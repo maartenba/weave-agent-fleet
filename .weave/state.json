@@ -1,0 +1,10 @@
+{
+  "active_plan": "/Users/pgermishuys/source/opencode-orchestrator/.weave/plans/v1-session-prompt-response.md",
+  "started_at": "2026-02-27T22:38:12.729Z",
+  "session_ids": [
+    "ses_35ed4c3abffesE3TFnUxQ8x5Dk"
+  ],
+  "plan_name": "v1-session-prompt-response",
+  "agent": "tapestry",
+  "start_sha": "9311983c10ce2283b7e62931b48aca7b9ce31f8b"
+}
