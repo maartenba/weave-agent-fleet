@@ -166,6 +166,7 @@ export default function SessionDetailPage() {
             />
           </div>
           <PromptInput
+            instanceId={instanceId}
             onSend={handleSend}
             disabled={isStopped || status === "error"}
             sendError={sendError}

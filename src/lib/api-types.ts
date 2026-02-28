@@ -84,3 +84,21 @@ export interface AccumulatedMessage {
   /** ISO timestamp */
   createdAt?: number;
 }
+
+// ─── Autocomplete Types ─────────────────────────────────────────────────────
+
+/** Slim command shape returned by GET /api/instances/[id]/commands */
+export interface AutocompleteCommand {
+  name: string;
+  description?: string;
+}
+
+/** Slim agent shape returned by GET /api/instances/[id]/agents */
+export interface AutocompleteAgent {
+  name: string;
+  description?: string;
+  mode: string;
+  color?: string;
+}
+
+// File search returns Array<string> (file paths) — no wrapper type needed
