@@ -1,23 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export function usePersistedState<T>(
   key: string,
   defaultValue: T
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  const [state, setStateInternal] = useState<T>(() => {
-    if (typeof window === "undefined") return defaultValue;
+  // Always start with defaultValue to match SSR output and avoid hydration mismatch.
+  // localStorage is read in useEffect after hydration completes.
+  const [state, setStateInternal] = useState<T>(defaultValue);
+  const hydrated = useRef(false);
+
+  // Hydrate from localStorage after mount (client-only)
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(key);
-      if (stored === null) return defaultValue;
-      return JSON.parse(stored) as T;
+      if (stored !== null) {
+        const parsed = JSON.parse(stored) as T;
+        setStateInternal(parsed);
+      }
     } catch {
-      return defaultValue;
+      // localStorage may be unavailable
     }
-  });
+    hydrated.current = true;
+  }, [key]);
 
+  // Persist to localStorage on subsequent state changes (skip the initial hydration write)
   useEffect(() => {
+    if (!hydrated.current) return;
     try {
       localStorage.setItem(key, JSON.stringify(state));
     } catch {
