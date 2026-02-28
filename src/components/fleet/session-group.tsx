@@ -32,9 +32,10 @@ interface SessionGroupProps {
   onTerminate: (sessionId: string, instanceId: string) => void;
   onNewSession?: (workspaceDirectory: string) => void;
   onResume?: (sessionId: string) => void;
+  resumingSessionId?: string | null;
 }
 
-export function SessionGroup({ group, onTerminate, onNewSession, onResume }: SessionGroupProps) {
+export function SessionGroup({ group, onTerminate, onNewSession, onResume, resumingSessionId }: SessionGroupProps) {
   const { refetch } = useSessionsContext();
   const { renameWorkspace } = useRenameWorkspace();
   const { terminateSession } = useTerminateSession();
@@ -166,6 +167,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume }: Ses
                 item={item}
                 onTerminate={onTerminate}
                 onResume={onResume}
+                isResuming={resumingSessionId === item.session.id}
               />
             ))}
           </div>

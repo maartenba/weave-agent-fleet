@@ -21,7 +21,7 @@ import { Loader2 } from "lucide-react";
 function FleetPageInner() {
   const { sessions, isLoading, error, refetch, summary: liveSummary } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
-  const { resumeSession } = useResumeSession();
+  const { resumeSession, resumingSessionId } = useResumeSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
@@ -154,6 +154,7 @@ function FleetPageInner() {
                      item={item}
                      onTerminate={handleTerminate}
                      onResume={handleResume}
+                     isResuming={resumingSessionId === item.session.id}
                    />
                  ))}
               </div>
@@ -195,6 +196,7 @@ function FleetPageInner() {
                      item={item}
                      onTerminate={handleTerminate}
                      onResume={handleResume}
+                     isResuming={resumingSessionId === item.session.id}
                    />
                  ))}
               </div>
@@ -233,6 +235,7 @@ function FleetPageInner() {
               item={item}
               onTerminate={handleTerminate}
               onResume={handleResume}
+              isResuming={resumingSessionId === item.session.id}
             />
           ))}
         </div>
@@ -256,6 +259,7 @@ function FleetPageInner() {
               group={{ ...group, sessions: sortSessions(group.sessions) }}
               onTerminate={handleTerminate}
               onResume={handleResume}
+              resumingSessionId={resumingSessionId}
             />
         ))}
       </div>

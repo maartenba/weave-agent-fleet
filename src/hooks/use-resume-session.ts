@@ -6,15 +6,18 @@ import type { ResumeSessionResponse } from "@/lib/api-types";
 export interface UseResumeSessionResult {
   resumeSession: (sessionId: string) => Promise<ResumeSessionResponse>;
   isResuming: boolean;
+  resumingSessionId: string | null;
   error?: string;
 }
 
 export function useResumeSession(): UseResumeSessionResult {
-  const [isResuming, setIsResuming] = useState(false);
+  const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
 
+  const isResuming = resumingSessionId !== null;
+
   const resumeSession = useCallback(async (sessionId: string): Promise<ResumeSessionResponse> => {
-    setIsResuming(true);
+    setResumingSessionId(sessionId);
     setError(undefined);
 
     try {
@@ -38,9 +41,9 @@ export function useResumeSession(): UseResumeSessionResult {
       setError(message);
       throw err;
     } finally {
-      setIsResuming(false);
+      setResumingSessionId(null);
     }
   }, []);
 
-  return { resumeSession, isResuming, error };
+  return { resumeSession, isResuming, resumingSessionId, error };
 }
