@@ -1,10 +1,10 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/agent-switching-ui.md",
-  "started_at": "2026-02-28T10:18:02.525Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/collapsible-sidebar.md",
+  "started_at": "2026-02-28T11:06:02.195Z",
   "session_ids": [
-    "ses_35c3eaa86ffewscVaGGaTXwG6w"
+    "ses_35c1c82afffelakzLyyMHagBvi"
   ],
-  "plan_name": "agent-switching-ui",
+  "plan_name": "collapsible-sidebar",
   "agent": "tapestry",
-  "start_sha": "38fe8d34367a970595eb0e3eb2babb03cf954829"
+  "start_sha": "adb1766fd44c88f28d0448f8d18b2ae6fd9fc87a"
 }

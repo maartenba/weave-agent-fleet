@@ -1,49 +1,97 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useSyncExternalStore, useCallback } from "react";
 
+// ── Per-key subscriber registry ──────────────────────────────────────────────
+// When setState writes to localStorage we notify all subscribers so
+// useSyncExternalStore re-reads the snapshot.
+const keyListeners = new Map<string, Set<() => void>>();
+
+function emitChange(key: string) {
+  const listeners = keyListeners.get(key);
+  if (listeners) {
+    for (const listener of listeners) {
+      listener();
+    }
+  }
+}
+
+function subscribeToKey(key: string) {
+  return (callback: () => void) => {
+    let listeners = keyListeners.get(key);
+    if (!listeners) {
+      listeners = new Set();
+      keyListeners.set(key, listeners);
+    }
+    listeners.add(callback);
+    return () => {
+      listeners!.delete(callback);
+      if (listeners!.size === 0) keyListeners.delete(key);
+    };
+  };
+}
+
+// ── Snapshot cache ───────────────────────────────────────────────────────────
+// useSyncExternalStore requires referential stability: if the underlying value
+// hasn't changed, getSnapshot must return the same object reference.
+const snapshotCache = new Map<string, { raw: string | null; value: unknown }>();
+
+function getStorageValue<T>(key: string, defaultValue: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    const cached = snapshotCache.get(key);
+    if (cached && cached.raw === raw) {
+      return cached.value as T;
+    }
+    const value = raw !== null ? (JSON.parse(raw) as T) : defaultValue;
+    snapshotCache.set(key, { raw, value });
+    return value;
+  } catch {
+    return defaultValue;
+  }
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
 export function usePersistedState<T>(
   key: string,
   defaultValue: T
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  // Always start with defaultValue to match SSR output and avoid hydration mismatch.
-  // localStorage is read in useEffect after hydration completes.
-  const [state, setStateInternal] = useState<T>(defaultValue);
-  const hydrated = useRef(false);
+  // subscribe is stable per key
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const subscribe = useCallback(subscribeToKey(key), [key]);
 
-  // Hydrate from localStorage after mount (client-only)
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored !== null) {
-        const parsed = JSON.parse(stored) as T;
-        setStateInternal(parsed);
-      }
-    } catch {
-      // localStorage may be unavailable
-    }
-    hydrated.current = true;
-  }, [key]);
-
-  // Persist to localStorage on subsequent state changes (skip the initial hydration write)
-  useEffect(() => {
-    if (!hydrated.current) return;
-    try {
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch {
-      // localStorage may be unavailable in some environments
-    }
-  }, [key, state]);
-
-  const setState = useCallback(
-    (value: T | ((prev: T) => T)) => {
-      setStateInternal((prev) => {
-        const next = typeof value === "function" ? (value as (prev: T) => T)(prev) : value;
-        return next;
-      });
-    },
-    []
+  const getSnapshot = useCallback(
+    () => getStorageValue(key, defaultValue),
+    // defaultValue is the initial fallback; safe to capture once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key]
   );
 
-  return [state, setState];
+  // Server snapshot always returns the default — guarantees hydration match
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const getServerSnapshot = useCallback(() => defaultValue, []);
+
+  const value = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  const setState = useCallback(
+    (newValue: T | ((prev: T) => T)) => {
+      try {
+        const current = getStorageValue(key, defaultValue);
+        const next =
+          typeof newValue === "function"
+            ? (newValue as (prev: T) => T)(current)
+            : newValue;
+        localStorage.setItem(key, JSON.stringify(next));
+        // Invalidate cache so getSnapshot returns the new value
+        snapshotCache.delete(key);
+        emitChange(key);
+      } catch {
+        // localStorage may be unavailable
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key]
+  );
+
+  return [value, setState];
 }

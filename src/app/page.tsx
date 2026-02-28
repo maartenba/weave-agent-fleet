@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header, NewSessionButton } from "@/components/layout/header";
 import { SummaryBar } from "@/components/fleet/summary-bar";
-import { FleetToolbar, loadPrefs, loadSavedPrefs } from "@/components/fleet/fleet-toolbar";
+import { FleetToolbar } from "@/components/fleet/fleet-toolbar";
 import type { GroupBy, SortBy } from "@/components/fleet/fleet-toolbar";
 import { SessionGroup } from "@/components/fleet/session-group";
 import { LiveSessionCard } from "@/components/fleet/live-session-card";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import { usePersistedState } from "@/hooks/use-persisted-state";
 import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
 import type { FleetSummary } from "@/lib/types";
 import type { SessionListItem } from "@/lib/api-types";
@@ -22,16 +23,13 @@ function FleetPageInner() {
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
 
-  // Toolbar state — start with defaults (SSR-safe), then hydrate from localStorage
-  const [prefs, setPrefs] = useState<{ groupBy: GroupBy; sortBy: SortBy }>(
-    loadPrefs
+  // SSR-safe persisted prefs — useSyncExternalStore under the hood
+  // ensures server renders defaults and client hydrates from localStorage.
+  const [prefs, setPrefs] = usePersistedState<{ groupBy: GroupBy; sortBy: SortBy }>(
+    "weave:fleet:prefs",
+    { groupBy: "directory", sortBy: "recent" }
   );
   const [search, setSearch] = useState("");
-
-  // Hydrate saved preferences after mount to avoid SSR/client mismatch
-  useEffect(() => {
-    setPrefs(loadSavedPrefs());
-  }, []);
 
   const handleGroupByChange = (groupBy: GroupBy) => {
     setPrefs((prev) => ({ ...prev, groupBy }));
