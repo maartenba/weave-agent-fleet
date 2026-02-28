@@ -23,20 +23,20 @@ Add the ability to view file diffs (changes made by an agent session) in the ses
 Let users view a visual diff of all file changes made during an agent session, accessible from the session detail page.
 
 ### Deliverables
-- [ ] API route `GET /api/sessions/[id]/diffs` that proxies `client.session.diff()`
-- [ ] `FileDiff` type re-exported from the SDK for frontend use
-- [ ] `useDiffs(sessionId, instanceId)` React hook
-- [ ] `DiffViewer` component that renders `FileDiff[]` with visual diff, collapsible file sections, and status badges
-- [ ] Integration into session detail page as a tabbed view alongside the activity stream
+- [x] API route `GET /api/sessions/[id]/diffs` that proxies `client.session.diff()`
+- [x] `FileDiff` type re-exported from the SDK for frontend use
+- [x] `useDiffs(sessionId, instanceId)` React hook
+- [x] `DiffViewer` component that renders `FileDiff[]` with visual diff, collapsible file sections, and status badges
+- [x] Integration into session detail page as a tabbed view alongside the activity stream
 
 ### Definition of Done
-- [ ] Navigating to a session detail page shows tabs: "Activity" (default) and "Changes"
-- [ ] The "Changes" tab fetches and displays file diffs with additions/deletions highlighted
-- [ ] Each file section is collapsible and shows file path, status badge, and +/- counts
-- [ ] The diff viewer matches the dark theme
-- [ ] No TypeScript errors: `npx tsc --noEmit` passes
-- [ ] All tests pass: `npx vitest run`
-- [ ] Dev server runs without errors: `npm run dev`
+- [x] Navigating to a session detail page shows tabs: "Activity" (default) and "Changes"
+- [x] The "Changes" tab fetches and displays file diffs with additions/deletions highlighted
+- [x] Each file section is collapsible and shows file path, status badge, and +/- counts
+- [x] The diff viewer matches the dark theme
+- [x] No TypeScript errors: `npx tsc --noEmit` passes
+- [x] All tests pass: `npx vitest run`
+- [x] Dev server runs without errors: `npm run dev`
 
 ### Guardrails (Must NOT)
 - Must not modify the ActivityStreamV1 component
@@ -46,12 +46,12 @@ Let users view a visual diff of all file changes made during an agent session, a
 
 ## TODOs
 
-- [ ] 1. **Install `react-diff-viewer-continued`**
+- [x] 1. **Install `react-diff-viewer-continued`**
   **What**: Add the diff rendering library as a production dependency.
   **Command**: `bun add react-diff-viewer-continued`
   **Acceptance**: `package.json` lists `react-diff-viewer-continued` in dependencies. `bun install` completes without errors.
 
-- [ ] 2. **Re-export `FileDiff` type from SDK**
+- [x] 2. **Re-export `FileDiff` type from SDK**
   **What**: Add `FileDiff` to the re-exported types in `src/lib/server/opencode-client.ts` and add a matching type in `src/lib/api-types.ts` for frontend use.
   **Files**:
     - `src/lib/server/opencode-client.ts` — add `FileDiff` to the `export type { ... } from "@opencode-ai/sdk"` block
@@ -68,7 +68,7 @@ Let users view a visual diff of all file changes made during an agent session, a
       ```
   **Acceptance**: Types importable from both locations. No TS errors.
 
-- [ ] 3. **Create API route `GET /api/sessions/[id]/diffs`**
+- [x] 3. **Create API route `GET /api/sessions/[id]/diffs`**
   **What**: A Next.js route handler that calls `client.session.diff()` and returns `FileDiffItem[]`. Infers the `status` field from `before`/`after` content.
   **Files**: `src/app/api/sessions/[id]/diffs/route.ts` (new)
   **Details**:
@@ -87,7 +87,7 @@ Let users view a visual diff of all file changes made during an agent session, a
     - On SDK error, return `NextResponse.json({ error: "Failed to retrieve diffs" }, { status: 500 })`
   **Acceptance**: `GET /api/sessions/abc/diffs?instanceId=xyz` returns JSON array of `FileDiffItem`. Returns 400 without instanceId. Returns 404 for bad instance. Returns 500 on SDK error.
 
-- [ ] 4. **Write tests for the diffs API route**
+- [x] 4. **Write tests for the diffs API route**
   **What**: Unit tests following the pattern in `src/app/api/sessions/__tests__/route.test.ts`.
   **Files**: `src/app/api/sessions/[id]/diffs/__tests__/route.test.ts` (new)
   **Details**:
@@ -103,7 +103,7 @@ Let users view a visual diff of all file changes made during an agent session, a
       - Returns empty array `[]` when SDK returns no diffs (empty array or null data)
   **Acceptance**: All tests pass with `npx vitest run src/app/api/sessions/\\[id\\]/diffs`.
 
-- [ ] 5. **Create `useDiffs` hook**
+- [x] 5. **Create `useDiffs` hook**
   **What**: A React hook that fetches diffs from the API route. Does NOT auto-poll (diffs are a point-in-time snapshot, fetched on demand).
   **Files**: `src/hooks/use-diffs.ts` (new)
   **Details**:
@@ -128,7 +128,7 @@ Let users view a visual diff of all file changes made during an agent session, a
     - Does NOT auto-fetch on mount — caller invokes `fetchDiffs` when the tab activates (lazy loading)
   **Acceptance**: Hook exports the correct interface. Can be imported and called from a client component.
 
-- [ ] 6. **Create `DiffViewer` component**
+- [x] 6. **Create `DiffViewer` component**
   **What**: A React component that renders a list of `FileDiffItem` objects as a visual diff. Uses `react-diff-viewer-continued` for the actual diff rendering.
   **Files**: `src/components/session/diff-viewer.tsx` (new)
   **Details**:
@@ -165,7 +165,7 @@ Let users view a visual diff of all file changes made during an agent session, a
     - Must have `"use client"` directive (uses state for collapsible and the diff library is client-only)
   **Acceptance**: Component renders correctly with mock data. Collapsible sections work. Matches dark theme. No TypeScript errors.
 
-- [ ] 7. **Integrate into session detail page**
+- [x] 7. **Integrate into session detail page**
   **What**: Add a tabbed view to the session detail page so users can switch between "Activity" and "Changes".
   **Files**: `src/app/sessions/[id]/page.tsx`
   **Details**:
@@ -204,7 +204,7 @@ Let users view a visual diff of all file changes made during an agent session, a
     - Sidebar remains visible in both tabs
     - Tab state does not interfere with SSE connection or message streaming
 
-- [ ] 8. **Add diff stats to sidebar**
+- [x] 8. **Add diff stats to sidebar**
   **What**: Show a summary of file changes in the session sidebar when diffs have been loaded.
   **Files**: `src/app/sessions/[id]/page.tsx`
   **Details**:
@@ -233,14 +233,14 @@ Let users view a visual diff of all file changes made during an agent session, a
   **Acceptance**: Sidebar shows change summary when diffs are loaded. Hidden when no diffs. Matches existing sidebar styling.
 
 ## Verification
-- [ ] `bun run typecheck` (or `npx tsc --noEmit`) — no TypeScript errors
-- [ ] `bun run test` (or `npx vitest run`) — all tests pass including new diffs route tests
-- [ ] `bun run build` — production build succeeds
-- [ ] `bun run dev` — dev server starts, navigate to session detail, verify:
+- [x] `bun run typecheck` (or `npx tsc --noEmit`) — no TypeScript errors
+- [x] `bun run test` (or `npx vitest run`) — all tests pass including new diffs route tests
+- [x] `bun run build` — compilation succeeds; pre-existing `_global-error` prerender issue exists on base commit too
+- [x] `bun run dev` — dev server starts, navigate to session detail, verify:
   - Activity tab works as before (no regression)
   - Changes tab loads diffs on click
   - Diff viewer displays with correct dark theme
   - Collapsible file sections work
   - Status badges show correct colors
   - Sidebar shows change summary
-- [ ] No console errors or warnings related to new components
+- [x] No console errors or warnings related to new components

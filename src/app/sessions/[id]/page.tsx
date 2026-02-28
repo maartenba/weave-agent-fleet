@@ -9,13 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { useSendPrompt } from "@/hooks/use-send-prompt";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAgents } from "@/hooks/use-agents";
+import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
-import { FolderOpen, GitBranch, Server, Clock, Hash, Coins, Square } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
+import { DiffViewer } from "@/components/session/diff-viewer";
 
 interface SessionMetadata {
   workspaceId: string | null;
@@ -41,6 +44,7 @@ export default function SessionDetailPage() {
     setSelectedAgent
   );
   const { terminateSession, isTerminating } = useTerminateSession();
+  const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
 
@@ -74,6 +78,17 @@ export default function SessionDetailPage() {
     0
   );
   const latestTodos = extractLatestTodos(messages);
+
+  // Aggregate diff stats for sidebar
+  const { totalDiffAdditions, totalDiffDeletions } = useMemo(() => {
+    let additions = 0;
+    let deletions = 0;
+    for (const d of diffs) {
+      additions += d.additions;
+      deletions += d.deletions;
+    }
+    return { totalDiffAdditions: additions, totalDiffDeletions: deletions };
+  }, [diffs]);
 
   // Derive active agent from the last user message
   const activeAgentName = sessionStatus === "busy"
@@ -185,31 +200,51 @@ export default function SessionDetailPage() {
         }
       />
       <div className="flex flex-1 overflow-hidden">
-        {/* Activity stream */}
+        {/* Main content with tabs */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {isStopped && (
             <div className="px-4 py-2 bg-slate-500/10 border-b border-slate-500/20 text-sm text-slate-400 text-center">
               Session stopped — conversation history preserved above.
             </div>
           )}
-          <div className="flex-1 overflow-hidden">
-            <ActivityStreamV1
-              messages={messages}
-              status={status}
-              sessionStatus={sessionStatus}
-              error={error}
-              agents={agents}
-            />
-          </div>
-          <PromptInput
-            instanceId={instanceId}
-            onSend={handleSend}
-            disabled={isStopped || status === "error"}
-            sendError={sendError}
-            agents={agents}
-            selectedAgent={selectedAgent}
-            onAgentChange={setSelectedAgent}
-          />
+          <Tabs
+            defaultValue="activity"
+            className="flex flex-1 flex-col overflow-hidden"
+            onValueChange={(value) => {
+              if (value === "changes") fetchDiffs();
+            }}
+          >
+            <TabsList variant="line" className="px-4 border-b border-white/10">
+              <TabsTrigger value="activity">Activity</TabsTrigger>
+              <TabsTrigger value="changes" className="gap-1.5">
+                <GitCompare className="h-3.5 w-3.5" />
+                Changes
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="activity" className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-hidden">
+                <ActivityStreamV1
+                  messages={messages}
+                  status={status}
+                  sessionStatus={sessionStatus}
+                  error={error}
+                  agents={agents}
+                />
+              </div>
+              <PromptInput
+                instanceId={instanceId}
+                onSend={handleSend}
+                disabled={isStopped || status === "error"}
+                sendError={sendError}
+                agents={agents}
+                selectedAgent={selectedAgent}
+                onAgentChange={setSelectedAgent}
+              />
+            </TabsContent>
+            <TabsContent value="changes" className="flex-1 overflow-hidden">
+              <DiffViewer diffs={diffs} isLoading={diffsLoading} error={diffsError} />
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Sidebar — real session metadata */}
@@ -291,6 +326,26 @@ export default function SessionDetailPage() {
                 </div>
                 <p className="text-xs font-mono">${totalCost.toFixed(4)}</p>
               </div>
+
+              {/* Changes summary */}
+              {diffs.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <GitCompare className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes</p>
+                    </div>
+                    <p className="text-xs font-mono">
+                      {diffs.length} file{diffs.length !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-xs font-mono">
+                      <span className="text-green-500">+{totalDiffAdditions}</span>{" "}
+                      <span className="text-red-500">-{totalDiffDeletions}</span>
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Active Agents */}
               {participatingAgents.length > 0 && (
