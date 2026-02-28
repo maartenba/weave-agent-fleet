@@ -13,6 +13,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, GitBranch, Server, Clock, Hash, Coins, Square } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
+import { extractLatestTodos } from "@/lib/todo-utils";
+import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 
 interface SessionMetadata {
   workspaceId: string | null;
@@ -66,6 +68,7 @@ export default function SessionDetailPage() {
     (sum, m) => sum + (m.tokens?.input ?? 0) + (m.tokens?.output ?? 0),
     0
   );
+  const latestTodos = extractLatestTodos(messages);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -264,6 +267,14 @@ export default function SessionDetailPage() {
                   <p className="text-xs capitalize">{status}</p>
                 </div>
               </div>
+
+              {/* Todos — shown when agent has used todowrite */}
+              {latestTodos && latestTodos.length > 0 && (
+                <>
+                  <Separator />
+                  <TodoSidebarPanel todos={latestTodos} />
+                </>
+              )}
             </div>
           </ScrollArea>
         </aside>

@@ -1,10 +1,10 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/notification-system.md",
-  "started_at": "2026-02-28T00:48:59.800Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/todowrite-rendering.md",
+  "started_at": "2026-02-28T01:37:53.937Z",
   "session_ids": [
-    "ses_35e5c6bc6ffeOzy6W0bXByTV7j"
+    "ses_35e218dd3ffeanxGPCWDM0oHjd"
   ],
-  "plan_name": "notification-system",
+  "plan_name": "todowrite-rendering",
   "agent": "tapestry",
-  "start_sha": "95ae3f447bac58ef7871bfde617a2d4aabecd0c3"
+  "start_sha": "2574a09d04623b6fd7d71f9cef00b5a738745e18"
 }

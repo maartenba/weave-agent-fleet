@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Bot, User, Wrench, Loader2, AlertCircle } from "lucide-react";
 import type { AccumulatedMessage, AccumulatedPart } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
+import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
+import { TodoListInline } from "./todo-list-inline";
 
 interface ActivityStreamV1Props {
   messages: AccumulatedMessage[];
@@ -20,6 +22,26 @@ function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
   const isRunning = state?.status === "running" || !state?.status;
   const isCompleted = state?.status === "completed";
   const isError = state?.status === "error";
+
+  // Special rendering for todowrite tool calls
+  if (isTodoWriteTool(part.tool)) {
+    const todos = parseTodoOutput(state?.output);
+    if (todos !== null || isRunning) {
+      return (
+        <div className="py-0.5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Wrench className="h-3 w-3 shrink-0 text-amber-500" />
+            <span className="font-mono text-amber-500/90">{part.tool}</span>
+            {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
+            {todos && !isRunning && (
+              <span className="text-muted-foreground/60">{todos.length} item{todos.length !== 1 ? "s" : ""}</span>
+            )}
+          </div>
+          <TodoListInline items={todos ?? []} isRunning={isRunning} />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground">
