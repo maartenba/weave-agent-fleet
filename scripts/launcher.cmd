@@ -61,15 +61,24 @@ exit /b %ERRORLEVEL%
 
 :do_uninstall
 echo Removing Weave Fleet from %INSTALL_DIR%...
-rd /s /q "%INSTALL_DIR%" 2>nul
-echo Done.
+if not exist "%INSTALL_DIR%" (
+    echo Already removed.
+    exit /b 0
+)
 echo.
 echo You may need to remove the PATH entry manually:
 echo   1. Open Settings ^> System ^> About ^> Advanced system settings
 echo   2. Click "Environment Variables"
 echo   3. Under "User variables", edit "Path"
 echo   4. Remove the entry: %INSTALL_DIR%\bin
-exit /b 0
+echo.
+rem Delete the install directory and exit on the same logical line.
+rem cmd.exe reads one line at a time by file offset — if rd deletes the running
+rem script (weave-fleet.cmd lives inside INSTALL_DIR), cmd.exe cannot seek to
+rem the next line and emits "The system cannot find the path specified."
+rem Keeping rd and exit /b on one line ensures the entire line is already in
+rem memory before rd executes, so no further file reads are needed.
+rd /s /q "%INSTALL_DIR%" >nul 2>&1 & echo Done. & exit /b 0
 
 :show_help
 set "VERSION=unknown"
