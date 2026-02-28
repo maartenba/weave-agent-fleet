@@ -7,6 +7,9 @@
  * Plugin deadlock prevention: config.plugin is set to [] via OPENCODE_CONFIG_CONTENT
  * (passed by the SDK as an env var to the child process). This prevents the Weave plugin
  * from loading and calling GET /skill back to the server during bootstrap.
+ *
+ * V2: Persists instance state to SQLite for recovery across server restarts.
+ * Uses port-based recovery (not PID) since the SDK doesn't expose the child PID.
  */
 
 import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
@@ -14,6 +17,11 @@ import { statSync } from "fs";
 import { homedir } from "os";
 import { resolve } from "path";
 import { randomUUID } from "crypto";
+import {
+  insertInstance,
+  updateInstanceStatus,
+  getRunningInstances,
+} from "./db-repository";
 
 // Re-export for convenience
 export type { OpencodeClient } from "@opencode-ai/sdk";
@@ -27,6 +35,8 @@ export interface ManagedInstance {
   close: () => void;
   status: "running" | "dead";
   createdAt: Date;
+  /** True if this instance was recovered from DB on startup (not freshly spawned) */
+  recovered: boolean;
 }
 
 const PORT_START = 4097;
@@ -40,6 +50,15 @@ const usedPorts = new Set<number>();
 // Track which directories already have an instance
 const directoryToInstanceId = new Map<string, string>();
 
+// Recovery state — resolved once startup recovery is complete
+let _recoveryCompleteResolve: (() => void) | null = null;
+export const _recoveryComplete: Promise<void> = new Promise((resolve) => {
+  _recoveryCompleteResolve = resolve;
+});
+
+// Guard against double cleanup
+let _cleanupRun = false;
+
 /**
  * Allowed workspace base directories. Only directories under these roots can be
  * used to spawn OpenCode instances. Configurable via ORCHESTRATOR_WORKSPACE_ROOTS
@@ -48,7 +67,7 @@ const directoryToInstanceId = new Map<string, string>();
 function getAllowedRoots(): string[] {
   const envRoots = process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
   if (envRoots) {
-    return envRoots.split(":").map((r) => resolve(r)).filter(Boolean);
+    return envRoots.split(":").map((r) => resolve(r.trim())).filter(Boolean);
   }
   return [resolve(homedir())];
 }
@@ -103,9 +122,100 @@ export function releasePort(port: number): void {
  * Reset all internal state — for tests only.
  */
 export function _resetForTests(): void {
+  // Reset the cleanup guard so destroyAll() actually runs
+  _cleanupRun = false;
   destroyAll();
+  // Reset again after destroyAll sets it to true, so subsequent calls work
+  _cleanupRun = false;
   usedPorts.clear();
   directoryToInstanceId.clear();
+}
+
+/**
+ * Attempt to recover instances that were running before the server restarted.
+ * Reads running instances from the DB, checks if their port is still reachable,
+ * and re-adds them to the in-memory Map if so. Marks unreachable instances as stopped.
+ *
+ * Called once on module init (lazily, on first API call that calls `ensureRecovered()`).
+ */
+export async function recoverInstances(): Promise<void> {
+  let runningDbInstances: ReturnType<typeof getRunningInstances>;
+  try {
+    runningDbInstances = getRunningInstances();
+  } catch {
+    // DB not available — skip recovery
+    _recoveryCompleteResolve?.();
+    _recoveryCompleteResolve = null;
+    return;
+  }
+
+  for (const dbInst of runningDbInstances) {
+    // Skip if already in memory (e.g. running in-process)
+    if (instances.has(dbInst.id)) continue;
+
+    // Check if the port is still responsive
+    const isAlive = await checkPortAlive(dbInst.url);
+
+    if (isAlive) {
+      // Re-register the port as in use
+      usedPorts.add(dbInst.port);
+
+      const client = createOpencodeClient({
+        baseUrl: dbInst.url,
+        directory: dbInst.directory,
+      });
+
+      const instance: ManagedInstance = {
+        id: dbInst.id,
+        port: dbInst.port,
+        url: dbInst.url,
+        directory: dbInst.directory,
+        client,
+        close: () => {
+          // For recovered instances, we don't have the original close() fn.
+          // Best effort: mark as dead. The process will be cleaned up
+          // by the OS when the Next.js server exits.
+        },
+        status: "running",
+        createdAt: new Date(dbInst.created_at),
+        recovered: true,
+      };
+
+      instances.set(dbInst.id, instance);
+      directoryToInstanceId.set(dbInst.directory, dbInst.id);
+    } else {
+      // Mark as stopped in DB
+      try {
+        updateInstanceStatus(dbInst.id, "stopped", new Date().toISOString());
+      } catch {
+        // Best effort
+      }
+    }
+  }
+
+  _recoveryCompleteResolve?.();
+  _recoveryCompleteResolve = null;
+}
+
+/**
+ * Check if an OpenCode server at the given URL is alive.
+ * Returns true if it responds with any HTTP status.
+ */
+async function checkPortAlive(url: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(`${url}/session`, {
+        signal: controller.signal,
+      });
+      return response.status < 500;
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -146,6 +256,21 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
     throw err;
   }
 
+  // Persist to DB for recovery across restarts
+  try {
+    insertInstance({
+      id: instanceId,
+      port,
+      directory,
+      url: server.url,
+      // PID not exposed by the SDK — using port-based recovery instead
+      pid: null,
+    });
+  } catch {
+    // DB write failure is non-fatal — instance still works in-memory
+    console.warn(`[process-manager] Failed to persist instance ${instanceId} to DB`);
+  }
+
   const client = createOpencodeClient({ baseUrl: server.url, directory });
 
   const instance: ManagedInstance = {
@@ -157,6 +282,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
     close: server.close,
     status: "running",
     createdAt: new Date(),
+    recovered: false,
   };
 
   instances.set(instanceId, instance);
@@ -176,6 +302,14 @@ export function listInstances(): ManagedInstance[] {
 export function destroyInstance(id: string): void {
   const instance = instances.get(id);
   if (!instance) return;
+
+  // Update DB first so even if kill fails, the DB reflects intent
+  try {
+    updateInstanceStatus(id, "stopped", new Date().toISOString());
+  } catch {
+    // Non-fatal
+  }
+
   try {
     instance.close();
   } catch {
@@ -188,10 +322,69 @@ export function destroyInstance(id: string): void {
 }
 
 export function destroyAll(): void {
+  if (_cleanupRun) return;
+  _cleanupRun = true;
+
   for (const id of [...instances.keys()]) {
     destroyInstance(id);
   }
 }
+
+// Kick off recovery as soon as the module is first loaded.
+// This is intentionally fire-and-forget — callers await `_recoveryComplete` if they need to.
+recoverInstances().catch((err) => {
+  console.error("[process-manager] Recovery failed:", err);
+});
+
+// ─── Health Check Loop ────────────────────────────────────────────────────────
+
+const HEALTH_CHECK_INTERVAL_MS = 30_000;
+const HEALTH_CHECK_FAIL_THRESHOLD = 3;
+
+// Track consecutive failure counts per instance
+const _healthFailCounts = new Map<string, number>();
+
+let _healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start a periodic health check loop that verifies each managed instance
+ * is still responding. After 3 consecutive failures, the instance is marked dead.
+ * Called once after recovery completes.
+ */
+export function startHealthCheckLoop(): void {
+  if (_healthCheckInterval) return; // already running
+  _healthCheckInterval = setInterval(async () => {
+    for (const [id, instance] of instances) {
+      if (instance.status !== "running") continue;
+
+      const alive = await checkPortAlive(instance.url);
+      if (alive) {
+        _healthFailCounts.delete(id);
+      } else {
+        const fails = (_healthFailCounts.get(id) ?? 0) + 1;
+        _healthFailCounts.set(id, fails);
+        if (fails >= HEALTH_CHECK_FAIL_THRESHOLD) {
+          console.warn(`[process-manager] Instance ${id} failed health check ${fails} times — marking dead`);
+          instance.status = "dead";
+          _healthFailCounts.delete(id);
+          try {
+            updateInstanceStatus(id, "stopped", new Date().toISOString());
+          } catch {
+            // Non-fatal
+          }
+          directoryToInstanceId.delete(instance.directory);
+          releasePort(instance.port);
+          instances.delete(id);
+        }
+      }
+    }
+  }, HEALTH_CHECK_INTERVAL_MS);
+}
+
+// Start health checks after recovery completes
+_recoveryComplete.then(() => {
+  startHealthCheckLoop();
+}).catch(() => {/* non-fatal */});
 
 // Clean up all instances when the Node.js process exits
 process.on("exit", destroyAll);
@@ -203,3 +396,8 @@ process.on("SIGINT", () => {
   destroyAll();
   process.exit(0);
 });
+process.on("SIGHUP", () => {
+  destroyAll();
+  process.exit(0);
+});
+process.on("beforeExit", destroyAll);

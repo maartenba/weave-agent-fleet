@@ -13,10 +13,13 @@ export type { Session as SDKSession, Part, SessionStatus };
 export interface CreateSessionRequest {
   directory: string;
   title?: string;
+  isolationStrategy?: "existing" | "worktree" | "clone";
+  branch?: string;
 }
 
 export interface CreateSessionResponse {
   instanceId: string;
+  workspaceId: string;
   session: Session;
 }
 
@@ -29,6 +32,10 @@ export interface SendPromptRequest {
 
 export interface SessionListItem {
   instanceId: string;
+  workspaceId: string;
+  workspaceDirectory: string;
+  isolationStrategy: string;
+  sessionStatus: "active" | "stopped" | "disconnected";
   session: Session;
   /** "running" means the OpenCode process is healthy */
   instanceStatus: "running" | "dead";

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type {
   AccumulatedMessage,
+  AccumulatedPart,
   SSEEvent,
 } from "@/lib/api-types";
 import {
@@ -14,6 +15,7 @@ import {
 export type SessionConnectionStatus =
   | "connecting"
   | "connected"
+  | "recovering"
   | "disconnected"
   | "error";
 
@@ -40,6 +42,67 @@ export function useSessionEvents(
   const isMounted = useRef(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track whether we've ever successfully connected — if so, do state recovery on reconnect
+  const hasConnectedOnce = useRef(false);
+
+  /**
+   * Fetch existing messages from the API and convert to AccumulatedMessage[].
+   * Used on initial connect (to show history) and on reconnect (to fill gaps).
+   */
+  const loadMessages = useCallback(async (): Promise<void> => {
+    if (!sessionId || !instanceId) return;
+    try {
+      const url = `/api/sessions/${encodeURIComponent(sessionId)}?instanceId=${encodeURIComponent(instanceId)}`;
+      const response = await fetch(url);
+      if (!response.ok) return;
+      const data = await response.json() as {
+        messages?: Array<{
+          info: { id: string; sessionID: string; role: string; time?: { created?: number }; cost?: number; tokens?: { input: number; output: number; reasoning: number } };
+          parts: Array<{ id: string; messageID: string; sessionID: string; type: string; text?: string; tool?: string; callID?: string; state?: unknown; cost?: number; tokens?: { input: number; output: number; reasoning: number } }>;
+        }>;
+      };
+      if (!data.messages?.length) return;
+
+      const accumulated: AccumulatedMessage[] = data.messages.map((msg) => {
+        const parts: AccumulatedPart[] = [];
+        let cost = 0;
+        let tokensInput = 0;
+        let tokensOutput = 0;
+        let tokensReasoning = 0;
+
+        for (const part of msg.parts) {
+          if (part.type === "text") {
+            parts.push({ partId: part.id, type: "text", text: part.text ?? "" });
+          } else if (part.type === "tool") {
+            parts.push({ partId: part.id, type: "tool", tool: part.tool ?? "", callId: part.callID ?? "", state: part.state });
+          } else if (part.type === "step-finish") {
+            cost += part.cost ?? 0;
+            tokensInput += part.tokens?.input ?? 0;
+            tokensOutput += part.tokens?.output ?? 0;
+            tokensReasoning += part.tokens?.reasoning ?? 0;
+          }
+        }
+
+        return {
+          messageId: msg.info.id,
+          sessionId: msg.info.sessionID,
+          role: msg.info.role === "user" ? "user" as const : "assistant" as const,
+          parts,
+          createdAt: msg.info.time?.created,
+          cost: cost || (msg.info.cost ?? 0),
+          tokens: (tokensInput || tokensOutput || tokensReasoning)
+            ? { input: tokensInput, output: tokensOutput, reasoning: tokensReasoning }
+            : msg.info.tokens
+              ? { input: msg.info.tokens.input, output: msg.info.tokens.output, reasoning: msg.info.tokens.reasoning }
+              : undefined,
+        };
+      });
+
+      setMessages(accumulated);
+    } catch {
+      // Best-effort — if loading fails, we still have the live stream
+    }
+  }, [sessionId, instanceId]);
 
   const connect = useCallback(() => {
     if (!isMounted.current) return;
@@ -52,8 +115,23 @@ export function useSessionEvents(
     es.onopen = () => {
       if (!isMounted.current) return;
       reconnectDelay.current = BASE_RECONNECT_DELAY_MS;
-      setStatus("connected");
-      setError(undefined);
+
+      if (hasConnectedOnce.current) {
+        // Reconnect after a drop — recover state to fill gaps
+        setStatus("recovering");
+        loadMessages().then(() => {
+          if (isMounted.current) {
+            setStatus("connected");
+            setError(undefined);
+          }
+        });
+      } else {
+        // First connect — load existing message history
+        hasConnectedOnce.current = true;
+        setStatus("connected");
+        setError(undefined);
+        loadMessages();
+      }
     };
 
     es.onmessage = (e: MessageEvent<string>) => {
@@ -79,7 +157,7 @@ export function useSessionEvents(
         if (isMounted.current) connect();
       }, delay);
     };
-  }, [sessionId, instanceId]);
+  }, [sessionId, instanceId, loadMessages]);
 
   useEffect(() => {
     isMounted.current = true;

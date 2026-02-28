@@ -303,3 +303,26 @@ See git history for details on earlier debugging attempts.
 4. **Context Bridge** — for cross-session coordination, use hybrid approach: git diff for small changes, LLM-summarized context for large changes, key files in full.
 5. **Workspace isolation** — `git worktree` for same-repo parallelism, full clones for different repos.
 6. **Crush migration** — if OpenCode is archived in favor of Crush, the SDK integration layer will need updating.
+
+---
+
+## 8. UX Improvements (Observed during V2 testing)
+
+### Issue 1: Prompt input loses focus after sending
+
+**Where**: Session detail page (`src/app/sessions/[id]/page.tsx`)
+**Behavior**: After typing a prompt and pressing Enter, keyboard focus leaves the input. The user must click the input box again to type the next prompt.
+**Expected**: Focus should remain on (or return to) the prompt input after submission. The prompt input should auto-focus on page load as well.
+**Fix approach**: After the `onSubmit` handler clears the input, call `inputRef.current?.focus()`. Also add `autoFocus` to the input element on mount.
+
+### Issue 2: Previous messages not loaded when navigating to a session
+
+**Where**: Session detail page, specifically `src/hooks/use-session-events.ts`
+**Behavior**: When navigating to an existing session, the activity stream starts empty. Only new messages (sent after page load) appear. Previous conversation history is not shown.
+**Root cause**: `useSessionEvents` initializes `messages` as `[]` and only accumulates from the live SSE stream. There is no initial fetch of existing messages. The `recoverMessageState` function (lines 51–64) fetches messages from `GET /api/sessions/[id]` but intentionally discards the response — it was stubbed as a known gap during V2.
+**Fix approach**:
+1. On mount (first connect), fetch `GET /api/sessions/${sessionId}?instanceId=${instanceId}` to get existing messages
+2. Parse the SDK `Message[]` response and convert to `AccumulatedMessage[]` format
+3. Set this as the initial messages state before the SSE stream starts delivering new events
+4. The same logic should be applied in `recoverMessageState` for reconnect scenarios
+**Complexity**: Medium — requires mapping SDK `Message` objects (with nested `parts[]`) into the `AccumulatedMessage` accumulator format used by `event-state.ts`

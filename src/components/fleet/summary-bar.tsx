@@ -1,5 +1,5 @@
 import { FleetSummary } from "@/lib/types";
-import { formatTokens, formatCost } from "@/lib/mock-data";
+import { formatTokens, formatCost } from "@/lib/format-utils";
 import {
   Zap,
   Pause,

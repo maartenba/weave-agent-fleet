@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Session } from "@/lib/types";
-import { formatTokens, formatCost, getStatusDot } from "@/lib/mock-data";
+import { formatTokens, formatCost, getStatusDot } from "@/lib/format-utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";

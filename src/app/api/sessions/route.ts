@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawnInstance, listInstances, validateDirectory } from "@/lib/server/process-manager";
+import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
+import { createWorkspace } from "@/lib/server/workspace-manager";
+import { insertSession, listSessions, getWorkspace, getInstance } from "@/lib/server/db-repository";
+import { randomUUID } from "crypto";
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
@@ -8,6 +11,9 @@ import type {
 
 // POST /api/sessions — spawn an OpenCode instance (or reuse) and create a session
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Wait for startup recovery before serving
+  await _recoveryComplete;
+
   let body: CreateSessionRequest;
   try {
     body = await request.json();
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { directory, title } = body;
+  const { directory, title, isolationStrategy = "existing", branch } = body;
 
   if (!directory || typeof directory !== "string") {
     return NextResponse.json(
@@ -33,7 +39,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const instance = await spawnInstance(resolvedDir);
+    // Step 1: Create workspace record (isolation strategy applied here)
+    const workspace = await createWorkspace({
+      sourceDirectory: resolvedDir,
+      strategy: isolationStrategy,
+      branch,
+    });
+
+    // Step 2: Spawn (or reuse) the OpenCode instance for the workspace directory
+    const instance = await spawnInstance(workspace.directory);
+
+    // Step 3: Create the session in OpenCode
     const result = await instance.client.session.create({
       body: { title: title ?? "New Session" },
     });
@@ -46,8 +62,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Step 4: Persist session to DB
+    const sessionDbId = randomUUID();
+    try {
+      insertSession({
+        id: sessionDbId,
+        workspace_id: workspace.id,
+        instance_id: instance.id,
+        opencode_session_id: session.id,
+        title: session.title ?? title ?? "New Session",
+        directory: workspace.directory,
+      });
+    } catch {
+      // DB write failure is non-fatal — session still works in-memory
+      console.warn(`[POST /api/sessions] Failed to persist session to DB`);
+    }
+
     const response: CreateSessionResponse = {
       instanceId: instance.id,
+      workspaceId: workspace.id,
       session,
     };
     return NextResponse.json(response, { status: 200 });
@@ -60,29 +93,130 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-// GET /api/sessions — list all sessions across all managed instances
+// GET /api/sessions — list all sessions (DB + live state merged)
 export async function GET(): Promise<NextResponse> {
-  const instances = listInstances();
+  // Wait for startup recovery before serving
+  await _recoveryComplete;
+
+  const liveInstances = listInstances();
+  const liveInstanceMap = new Map(liveInstances.map((i) => [i.id, i]));
+
+  // Load all sessions from DB
+  let dbSessions: ReturnType<typeof listSessions>;
+  try {
+    dbSessions = listSessions();
+  } catch {
+    // If DB is unavailable, fall back to live-only listing (V1 behavior)
+    const items: SessionListItem[] = [];
+    await Promise.allSettled(
+      liveInstances.map(async (instance) => {
+        try {
+          const result = await instance.client.session.list();
+          const sessions = result.data ?? [];
+          for (const session of sessions) {
+            items.push({
+              instanceId: instance.id,
+              workspaceId: "",
+              workspaceDirectory: instance.directory,
+              isolationStrategy: "existing",
+              sessionStatus: instance.status === "running" ? "active" : "stopped",
+              session,
+              instanceStatus: instance.status,
+            });
+          }
+        } catch {
+          // skip
+        }
+      })
+    );
+    return NextResponse.json(items, { status: 200 });
+  }
 
   const items: SessionListItem[] = [];
 
-  await Promise.allSettled(
-    instances.map(async (instance) => {
+  for (const dbSession of dbSessions) {
+    // Determine the live instance state
+    const liveInstance = liveInstanceMap.get(dbSession.instance_id);
+
+    let instanceStatus: "running" | "dead" = "dead";
+    let sessionStatus: "active" | "stopped" | "disconnected";
+
+    if (liveInstance) {
+      instanceStatus = liveInstance.status;
+      sessionStatus = liveInstance.status === "running" ? "active" : "stopped";
+    } else {
+      // Not in live map — check DB instance status
+      let dbInst: ReturnType<typeof getInstance>;
       try {
-        const result = await instance.client.session.list();
-        const sessions = result.data ?? [];
-        for (const session of sessions) {
+        dbInst = getInstance(dbSession.instance_id);
+      } catch {
+        dbInst = undefined;
+      }
+      if (dbInst?.status === "running") {
+        // DB says running but not in live Map → orphan / disconnected
+        sessionStatus = "disconnected";
+      } else {
+        sessionStatus = dbSession.status === "active" ? "disconnected" : (dbSession.status as "stopped" | "disconnected");
+      }
+    }
+
+    // Get workspace info
+    let workspaceDirectory = dbSession.directory;
+    let isolationStrategy: string = "existing";
+    try {
+      const ws = getWorkspace(dbSession.workspace_id);
+      if (ws) {
+        workspaceDirectory = ws.directory;
+        isolationStrategy = ws.isolation_strategy;
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // Fetch the OpenCode session details from the live instance if available
+    if (liveInstance && instanceStatus === "running") {
+      try {
+        const result = await liveInstance.client.session.get({
+          path: { id: dbSession.opencode_session_id },
+        });
+        if (result.data) {
           items.push({
-            instanceId: instance.id,
-            session,
-            instanceStatus: instance.status,
+            instanceId: dbSession.instance_id,
+            workspaceId: dbSession.workspace_id,
+            workspaceDirectory,
+            isolationStrategy,
+            sessionStatus,
+            session: result.data,
+            instanceStatus,
           });
+          continue;
         }
       } catch {
-        // If an instance fails to list, skip it — don't crash the whole response
+        // Fall through to stub
       }
-    })
-  );
+    }
+
+    // For disconnected/stopped sessions, synthesize a stub session object
+    items.push({
+      instanceId: dbSession.instance_id,
+      workspaceId: dbSession.workspace_id,
+      workspaceDirectory,
+      isolationStrategy,
+      sessionStatus,
+      session: {
+        id: dbSession.opencode_session_id,
+        title: dbSession.title,
+        directory: dbSession.directory,
+        projectID: "",
+        version: "0",
+        time: {
+          created: new Date(dbSession.created_at).getTime(),
+          updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
+        },
+      } as Parameters<typeof items.push>[0]["session"],
+      instanceStatus,
+    });
+  }
 
   return NextResponse.json(items, { status: 200 });
 }

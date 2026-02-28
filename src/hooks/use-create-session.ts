@@ -1,12 +1,18 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { CreateSessionResponse } from "@/lib/api-types";
+import type { CreateSessionRequest, CreateSessionResponse } from "@/lib/api-types";
+
+export interface CreateSessionOptions {
+  title?: string;
+  isolationStrategy?: "existing" | "worktree" | "clone";
+  branch?: string;
+}
 
 export interface UseCreateSessionResult {
   createSession: (
     directory: string,
-    title?: string
+    opts?: CreateSessionOptions
   ) => Promise<CreateSessionResponse>;
   isLoading: boolean;
   error?: string;
@@ -17,14 +23,21 @@ export function useCreateSession(): UseCreateSessionResult {
   const [error, setError] = useState<string | undefined>();
 
   const createSession = useCallback(
-    async (directory: string, title?: string): Promise<CreateSessionResponse> => {
+    async (directory: string, opts?: CreateSessionOptions): Promise<CreateSessionResponse> => {
       setIsLoading(true);
       setError(undefined);
       try {
+        const body: CreateSessionRequest = {
+          directory,
+          title: opts?.title,
+          isolationStrategy: opts?.isolationStrategy,
+          branch: opts?.branch,
+        };
+
         const response = await fetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ directory, title }),
+          body: JSON.stringify(body),
         });
 
         if (!response.ok) {

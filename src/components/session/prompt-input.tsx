@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send, Loader2, AlertCircle } from "lucide-react";
@@ -14,8 +14,18 @@ interface PromptInputProps {
 export function PromptInput({ onSend, disabled, sendError }: PromptInputProps) {
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const canSend = !!value.trim() && !disabled && !isSending;
+  const isDisabled = disabled || isSending;
+
+  // Re-focus whenever the input becomes enabled (e.g. agent finishes responding)
+  useEffect(() => {
+    if (!isDisabled) {
+      inputRef.current?.focus();
+    }
+  }, [isDisabled]);
+
+  const canSend = !!value.trim() && !isDisabled;
 
   return (
     <div className="border-t p-3 space-y-2">
@@ -36,16 +46,18 @@ export function PromptInput({ onSend, disabled, sendError }: PromptInputProps) {
             await onSend?.(text);
           } finally {
             setIsSending(false);
+            inputRef.current?.focus();
           }
         }}
         className="flex items-center gap-2"
       >
         <Input
+          ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Send a message to this session..."
           className="text-sm"
-          disabled={disabled || isSending}
+          disabled={isDisabled}
         />
         <Button type="submit" size="icon" variant="default" disabled={!canSend}>
           {isSending ? (

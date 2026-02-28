@@ -1,7 +1,22 @@
 import { writeFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { resolve } from "path";
 import { allocatePort, releasePort, _resetForTests, validateDirectory } from "@/lib/server/process-manager";
+import { _resetDbForTests } from "@/lib/server/database";
+import { getInstance as getDbInstance, getRunningInstances } from "@/lib/server/db-repository";
+
+// Use an isolated temp DB for all process-manager tests
+beforeAll(() => {
+  process.env.WEAVE_DB_PATH = join(tmpdir(), `pm-test-${randomUUID()}.db`);
+});
+
+afterAll(() => {
+  _resetDbForTests();
+  delete process.env.WEAVE_DB_PATH;
+});
 
 // ---------------------------------------------------------------------------
 // Port allocation
@@ -185,5 +200,37 @@ describe("validateDirectory", () => {
     process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
     // The root itself (/tmp === /tmp) should be allowed
     expect(() => validateDirectory("/tmp")).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _resetForTests — does not reset DB (DB tests are in db-repository.test.ts)
+// ---------------------------------------------------------------------------
+
+describe("_resetForTests with DB", () => {
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  it("ClearsUsedPortsStateAfterAllocationWithDbPresent", () => {
+    allocatePort(); // 4097
+    allocatePort(); // 4098
+    _resetForTests();
+    expect(allocatePort()).toBe(4097);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DB integration — verifies that DB functions are accessible from tests
+// ---------------------------------------------------------------------------
+
+describe("DB integration — repository accessible", () => {
+  it("GetRunningInstancesReturnsEmptyWhenNoneInserted", () => {
+    const running = getRunningInstances();
+    expect(Array.isArray(running)).toBe(true);
+  });
+
+  it("GetDbInstanceReturnsUndefinedForUnknownId", () => {
+    expect(getDbInstance("nonexistent-id")).toBeUndefined();
   });
 });

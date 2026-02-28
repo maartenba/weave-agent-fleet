@@ -1,0 +1,211 @@
+/**
+ * Database repository — typed CRUD functions for the three fleet tables.
+ *
+ * All functions are synchronous (better-sqlite3 is sync).
+ * These are thin wrappers around prepared statements — no business logic here.
+ */
+
+import { getDb } from "./database";
+
+// ─── Row Types ────────────────────────────────────────────────────────────────
+
+export interface DbWorkspace {
+  id: string;
+  directory: string;
+  source_directory: string | null;
+  isolation_strategy: "existing" | "worktree" | "clone";
+  branch: string | null;
+  created_at: string;
+  cleaned_up_at: string | null;
+}
+
+export interface DbInstance {
+  id: string;
+  port: number;
+  pid: number | null;
+  directory: string;
+  url: string;
+  status: "running" | "stopped";
+  created_at: string;
+  stopped_at: string | null;
+}
+
+export interface DbSession {
+  id: string;
+  workspace_id: string;
+  instance_id: string;
+  opencode_session_id: string;
+  title: string;
+  status: "active" | "stopped" | "disconnected";
+  directory: string;
+  created_at: string;
+  stopped_at: string | null;
+}
+
+// ─── Insert input types (id + timestamps are required on insert) ──────────────
+
+export type InsertWorkspace = Pick<
+  DbWorkspace,
+  "id" | "directory" | "isolation_strategy"
+> &
+  Partial<Pick<DbWorkspace, "source_directory" | "branch">>;
+
+export type InsertInstance = Pick<
+  DbInstance,
+  "id" | "port" | "directory" | "url"
+> &
+  Partial<Pick<DbInstance, "pid">>;
+
+export type InsertSession = Pick<
+  DbSession,
+  | "id"
+  | "workspace_id"
+  | "instance_id"
+  | "opencode_session_id"
+  | "directory"
+> &
+  Partial<Pick<DbSession, "title">>;
+
+// ─── Workspaces ───────────────────────────────────────────────────────────────
+
+export function insertWorkspace(ws: InsertWorkspace): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO workspaces (id, directory, source_directory, isolation_strategy, branch)
+     VALUES (@id, @directory, @source_directory, @isolation_strategy, @branch)`
+  ).run({
+    id: ws.id,
+    directory: ws.directory,
+    source_directory: ws.source_directory ?? null,
+    isolation_strategy: ws.isolation_strategy,
+    branch: ws.branch ?? null,
+  });
+}
+
+export function getWorkspace(id: string): DbWorkspace | undefined {
+  return getDb()
+    .prepare("SELECT * FROM workspaces WHERE id = ?")
+    .get(id) as DbWorkspace | undefined;
+}
+
+export function listWorkspaces(): DbWorkspace[] {
+  return getDb().prepare("SELECT * FROM workspaces ORDER BY created_at DESC").all() as DbWorkspace[];
+}
+
+export function markWorkspaceCleaned(id: string): void {
+  getDb()
+    .prepare(
+      "UPDATE workspaces SET cleaned_up_at = datetime('now') WHERE id = ?"
+    )
+    .run(id);
+}
+
+// ─── Instances ────────────────────────────────────────────────────────────────
+
+export function insertInstance(inst: InsertInstance): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO instances (id, port, pid, directory, url, status)
+     VALUES (@id, @port, @pid, @directory, @url, 'running')`
+  ).run({
+    id: inst.id,
+    port: inst.port,
+    pid: inst.pid ?? null,
+    directory: inst.directory,
+    url: inst.url,
+  });
+}
+
+export function getInstance(id: string): DbInstance | undefined {
+  return getDb()
+    .prepare("SELECT * FROM instances WHERE id = ?")
+    .get(id) as DbInstance | undefined;
+}
+
+export function getInstanceByDirectory(directory: string): DbInstance | undefined {
+  return getDb()
+    .prepare("SELECT * FROM instances WHERE directory = ? AND status = 'running' ORDER BY created_at DESC LIMIT 1")
+    .get(directory) as DbInstance | undefined;
+}
+
+export function listInstances(): DbInstance[] {
+  return getDb().prepare("SELECT * FROM instances ORDER BY created_at DESC").all() as DbInstance[];
+}
+
+export function updateInstanceStatus(
+  id: string,
+  status: "running" | "stopped",
+  stoppedAt?: string
+): void {
+  getDb()
+    .prepare(
+      "UPDATE instances SET status = @status, stopped_at = @stopped_at WHERE id = @id"
+    )
+    .run({ id, status, stopped_at: stoppedAt ?? null });
+}
+
+export function getRunningInstances(): DbInstance[] {
+  return getDb()
+    .prepare("SELECT * FROM instances WHERE status = 'running' ORDER BY created_at ASC")
+    .all() as DbInstance[];
+}
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+export function insertSession(sess: InsertSession): void {
+  getDb()
+    .prepare(
+      `INSERT INTO sessions (id, workspace_id, instance_id, opencode_session_id, title, status, directory)
+       VALUES (@id, @workspace_id, @instance_id, @opencode_session_id, @title, 'active', @directory)`
+    )
+    .run({
+      id: sess.id,
+      workspace_id: sess.workspace_id,
+      instance_id: sess.instance_id,
+      opencode_session_id: sess.opencode_session_id,
+      title: sess.title ?? "Untitled",
+      directory: sess.directory,
+    });
+}
+
+export function getSession(id: string): DbSession | undefined {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .get(id) as DbSession | undefined;
+}
+
+export function getSessionByOpencodeId(opencodeSessionId: string): DbSession | undefined {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE opencode_session_id = ?")
+    .get(opencodeSessionId) as DbSession | undefined;
+}
+
+export function listSessions(): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions ORDER BY created_at DESC")
+    .all() as DbSession[];
+}
+
+export function listActiveSessions(): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC")
+    .all() as DbSession[];
+}
+
+export function updateSessionStatus(
+  id: string,
+  status: "active" | "stopped" | "disconnected",
+  stoppedAt?: string
+): void {
+  getDb()
+    .prepare(
+      "UPDATE sessions SET status = @status, stopped_at = @stopped_at WHERE id = @id"
+    )
+    .run({ id, status, stopped_at: stoppedAt ?? null });
+}
+
+export function getSessionsForInstance(instanceId: string): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status = 'active'")
+    .all(instanceId) as DbSession[];
+}
