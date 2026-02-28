@@ -91,19 +91,31 @@ echo Environment variables:
 echo   PORT             Server port (default: 3000)
 echo   HOSTNAME         Server hostname (default: 0.0.0.0)
 echo   WEAVE_DB_PATH    Database file path (default: %%USERPROFILE%%\.weave\fleet.db)
+echo   OPENCODE_BIN     Full path to opencode binary (if not on PATH)
 exit /b 0
 
 :start_server
 
 rem Check that opencode CLI is available
+rem OPENCODE_BIN allows specifying the full path to the opencode binary,
+rem useful on Windows where 'where' may not find winget-installed binaries.
+if defined OPENCODE_BIN (
+    if exist "%OPENCODE_BIN%" goto :opencode_found
+    echo Warning: OPENCODE_BIN set to "%OPENCODE_BIN%" but file does not exist. >&2
+    echo Falling back to PATH lookup... >&2
+)
 where opencode >nul 2>nul
 if %ERRORLEVEL% neq 0 (
     echo Error: 'opencode' CLI not found on PATH. >&2
     echo. >&2
     echo Weave Fleet requires OpenCode to manage AI agent sessions. >&2
     echo Install it from: https://opencode.ai >&2
+    echo. >&2
+    echo If opencode is installed but not found, set OPENCODE_BIN to the full path: >&2
+    echo   set OPENCODE_BIN=C:\path\to\opencode.exe >&2
     exit /b 1
 )
+:opencode_found
 
 rem Set environment for production
 set "NODE_ENV=production"

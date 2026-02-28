@@ -71,17 +71,32 @@ case "${1:-}" in
     echo "  PORT             Server port (default: 3000)"
     echo "  HOSTNAME         Server hostname (default: 0.0.0.0)"
     echo "  WEAVE_DB_PATH    Database file path (default: ~/.weave/fleet.db)"
+    echo "  OPENCODE_BIN     Full path to opencode binary (if not on PATH)"
     exit 0
     ;;
 esac
 
 # Check that opencode CLI is available
+# OPENCODE_BIN allows specifying the full path to the opencode binary.
+if [ -n "$OPENCODE_BIN" ]; then
+  if [ -x "$OPENCODE_BIN" ]; then
+    # Prepend the binary's directory to PATH so spawn('opencode') finds it
+    OPENCODE_DIR="$(dirname "$OPENCODE_BIN")"
+    export PATH="$OPENCODE_DIR:$PATH"
+  else
+    echo "Warning: OPENCODE_BIN set to \"$OPENCODE_BIN\" but file does not exist or is not executable." >&2
+    echo "Falling back to PATH lookup..." >&2
+  fi
+fi
 if ! command -v opencode >/dev/null 2>&1; then
   echo "Error: 'opencode' CLI not found on PATH." >&2
   echo "" >&2
   echo "Weave Fleet requires OpenCode to manage AI agent sessions." >&2
   echo "Install it with:" >&2
   echo "  curl -fsSL https://opencode.ai/install | bash" >&2
+  echo "" >&2
+  echo "If opencode is installed but not found, set OPENCODE_BIN to the full path:" >&2
+  echo "  export OPENCODE_BIN=/path/to/opencode" >&2
   exit 1
 fi
 

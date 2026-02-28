@@ -13,9 +13,9 @@
  */
 
 import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
-import { statSync } from "fs";
+import { existsSync, statSync } from "fs";
 import { homedir } from "os";
-import { resolve, sep } from "path";
+import { dirname, resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import {
   insertInstance,
@@ -27,6 +27,22 @@ import {
 import {
   createSessionDisconnectedNotification,
 } from "./notification-service";
+
+// ─── OPENCODE_BIN support ─────────────────────────────────────────────────────
+// If OPENCODE_BIN is set to the full path of the opencode binary, prepend its
+// parent directory to PATH so the SDK's `spawn('opencode', ...)` can find it.
+// This works around Windows environments where `where opencode` fails even when
+// the binary is installed (e.g. via winget).
+if (process.env.OPENCODE_BIN) {
+  const binPath = resolve(process.env.OPENCODE_BIN);
+  if (existsSync(binPath)) {
+    const binDir = dirname(binPath);
+    const sep = process.platform === "win32" ? ";" : ":";
+    process.env.PATH = `${binDir}${sep}${process.env.PATH ?? ""}`;
+  } else {
+    console.warn(`[process-manager] OPENCODE_BIN set to "${process.env.OPENCODE_BIN}" but file does not exist`);
+  }
+}
 
 // Re-export for convenience
 export type { OpencodeClient } from "@opencode-ai/sdk/v2";
