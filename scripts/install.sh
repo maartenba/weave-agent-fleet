@@ -38,6 +38,14 @@ detect_platform() {
   case "$OS" in
     Darwin) PLATFORM="darwin" ;;
     Linux)  PLATFORM="linux" ;;
+    MINGW*|MSYS*|CYGWIN*)
+      echo ""
+      warn "It looks like you're on Windows. Use the PowerShell installer instead:"
+      echo ""
+      echo "  irm https://github.com/${REPO}/releases/latest/download/install.ps1 | iex"
+      echo ""
+      exit 1
+      ;;
     *)      error "Unsupported operating system: $OS. Only macOS and Linux are supported." ;;
   esac
 

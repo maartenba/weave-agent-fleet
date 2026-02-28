@@ -10,8 +10,16 @@ A fleet orchestrator for managing multiple OpenCode AI agent sessions from a sin
 
 ### Install
 
+**macOS / Linux:**
+
 ```sh
 curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 | iex
 ```
 
 ### Run
@@ -40,8 +48,8 @@ weave-fleet uninstall
 |---------------------|---------|-------------|
 | `PORT` | `3000` | Server port |
 | `HOSTNAME` | `0.0.0.0` | Server hostname |
-| `WEAVE_DB_PATH` | `~/.weave/fleet.db` | SQLite database path |
-| `WEAVE_INSTALL_DIR` | `~/.weave/fleet` | Installation directory (used by installer) |
+| `WEAVE_DB_PATH` | `~/.weave/fleet.db` (macOS/Linux), `%USERPROFILE%\.weave\fleet.db` (Windows) | SQLite database path |
+| `WEAVE_INSTALL_DIR` | `~/.weave/fleet` (macOS/Linux), `%LOCALAPPDATA%\weave\fleet` (Windows) | Installation directory (used by installer) |
 
 ## Development
 
