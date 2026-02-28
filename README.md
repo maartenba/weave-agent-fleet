@@ -13,7 +13,7 @@ A fleet orchestrator for managing multiple OpenCode AI agent sessions from a sin
 **macOS / Linux:**
 
 ```sh
-curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh
+curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh
 ```
 
 **Windows (PowerShell):**

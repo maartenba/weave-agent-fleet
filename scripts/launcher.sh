@@ -13,7 +13,7 @@ VERSION_FILE="$INSTALL_DIR/VERSION"
 if [ ! -x "$NODE_BIN" ]; then
   echo "Error: bundled Node.js binary not found at $NODE_BIN" >&2
   echo "Your installation may be corrupt. Re-install with:" >&2
-  echo "  curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh" >&2
+  echo "  curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh" >&2
   exit 1
 fi
 
@@ -21,7 +21,7 @@ fi
 if [ ! -f "$SERVER_JS" ]; then
   echo "Error: server.js not found at $SERVER_JS" >&2
   echo "Your installation may be corrupt. Re-install with:" >&2
-  echo "  curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh" >&2
+  echo "  curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh" >&2
   exit 1
 fi
 
@@ -38,9 +38,9 @@ case "${1:-}" in
   update)
     echo "Updating Weave Fleet..."
     if command -v curl >/dev/null 2>&1; then
-      exec sh -c "curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh"
+      exec sh -c "curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh"
     elif command -v wget >/dev/null 2>&1; then
-      exec sh -c "wget -qO- https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh"
+      exec sh -c "wget -qO- https://get.tryweave.io/agent-fleet.sh | sh"
     else
       echo "Error: curl or wget is required to update." >&2
       exit 1

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # install.sh — Weave Agent Fleet installer
-# Usage: curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh
+# Usage: curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh
 #
 # Environment variables:
 #   WEAVE_VERSION      — Install a specific version (e.g., "0.1.0"). Default: latest.
