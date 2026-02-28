@@ -55,7 +55,7 @@ Ship Windows x64 as a supported platform with a PowerShell one-liner installer (
 - [ ] `.gitignore` updated for Windows build artifacts
 
 ### Definition of Done
-- [ ] `irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 | iex` successfully installs on a clean Windows x64 machine
+- [ ] `irm https://get.tryweave.io/agent-fleet.ps1 | iex` successfully installs on a clean Windows x64 machine
 - [ ] `weave-fleet` starts the Next.js production server on Windows
 - [ ] `weave-fleet update` re-installs the latest version on Windows
 - [ ] `weave-fleet version` prints the correct version on Windows
@@ -77,7 +77,7 @@ Ship Windows x64 as a supported platform with a PowerShell one-liner installer (
 ### Phase 1: PowerShell Install Script
 
 - [ ] 1. **Create `scripts/install.ps1`**
-  **What**: PowerShell install script equivalent to `install.sh`. Invoked via `irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 | iex`. Must:
+  **What**: PowerShell install script equivalent to `install.sh`. Invoked via `irm https://get.tryweave.io/agent-fleet.ps1 | iex`. Must:
   - Detect architecture via `$env:PROCESSOR_ARCHITECTURE` (map `AMD64`→`x64`, `ARM64`→`arm64`)
   - Only support `x64` initially; error on `ARM64` with "Windows arm64 not yet supported"
   - Determine latest version from GitHub Releases API (`Invoke-RestMethod`) or use `$env:WEAVE_VERSION`
@@ -99,7 +99,7 @@ Ship Windows x64 as a supported platform with a PowerShell one-liner installer (
   **What**: Add a check at the top of `install.sh` to detect Windows environments (MSYS, Git Bash, Cygwin, WSL running Windows binaries) and print a redirect message:
   ```
   It looks like you're on Windows. Use the PowerShell installer instead:
-    irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 | iex
+    irm https://get.tryweave.io/agent-fleet.ps1 | iex
   ```
   Detection: Check `uname -s` for `MINGW*`, `MSYS*`, `CYGWIN*` patterns. Keep the existing `*) error "Unsupported..."` as fallback.
   **Files**: `scripts/install.sh`
@@ -117,7 +117,7 @@ Ship Windows x64 as a supported platform with a PowerShell one-liner installer (
   - Parse first argument as subcommand:
     - `(no args)` — start the server
     - `version` / `--version` / `-v` — print VERSION file content
-    - `update` — invoke PowerShell: `powershell -NoProfile -Command "irm <install.ps1 URL> | iex"`
+    - `update` — invoke PowerShell: `powershell -NoProfile -Command "irm https://get.tryweave.io/agent-fleet.ps1 | iex"`
     - `uninstall` — remove `%INSTALL_DIR%` and print manual PATH removal instructions
     - `help` / `--help` / `-h` — print usage
   - Check `opencode` is on PATH via `where opencode >nul 2>nul`; error if not found
@@ -251,15 +251,15 @@ Ship Windows x64 as a supported platform with a PowerShell one-liner installer (
   ```markdown
   ### Install
   
-  **macOS / Linux:**
-  ```sh
-  curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh
-  ```
-  
-  **Windows (PowerShell):**
-  ```powershell
-  irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 | iex
-  ```
+   **macOS / Linux:**
+   ```sh
+   curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh
+   ```
+   
+   **Windows (PowerShell):**
+   ```powershell
+   irm https://get.tryweave.io/agent-fleet.ps1 | iex
+   ```
   ```
   Also update the Configuration table to add Windows-specific defaults:
   - `WEAVE_INSTALL_DIR`: `~/.weave/fleet` (macOS/Linux), `%LOCALAPPDATA%\weave\fleet` (Windows)
@@ -351,7 +351,7 @@ Phases 5 and 6 are independent of each other and can be done in parallel. Phase 
 **Mitigation**: `node.exe` from nodejs.org is signed. The `.zip` archive is downloaded from GitHub Releases (trusted source). If users report issues, document adding an AV exclusion for `%LOCALAPPDATA%\weave\fleet\`.
 
 ## Verification
-- [ ] `irm <install.ps1 URL> | iex` installs on a clean Windows x64 machine
+- [ ] `irm https://get.tryweave.io/agent-fleet.ps1 | iex` installs on a clean Windows x64 machine
 - [ ] `weave-fleet` starts the server on Windows (http://localhost:3000 responds)
 - [ ] `weave-fleet version` prints the correct version
 - [ ] `weave-fleet update` downloads and installs the latest release

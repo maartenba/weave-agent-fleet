@@ -237,3 +237,40 @@ jobs:
             artifacts/checksums.txt
             scripts/install.sh
             scripts/install.ps1
+
+  deploy-vanity-url:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          path: source
+
+      - name: Update scripts on gh-pages
+        run: |
+          cp source/scripts/install.sh gh-pages/agent-fleet.sh
+          if [ -f source/scripts/install.ps1 ]; then
+            cp source/scripts/install.ps1 gh-pages/agent-fleet.ps1
+          fi
+
+      - name: Commit and push
+        working-directory: gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add agent-fleet.sh agent-fleet.ps1 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+          else
+            git commit -m "Update install scripts for ${GITHUB_REF_NAME}"
+            git push
+          fi

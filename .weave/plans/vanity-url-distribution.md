@@ -91,7 +91,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
   **Files**: None (DNS console)
   **Acceptance**: `dig get.tryweave.io CNAME` returns `pgermishuys.github.io.`
 
-- [ ] 2. **Initialize the `gh-pages` branch with CNAME file**
+- [x] 2. **Initialize the `gh-pages` branch with CNAME file**
   **What**: Create an orphan `gh-pages` branch with:
   - `CNAME` file containing `get.tryweave.io` (tells GitHub Pages to serve this custom domain)
   - `.nojekyll` empty file (disables Jekyll processing — we want raw file serving)
@@ -138,7 +138,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
 
 ### Phase 2: Automated Deployment
 
-- [ ] 4. **Add deploy-to-gh-pages step in release workflow**
+- [x] 4. **Add deploy-to-gh-pages step in release workflow**
   **What**: Add a new job to `.github/workflows/release.yml` that runs after the `release` job and copies the install scripts to the `gh-pages` branch. This ensures the vanity URL always serves the latest release's scripts.
 
   Add a `deploy-vanity-url` job:
@@ -184,7 +184,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
 
 ### Phase 3: Update References in Scripts
 
-- [ ] 5. **Update `scripts/install.sh` header comment**
+- [x] 5. **Update `scripts/install.sh` header comment**
   **What**: Change the usage comment from the GitHub Releases URL to the vanity URL:
   ```sh
   # Usage: curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh
@@ -193,7 +193,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
   **Files**: `scripts/install.sh` (line 3)
   **Acceptance**: The comment at the top of `install.sh` shows the vanity URL.
 
-- [ ] 6. **Update `scripts/launcher.sh` error messages and update URL**
+- [x] 6. **Update `scripts/launcher.sh` error messages and update URL**
   **What**: Update three locations where the GitHub Releases `install.sh` URL is hardcoded:
   
   Line 16 (Node.js binary not found error):
@@ -218,7 +218,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
   **Files**: `scripts/launcher.sh` (lines 16, 24, 41, 43)
   **Acceptance**: All self-referencing URLs in the launcher use the vanity URL. `weave-fleet update` downloads from `get.tryweave.io`.
 
-- [ ] 7. **Update `README.md` install instructions**
+- [x] 7. **Update `README.md` install instructions**
   **What**: Replace the install command with the vanity URL:
   ```markdown
   ### Install
@@ -234,7 +234,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
 
 ### Phase 4: Update Windows Plan
 
-- [ ] 8. **Update `windows-installer-support.md` with vanity URLs**
+- [x] 8. **Update `windows-installer-support.md` with vanity URLs**
   **What**: Update all references to the raw GitHub Releases URLs in the Windows plan to use vanity URLs:
   
   - Line 58 (Definition of Done): `irm https://get.tryweave.io/agent-fleet.ps1 | iex`
@@ -257,7 +257,7 @@ Serve install scripts at `https://get.tryweave.io/agent-fleet.sh` and `https://g
   **Files**: `.weave/plans/windows-installer-support.md`
   **Acceptance**: All install URLs in the Windows plan use `get.tryweave.io` vanity URLs.
 
-- [ ] 9. **Add vanity URL note to the Windows install.ps1 task**
+- [x] 9. **Add vanity URL note to the Windows install.ps1 task**
   **What**: When `scripts/install.ps1` is eventually implemented (per the Windows plan), ensure it includes the vanity URL in its header comment:
   ```powershell
   # Usage: irm https://get.tryweave.io/agent-fleet.ps1 | iex
