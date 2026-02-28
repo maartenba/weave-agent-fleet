@@ -9,6 +9,7 @@ import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
 import { TodoListInline } from "./todo-list-inline";
+import { MarkdownRenderer } from "./markdown-renderer";
 
 interface ActivityStreamV1Props {
   messages: AccumulatedMessage[];
@@ -206,9 +207,7 @@ function MessageItem({ message, agents, allMessages }: MessageItemProps) {
 
         {/* Text content */}
         {fullText && (
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
-            {fullText}
-          </p>
+          <MarkdownRenderer content={fullText} />
         )}
 
         {/* Empty state for assistant — still streaming */}

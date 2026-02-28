@@ -24,23 +24,23 @@ AI model responses currently render as plain text in a `<p>` tag (line 209 of `a
 Render markdown-formatted model responses with proper typography, syntax-highlighted code blocks, and a copy-to-clipboard button — while maintaining streaming performance and dark-theme consistency.
 
 ### Deliverables
-- [ ] `MarkdownRenderer` component with full GFM markdown support
-- [ ] Syntax highlighting for fenced code blocks
-- [ ] Copy-to-clipboard button on code blocks
-- [ ] Dark-theme-consistent markdown typography styles
-- [ ] Integration into `activity-stream-v1.tsx` (replace `<p>{fullText}</p>`)
-- [ ] Integration into `activity-stream.tsx` (legacy stream, same treatment)
-- [ ] Streaming performance: memoization to avoid re-parsing on every delta
+- [x] `MarkdownRenderer` component with full GFM markdown support
+- [x] Syntax highlighting for fenced code blocks
+- [x] Copy-to-clipboard button on code blocks
+- [x] Dark-theme-consistent markdown typography styles
+- [x] Integration into `activity-stream-v1.tsx` (replace `<p>{fullText}</p>`)
+- [x] Integration into `activity-stream.tsx` (legacy stream, same treatment)
+- [x] Streaming performance: memoization to avoid re-parsing on every delta
 
 ### Definition of Done
-- [ ] Markdown headings, bold, italic, lists, links, inline code, code blocks, tables, and blockquotes render correctly
-- [ ] Fenced code blocks show syntax highlighting with language label
-- [ ] Code blocks have a functional copy-to-clipboard button
-- [ ] Styles match the existing dark theme (slate bg, purple accents, JetBrains Mono for code)
-- [ ] Streaming text renders incrementally without visible jank or layout thrashing
-- [ ] No TypeScript errors: `npx tsc --noEmit` passes
-- [ ] All existing tests pass: `npm run test`
-- [ ] Dev server runs without errors: `npm run dev`
+- [x] Markdown headings, bold, italic, lists, links, inline code, code blocks, tables, and blockquotes render correctly
+- [x] Fenced code blocks show syntax highlighting with language label
+- [x] Code blocks have a functional copy-to-clipboard button
+- [x] Styles match the existing dark theme (slate bg, purple accents, JetBrains Mono for code)
+- [x] Streaming text renders incrementally without visible jank or layout thrashing
+- [x] No TypeScript errors: `npx tsc --noEmit` passes
+- [x] All existing tests pass: `npm run test`
+- [x] Dev server runs without errors: `npm run dev`
 
 ### Guardrails (Must NOT)
 - Must NOT modify `event-state.ts` or the SSE streaming pipeline
@@ -53,7 +53,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 1: Dependencies & Foundation
 
-- [ ] 1. **Install markdown rendering dependencies**
+- [x] 1. **Install markdown rendering dependencies**
   **What**: Add `react-markdown`, `remark-gfm`, and `rehype-highlight` (plus `highlight.js` for syntax themes) as production dependencies. These are the standard, lightweight choices for React markdown rendering with GFM support and code highlighting.
   **Files**: `package.json`
   **Commands**:
@@ -69,7 +69,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 2: MarkdownRenderer Component
 
-- [ ] 2. **Create the `MarkdownRenderer` component**
+- [x] 2. **Create the `MarkdownRenderer` component**
   **What**: Create a new `"use client"` component that wraps `react-markdown` with custom component overrides for headings, code blocks, links, lists, tables, and other elements. The component accepts a `content: string` prop and renders it as styled markdown.
   **Files**: `src/components/session/markdown-renderer.tsx` (new)
   **Key implementation details**:
@@ -94,7 +94,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
   - The wrapper `<div>` should use classes: `prose-weave space-y-2 text-sm` (the `prose-weave` class is for additional CSS overrides in `globals.css`, and `space-y-2` provides vertical rhythm between block elements).
   **Acceptance**: Component renders a test markdown string with headings, bold, lists, code blocks, and links. All elements are visually styled. No TypeScript errors.
 
-- [ ] 3. **Create the `CodeBlock` sub-component with copy-to-clipboard**
+- [x] 3. **Create the `CodeBlock` sub-component with copy-to-clipboard**
   **What**: A dedicated component for rendering fenced code blocks with a language label and copy button. This is rendered by the custom `pre` component override in `MarkdownRenderer`.
   **Files**: `src/components/session/markdown-renderer.tsx` (same file, unexported sub-component)
   **Key implementation details**:
@@ -112,7 +112,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 3: Markdown Typography Styles
 
-- [ ] 4. **Add markdown-specific CSS to `globals.css`**
+- [x] 4. **Add markdown-specific CSS to `globals.css`**
   **What**: Add a `.prose-weave` class with CSS overrides for markdown content that integrates with the dark theme. This handles edge cases that Tailwind utility classes on individual elements can't cover (e.g., highlight.js theme tokens, nested list spacing, table hover).
   **Files**: `src/app/globals.css`
   **Key additions**:
@@ -152,7 +152,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 4: Integration
 
-- [ ] 5. **Integrate `MarkdownRenderer` into `activity-stream-v1.tsx`**
+- [x] 5. **Integrate `MarkdownRenderer` into `activity-stream-v1.tsx`**
   **What**: Replace the plain-text `<p>` rendering of `fullText` with the new `MarkdownRenderer` component.
   **Files**: `src/components/session/activity-stream-v1.tsx`
   **Changes**:
@@ -177,7 +177,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
   - **User messages**: Consider whether user messages should also get markdown rendering. User prompts are typically short and rarely contain markdown. For now, render all messages (user + assistant) through `MarkdownRenderer` — the component handles plain text gracefully (it just renders it as a `<p>`). If user messages look odd, we can add a `className` prop or a `variant` prop later.
   **Acceptance**: Model responses render with formatted markdown in the v1 activity stream. Streaming still works — text appears incrementally. No layout shifts.
 
-- [ ] 6. **Integrate `MarkdownRenderer` into `activity-stream.tsx` (legacy)**
+- [x] 6. **Integrate `MarkdownRenderer` into `activity-stream.tsx` (legacy)**
   **What**: Apply the same markdown rendering to the legacy activity stream for consistency.
   **Files**: `src/components/session/activity-stream.tsx`
   **Changes**:
@@ -199,7 +199,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 5: Performance & Polish
 
-- [ ] 7. **Optimize streaming performance with memoization**
+- [x] 7. **Optimize streaming performance with memoization**
   **What**: Ensure that the `MarkdownRenderer` is wrapped with `React.memo` and that `remarkPlugins`/`rehypePlugins`/`components` arrays are referentially stable (defined at module scope or memoized). Profile with React DevTools to verify that the markdown tree doesn't cause excessive re-renders.
   **Files**: `src/components/session/markdown-renderer.tsx`
   **Key details**:
@@ -209,7 +209,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
   - **Do NOT debounce/throttle deltas** — the text should appear character-by-character for the real-time streaming feel. The memoization is sufficient for typical message sizes. If performance issues arise with very large messages (>50KB), that's a future optimization (e.g., virtualized rendering or raw HTML for completed messages).
   **Acceptance**: During streaming, the page remains responsive (no frame drops visible in React DevTools Profiler). Plugin/component arrays have stable references across renders.
 
-- [ ] 8. **Handle edge cases and partial markdown during streaming**
+- [x] 8. **Handle edge cases and partial markdown during streaming**
   **What**: During streaming, `fullText` may contain incomplete markdown (e.g., an unclosed code fence `` ``` `` without its closing fence, or a partial link `[text](url`). `react-markdown` handles this gracefully — it renders what it can and treats unclosed constructs as plain text. Verify this behavior and document any workarounds needed.
   **Files**: `src/components/session/markdown-renderer.tsx` (potential adjustments)
   **Key considerations**:
@@ -222,7 +222,7 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
 
 ### Phase 6: Testing
 
-- [ ] 9. **Add utility tests for code block language extraction**
+- [x] 9. **Add utility tests for code block language extraction**
   **What**: If any utility functions are extracted (e.g., a `extractLanguage(className: string): string` helper, or a `extractTextContent(node: ReactNode): string` helper for the copy button), add unit tests.
   **Files**: `src/lib/__tests__/markdown-utils.test.ts` (new, if utilities are extracted to `src/lib/markdown-utils.ts`)
   **Test cases**:
@@ -232,31 +232,31 @@ Render markdown-formatted model responses with proper typography, syntax-highlig
   - `extractLanguage(undefined)` → `""` (defensive)
   **Acceptance**: Tests pass with `npm run test`. Note: if all logic stays inline in the component with no extractable pure functions, this task can be skipped — do not force extraction just for testability.
 
-- [ ] 10. **Manual QA checklist**
+- [x] 10. **Manual QA checklist**
   **What**: Manually verify all markdown features render correctly with realistic model output.
   **Checklist**:
-  - [ ] `# Heading 1` through `###### Heading 6` — different sizes, proper spacing
-  - [ ] `**bold**` and `*italic*` — correct font weight/style
-  - [ ] `- unordered` and `1. ordered` lists — proper bullets/numbers, nesting works
-  - [ ] `` `inline code` `` — highlighted background, mono font
-  - [ ] Fenced code block with language (` ```typescript `) — syntax highlighting, language label, copy button
-  - [ ] Fenced code block without language (` ``` `) — plain preformatted text, copy button works
-  - [ ] `[link text](url)` — purple colored, opens in new tab
-  - [ ] `> blockquote` — left border, italic, muted color
-  - [ ] `| table | header |` — bordered, striped rows
-  - [ ] `---` horizontal rule — subtle divider
-  - [ ] Streaming: start a prompt, watch text arrive character-by-character — no jank, code blocks build up progressively
-  - [ ] Copy button: click copies code content to clipboard, shows check icon briefly
-  - [ ] Long code blocks: horizontal scroll works, no layout overflow
-  - [ ] Mixed content: message with text → code → text → list renders with proper spacing
+  - [x] `# Heading 1` through `###### Heading 6` — different sizes, proper spacing
+  - [x] `**bold**` and `*italic*` — correct font weight/style
+  - [x] `- unordered` and `1. ordered` lists — proper bullets/numbers, nesting works
+  - [x] `` `inline code` `` — highlighted background, mono font
+  - [x] Fenced code block with language (` ```typescript `) — syntax highlighting, language label, copy button
+  - [x] Fenced code block without language (` ``` `) — plain preformatted text, copy button works
+  - [x] `[link text](url)` — purple colored, opens in new tab
+  - [x] `> blockquote` — left border, italic, muted color
+  - [x] `| table | header |` — bordered, striped rows
+  - [x] `---` horizontal rule — subtle divider
+  - [x] Streaming: start a prompt, watch text arrive character-by-character — no jank, code blocks build up progressively
+  - [x] Copy button: click copies code content to clipboard, shows check icon briefly
+  - [x] Long code blocks: horizontal scroll works, no layout overflow
+  - [x] Mixed content: message with text → code → text → list renders with proper spacing
   **Acceptance**: All checklist items pass visual inspection.
 
 ## Verification
-- [ ] All TypeScript compiles cleanly: `npx tsc --noEmit`
-- [ ] All existing tests pass: `npm run test`
-- [ ] Dev server starts cleanly: `npm run dev`
-- [ ] No regressions in tool call rendering, todo list rendering, or message layout
-- [ ] Production build succeeds: `npm run build`
+- [x] All TypeScript compiles cleanly: `npx tsc --noEmit`
+- [x] All existing tests pass: `npm run test`
+- [x] Dev server starts cleanly: `npm run dev`
+- [x] No regressions in tool call rendering, todo list rendering, or message layout
+- [x] Production build succeeds: `npm run build`
 
 ## Architecture Notes
 

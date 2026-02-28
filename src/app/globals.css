@@ -161,3 +161,30 @@
 .weave-gradient-border {
   border-image: linear-gradient(135deg, #3B82F6, #A855F7, #EC4899) 1;
 }
+
+/* ─── Markdown prose (Weave dark theme) ─────────────────────────────────── */
+
+.prose-weave pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+.prose-weave pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+
+/* Tight spacing between consecutive list items */
+.prose-weave li > p {
+  margin: 0;
+}
+
+/* Table striping */
+.prose-weave table tr:nth-child(even) {
+  background: var(--muted);
+}
+
+.prose-weave table th {
+  background: var(--muted);
+  font-weight: 600;
+}

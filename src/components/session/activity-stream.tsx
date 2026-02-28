@@ -14,6 +14,7 @@ import {
   Bot,
   User,
 } from "lucide-react";
+import { MarkdownRenderer } from "./markdown-renderer";
 
 interface ActivityStreamProps {
   events: SessionEvent[];
@@ -78,9 +79,9 @@ function EventContent({ event }: { event: SessionEvent }) {
           <span className={`font-medium ${data.role === "user" ? "text-foreground" : agentColor}`}>
             {data.role === "user" ? "You" : agent}
           </span>
-          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-            {data.text as string}
-          </p>
+          <div className="mt-0.5">
+            <MarkdownRenderer content={data.text as string} className="text-xs" />
+          </div>
         </div>
       );
 
