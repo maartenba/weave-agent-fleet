@@ -7,6 +7,7 @@ import {
   getWorkspace,
   listWorkspaces,
   markWorkspaceCleaned,
+  updateWorkspaceDisplayName,
   insertInstance,
   getInstance,
   getInstanceByDirectory,
@@ -106,6 +107,35 @@ describe("workspace repository", () => {
     markWorkspaceCleaned(id);
     const ws = getWorkspace(id);
     expect(ws?.cleaned_up_at).not.toBeNull();
+  });
+
+  it("UpdatesWorkspaceDisplayName", () => {
+    const id = mkWorkspaceId();
+    insertWorkspace({ id, directory: "/tmp/named", isolation_strategy: "existing" });
+    expect(getWorkspace(id)?.display_name).toBeNull();
+
+    updateWorkspaceDisplayName(id, "My Project");
+    const ws = getWorkspace(id);
+    expect(ws?.display_name).toBe("My Project");
+  });
+
+  it("UpdatesDisplayNameOnlyForTargetWorkspace", () => {
+    const id1 = mkWorkspaceId();
+    const id2 = mkWorkspaceId();
+    insertWorkspace({ id: id1, directory: "/tmp/a", isolation_strategy: "existing" });
+    insertWorkspace({ id: id2, directory: "/tmp/b", isolation_strategy: "existing" });
+
+    updateWorkspaceDisplayName(id1, "Renamed");
+    expect(getWorkspace(id1)?.display_name).toBe("Renamed");
+    expect(getWorkspace(id2)?.display_name).toBeNull();
+  });
+
+  it("OverwritesExistingDisplayName", () => {
+    const id = mkWorkspaceId();
+    insertWorkspace({ id, directory: "/tmp/ow", isolation_strategy: "existing" });
+    updateWorkspaceDisplayName(id, "First");
+    updateWorkspaceDisplayName(id, "Second");
+    expect(getWorkspace(id)?.display_name).toBe("Second");
   });
 });
 

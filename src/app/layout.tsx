@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { ClientLayout } from "./client-layout";
+
+// Force dynamic rendering — this app is a live dashboard that polls APIs,
+// so static prerendering is not useful and causes _global-error crashes
+// with client providers in Next.js 16.
+export const dynamic = "force-dynamic";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -39,12 +43,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <TooltipProvider delayDuration={0}>
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-auto">{children}</main>
-          </div>
-        </TooltipProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

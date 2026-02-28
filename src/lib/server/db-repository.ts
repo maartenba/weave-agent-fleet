@@ -17,6 +17,7 @@ export interface DbWorkspace {
   branch: string | null;
   created_at: string;
   cleaned_up_at: string | null;
+  display_name: string | null;
 }
 
 export interface DbInstance {
@@ -98,6 +99,12 @@ export function markWorkspaceCleaned(id: string): void {
       "UPDATE workspaces SET cleaned_up_at = datetime('now') WHERE id = ?"
     )
     .run(id);
+}
+
+export function updateWorkspaceDisplayName(id: string, displayName: string): void {
+  getDb()
+    .prepare("UPDATE workspaces SET display_name = @display_name WHERE id = @id")
+    .run({ id, display_name: displayName });
 }
 
 // ─── Instances ────────────────────────────────────────────────────────────────

@@ -118,6 +118,7 @@ export async function GET(): Promise<NextResponse> {
               instanceId: instance.id,
               workspaceId: "",
               workspaceDirectory: instance.directory,
+              workspaceDisplayName: null,
               isolationStrategy: "existing",
               sessionStatus: instance.status === "running" ? "active" : "stopped",
               session,
@@ -163,11 +164,13 @@ export async function GET(): Promise<NextResponse> {
     // Get workspace info
     let workspaceDirectory = dbSession.directory;
     let isolationStrategy: string = "existing";
+    let workspaceDisplayName: string | null = null;
     try {
       const ws = getWorkspace(dbSession.workspace_id);
       if (ws) {
         workspaceDirectory = ws.directory;
         isolationStrategy = ws.isolation_strategy;
+        workspaceDisplayName = ws.display_name;
       }
     } catch {
       // Non-fatal
@@ -184,6 +187,7 @@ export async function GET(): Promise<NextResponse> {
             instanceId: dbSession.instance_id,
             workspaceId: dbSession.workspace_id,
             workspaceDirectory,
+            workspaceDisplayName,
             isolationStrategy,
             sessionStatus,
             session: result.data,
@@ -201,6 +205,7 @@ export async function GET(): Promise<NextResponse> {
       instanceId: dbSession.instance_id,
       workspaceId: dbSession.workspace_id,
       workspaceDirectory,
+      workspaceDisplayName,
       isolationStrategy,
       sessionStatus,
       session: {

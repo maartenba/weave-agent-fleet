@@ -90,6 +90,13 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
   `);
 
+  // Migrations — wrapped in try/catch since columns may already exist
+  try {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN display_name TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
   _db = db;
   return db;
 }

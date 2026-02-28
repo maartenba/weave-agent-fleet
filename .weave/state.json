@@ -1,10 +1,10 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/todowrite-rendering.md",
-  "started_at": "2026-02-28T01:37:53.937Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/session-organization.md",
+  "started_at": "2026-02-28T02:00:00.000Z",
   "session_ids": [
     "ses_35e218dd3ffeanxGPCWDM0oHjd"
   ],
-  "plan_name": "todowrite-rendering",
+  "plan_name": "session-organization",
   "agent": "tapestry",
-  "start_sha": "2574a09d04623b6fd7d71f9cef00b5a738745e18"
+  "start_sha": "85ca7c72165d1bcf5a150768fb92144d00a32912"
 }

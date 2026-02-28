@@ -59,27 +59,27 @@ Sessions are displayed as a flat grid of cards on the Fleet page (`/`). The side
 Transform the flat session list into an organized workspace-grouped view in both the sidebar (tree navigation) and Fleet page (grouped grid with controls), with user-renamable workspace display names.
 
 ### Deliverables
-- [ ] Database migration: `display_name` column on `workspaces` table
-- [ ] API endpoint: `PATCH /api/workspaces/[id]` for rename
-- [ ] `SessionsProvider` context for shared session data
-- [ ] `LiveSessionCard` extracted to its own component file
-- [ ] `SessionGroup` component for collapsible workspace groups on Fleet page
-- [ ] Fleet page toolbar: Group By, Sort, Search controls
-- [ ] Sidebar workspace tree under Fleet nav item
-- [ ] Context menu on sidebar workspace items (Rename, Pin, New session, Terminate all)
-- [ ] Inline rename on double-click (sidebar and Fleet page headers)
-- [ ] Persisted UI state (collapsed groups, sort/group preferences) via localStorage
+- [x] Database migration: `display_name` column on `workspaces` table
+- [x] API endpoint: `PATCH /api/workspaces/[id]` for rename
+- [x] `SessionsProvider` context for shared session data
+- [x] `LiveSessionCard` extracted to its own component file
+- [x] `SessionGroup` component for collapsible workspace groups on Fleet page
+- [x] Fleet page toolbar: Group By, Sort, Search controls
+- [x] Sidebar workspace tree under Fleet nav item
+- [x] Context menu on sidebar workspace items (Rename, Pin, New session, Terminate all)
+- [x] Inline rename on double-click (sidebar and Fleet page headers)
+- [x] Persisted UI state (collapsed groups, sort/group preferences) via localStorage
 
 ### Definition of Done
-- [ ] `npm run build` passes with no errors
-- [ ] `npm run lint` passes with no errors
-- [ ] `npm run test` passes with no regressions
-- [ ] Sidebar shows workspace tree with session counts and status dots
-- [ ] Clicking a workspace in sidebar filters Fleet page
-- [ ] Fleet page groups sessions by workspace with collapsible sections
-- [ ] Search input filters sessions by title, directory, or tags
-- [ ] Workspace rename via context menu or double-click persists to DB
-- [ ] UI state (collapsed groups, sort preference) survives page refresh
+- [x] `npm run build` passes with no errors
+- [x] `npm run lint` passes with no errors
+- [x] `npm run test` passes with no regressions
+- [x] Sidebar shows workspace tree with session counts and status dots
+- [x] Clicking a workspace in sidebar filters Fleet page
+- [x] Fleet page groups sessions by workspace with collapsible sections
+- [x] Search input filters sessions by title, directory, or tags
+- [x] Workspace rename via context menu or double-click persists to DB
+- [x] UI state (collapsed groups, sort preference) survives page refresh
 
 ### Guardrails (Must NOT)
 - Must NOT introduce React Query, SWR, or other data-fetching libraries — use existing hook patterns
@@ -95,27 +95,27 @@ Transform the flat session list into an organized workspace-grouped view in both
 
 ### Phase 1: Data Layer
 
-- [ ] 1. Add `display_name` column to `workspaces` table
+- [x] 1. Add `display_name` column to `workspaces` table
   **What**: Add `ALTER TABLE workspaces ADD COLUMN display_name TEXT` migration to `src/lib/server/database.ts` in the schema init block. Add it after the existing `CREATE TABLE IF NOT EXISTS workspaces` statement as an `ALTER TABLE` wrapped in a try/catch (column may already exist on existing DBs). Update `DbWorkspace` type in `src/lib/server/db-repository.ts` to include `display_name: string | null`.
   **Files**:
     - `src/lib/server/database.ts` — add ALTER TABLE migration
     - `src/lib/server/db-repository.ts` — update `DbWorkspace` type, add `updateWorkspaceDisplayName()` function
   **Acceptance**: `getWorkspace()` returns objects with `display_name` field. `updateWorkspaceDisplayName(id, "My Project")` updates the row.
 
-- [ ] 2. Create workspace rename API endpoint
+- [x] 2. Create workspace rename API endpoint
   **What**: Create `PATCH /api/workspaces/[id]` route. Accepts `{ displayName: string }` body. Calls `updateWorkspaceDisplayName()`. Returns `{ id, displayName }` on success. 400 if body invalid, 404 if workspace not found.
   **Files**:
     - `src/app/api/workspaces/[id]/route.ts` — new file, PATCH handler
   **Acceptance**: `curl -X PATCH /api/workspaces/<id> -d '{"displayName":"My Project"}'` returns 200 with updated display name.
 
-- [ ] 3. Enrich `GET /api/sessions` response with workspace display name
+- [x] 3. Enrich `GET /api/sessions` response with workspace display name
   **What**: In `src/app/api/sessions/route.ts`, when looking up workspace info (line 167), also read `display_name` from the workspace row. Add `workspaceDisplayName: string | null` to `SessionListItem` in `src/lib/api-types.ts`.
   **Files**:
     - `src/lib/api-types.ts` — add `workspaceDisplayName` to `SessionListItem`
     - `src/app/api/sessions/route.ts` — pass `display_name` through to response
   **Acceptance**: `GET /api/sessions` response items include `workspaceDisplayName` field (null if not set).
 
-- [ ] 4. Create `useRenameWorkspace` hook
+- [x] 4. Create `useRenameWorkspace` hook
   **What**: Client-side hook for the rename mutation. Pattern: `const { renameWorkspace, isLoading, error } = useRenameWorkspace()`. The `renameWorkspace(workspaceId, displayName, onSuccess?)` function calls `PATCH /api/workspaces/[id]` with `{ displayName }` and invokes the optional `onSuccess` callback on 200 response. This keeps the hook decoupled from the sessions context (which doesn't exist yet in Phase 1). Callers in Phase 3/4 will wire `onSuccess` to `sessionsContext.refetch` to refresh the session list after rename.
   **Files**:
     - `src/hooks/use-rename-workspace.ts` — new file
@@ -123,7 +123,7 @@ Transform the flat session list into an organized workspace-grouped view in both
 
 ### Phase 2: Shared State & Component Extraction
 
-- [ ] 5. Create `SessionsProvider` context and client layout wrapper
+- [x] 5. Create `SessionsProvider` context and client layout wrapper
   **What**: Create a React context that wraps `useSessions(5000)` and `useFleetSummary(10000)` into a single provider. Exposes `{ sessions, isLoading, error, refetch, summary }` where `refetch` triggers a session re-fetch (fleet summary refreshes on its own poll cycle). Because `src/app/layout.tsx` is a **server component** (no `"use client"` directive), the provider cannot be added there directly. Instead: (1) create `src/contexts/sessions-context.tsx` with the provider and `useSessionsContext()` hook, (2) create `src/app/client-layout.tsx` as a `"use client"` component that wraps children with `<SessionsProvider>` and renders `<Sidebar>` + `<main>` inside the flex container, (3) update `layout.tsx` to render `<ClientLayout>{children}</ClientLayout>` instead of the current inline flex layout.
   **Files**:
     - `src/contexts/sessions-context.tsx` — new file, provider + `useSessionsContext()` hook
@@ -131,20 +131,20 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/app/layout.tsx` — replace inline flex layout with `<ClientLayout>{children}</ClientLayout>`, remove direct `<Sidebar>` and `<TooltipProvider>` imports
   **Acceptance**: `useSessionsContext()` returns the same data as `useSessions()` currently does, accessible from any component in the tree. `layout.tsx` remains a server component (no `"use client"`). `npm run build` passes.
 
-- [ ] 6. Extract `LiveSessionCard` component
+- [x] 6. Extract `LiveSessionCard` component
   **What**: Move `LiveSessionCard` and the `timeSince` helper from `src/app/page.tsx` into a new component file. Export both so Fleet page can import them.
   **Files**:
     - `src/components/fleet/live-session-card.tsx` — new file with `LiveSessionCard` and `timeSince`
     - `src/app/page.tsx` — import `LiveSessionCard` from new file, remove inline definition
   **Acceptance**: Fleet page renders identically to before. No visual change.
 
-- [ ] 7. Create `useWorkspaces` derived hook
+- [x] 7. Create `useWorkspaces` derived hook
   **What**: A hook that takes the `SessionListItem[]` from context and derives a workspace list. Returns `WorkspaceGroup[]` where each entry has `{ workspaceId, workspaceDirectory, displayName, sessionCount, hasRunningSession, sessions: SessionListItem[] }`. Sorts workspaces: those with running sessions first, then alphabetically by display name. **Important**: Wrap the derivation logic in `useMemo` keyed on the `sessions` array reference to prevent re-computing the grouping on every render cycle (the `useSessions` poll returns a new array reference every 5s, but intermediate re-renders should not re-derive).
   **Files**:
     - `src/hooks/use-workspaces.ts` — new file, pure derivation (no API calls), memoized with `useMemo`
   **Acceptance**: Given 5 sessions across 2 workspaces, returns 2 `WorkspaceGroup` objects with correct counts and sessions. Re-derivation only occurs when session data changes.
 
-- [ ] 8. Install shadcn `context-menu` and `collapsible` components
+- [x] 8. Install shadcn `context-menu` and `collapsible` components
   **What**: Run `npx shadcn@latest add context-menu collapsible` to install the Radix-based primitives. These will be used for sidebar right-click menus and collapsible tree/group sections.
   **Files**:
     - `src/components/ui/context-menu.tsx` — auto-generated by shadcn
@@ -153,7 +153,7 @@ Transform the flat session list into an organized workspace-grouped view in both
 
 ### Phase 3: Grouped Fleet Page
 
-- [ ] 9. Create `FleetToolbar` component
+- [x] 9. Create `FleetToolbar` component
   **What**: A toolbar rendered above the session grid with three controls:
     - **Group By** dropdown: `Directory` (default) | `Status` | `Source` | `None` — uses `DropdownMenu` from existing UI
     - **Sort** dropdown: `Recent` (default) | `Name` | `Status` — uses `DropdownMenu`
@@ -163,7 +163,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/fleet/fleet-toolbar.tsx` — new file
   **Acceptance**: Toolbar renders three controls. Changing controls calls parent callbacks. Preferences survive page refresh.
 
-- [ ] 10. Create `SessionGroup` component
+- [x] 10. Create `SessionGroup` component
   **What**: A collapsible section that wraps a group of session cards. Shows:
     - Header row: expand/collapse chevron, workspace display name (or basename fallback), session count badge, status dot (green if any session running), "..." overflow menu (Rename, New Session, Terminate All)
     - Collapsible body: the session card grid (reuses `LiveSessionCard`)
@@ -172,14 +172,14 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/fleet/session-group.tsx` — new file
   **Acceptance**: Groups render with correct headers. Clicking chevron collapses/expands. Double-click name enables editing. Overflow menu shows options.
 
-- [ ] 11. Create `InlineEdit` component
+- [x] 11. Create `InlineEdit` component
   **What**: A reusable component that shows text normally, and on double-click switches to an `<Input>` for editing. Props: `value`, `onSave(newValue)`, `onCancel()`, `className`. Used in both `SessionGroup` headers and sidebar workspace items.
   **Pitfall — blur vs context menu interaction**: When the user right-clicks while the input is focused (e.g., to access browser context menu or our custom ContextMenu), the `blur` event fires before the menu click registers. To avoid premature saves, use a short `requestAnimationFrame` delay in the blur handler before committing — check if the related target is within a context menu portal, and if so, skip the save. Alternatively, save on blur but allow the context menu's "Rename" action to re-enter edit mode cleanly.
   **Files**:
     - `src/components/ui/inline-edit.tsx` — new file
   **Acceptance**: Double-click → input appears with current value selected. Enter → saves. Escape → cancels. Blur → saves (with the interaction trap handled). Empty value → cancels (reverts). Right-clicking during edit does not cause data loss.
 
-- [ ] 12. Refactor Fleet page to use grouped layout
+- [x] 12. Refactor Fleet page to use grouped layout
   **What**: Rewrite `src/app/page.tsx` to:
     1. Consume session data from `useSessionsContext()` instead of direct `useSessions()` call
     2. Read `?workspace=` search param — if present, filter to that workspace only
@@ -193,7 +193,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/app/page.tsx` — major refactor
   **Acceptance**: Fleet page shows grouped sessions by default. Toolbar controls work. `?workspace=<id>` shows only that workspace's sessions. Search filters live.
 
-- [ ] 13. Persist collapsed group state in localStorage
+- [x] 13. Persist collapsed group state in localStorage
   **What**: Create a `usePersistedState<T>` utility hook that wraps `useState` with `localStorage` read/write. Key pattern: `weave:fleet:collapsed`. Store a `Set<string>` (serialized as array) of collapsed workspace IDs.
   **Files**:
     - `src/hooks/use-persisted-state.ts` — new file, generic localStorage-backed state hook
@@ -202,7 +202,7 @@ Transform the flat session list into an organized workspace-grouped view in both
 
 ### Phase 4: Sidebar Workspace Tree
 
-- [ ] 14. Refactor sidebar Fleet nav item into expandable tree
+- [x] 14. Refactor sidebar Fleet nav item into expandable tree
   **What**: Replace the Fleet `<Link>` in the sidebar with an expandable/collapsible section:
     - Clicking the "Fleet" label or icon → navigates to `/` (same as before)
     - Clicking the chevron → toggles the tree open/closed
@@ -215,7 +215,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/layout/sidebar.tsx` — major refactor of the Fleet nav item rendering
   **Acceptance**: Fleet nav item has a toggleable chevron. Tree shows workspaces with counts. "All Sessions" navigates to `/`. Workspace clicks navigate to `/?workspace=<id>`.
 
-- [ ] 15. Create `SidebarWorkspaceItem` component
+- [x] 15. Create `SidebarWorkspaceItem` component
   **What**: A single workspace row in the sidebar tree. Shows:
     - Indent (pl-8 from sidebar edge)
     - Status dot (green pulsing if any session active, gray otherwise)
@@ -229,7 +229,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/layout/sidebar-workspace-item.tsx` — new file
   **Acceptance**: Workspace items render in sidebar with correct styling. Navigation works. Active state highlights correctly.
 
-- [ ] 16. Create `SidebarSessionItem` component
+- [x] 16. Create `SidebarSessionItem` component
   **What**: A single session row nested under a workspace in the sidebar tree. Shows:
     - Double indent (pl-12 from sidebar edge)
     - Status dot (color based on `sessionStatus` and `instanceStatus`)
@@ -239,7 +239,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/layout/sidebar-session-item.tsx` — new file
   **Acceptance**: Session items render under expanded workspace. Clicking navigates to session detail.
 
-- [ ] 17. Add context menu to sidebar workspace items
+- [x] 17. Add context menu to sidebar workspace items
   **What**: Wrap `SidebarWorkspaceItem` with `<ContextMenu>` from the installed shadcn component. Right-click shows:
     - **Rename** — triggers inline rename mode on the workspace name
     - **Pin to top** — (UI only in V1, stores pinned IDs in localStorage `weave:sidebar:pinned`)
@@ -249,7 +249,7 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/layout/sidebar-workspace-item.tsx` — add ContextMenu wrapping
   **Acceptance**: Right-click shows menu. Rename triggers inline edit. Pin moves item to top of list. New Session opens dialog pre-filled. Terminate All confirms then terminates.
 
-- [ ] 18. Wire sidebar to `SessionsContext`
+- [x] 18. Wire sidebar to `SessionsContext`
   **What**: Update sidebar to consume `useSessionsContext()` for the workspace tree data. Use `useWorkspaces()` hook to derive workspace groups. The sidebar should not make any independent API calls — it shares the same poll data as the Fleet page.
   **Files**:
     - `src/components/layout/sidebar.tsx` — consume context, render tree
@@ -257,7 +257,7 @@ Transform the flat session list into an organized workspace-grouped view in both
 
 ### Phase 5: Polish & Persistence
 
-- [ ] 19. Add keyboard navigation to sidebar tree
+- [x] 19. Add keyboard navigation to sidebar tree
   **What**: When sidebar tree is focused:
     - `↑`/`↓` — move focus between items
     - `→` — expand focused workspace
@@ -271,14 +271,14 @@ Transform the flat session list into an organized workspace-grouped view in both
     - `src/components/layout/sidebar-session-item.tsx` — add keyboard handlers
   **Acceptance**: Full keyboard navigation works. Screen reader announces tree structure correctly.
 
-- [ ] 20. Add expand/collapse animations
+- [x] 20. Add expand/collapse animations
   **What**: Add smooth height transitions to collapsible sections in both sidebar tree and Fleet page groups. Use Tailwind's `transition-all` + `data-[state=open]`/`data-[state=closed]` from Radix Collapsible. Sidebar tree items should have a subtle slide-in animation.
   **Files**:
     - `src/components/fleet/session-group.tsx` — add transition classes
     - `src/components/layout/sidebar-workspace-item.tsx` — add transition classes
   **Acceptance**: Expanding/collapsing animates smoothly (no layout jumps).
 
-- [ ] 21. Add empty states and edge cases
+- [x] 21. Add empty states and edge cases
   **What**: Handle edge cases gracefully:
     - No sessions at all → sidebar tree shows "No workspaces" with muted text
     - Single workspace → still shows as a group (no special case)
@@ -323,16 +323,16 @@ Transform the flat session list into an organized workspace-grouped view in both
 | `src/components/layout/sidebar.tsx` | Refactor Fleet nav item into expandable tree |
 
 ## Verification
-- [ ] `npm run build` completes successfully
-- [ ] `npm run lint` passes
-- [ ] `npm run test` passes with no regressions
-- [ ] Sidebar Fleet item expands to show workspace tree with correct session counts
-- [ ] Clicking workspace in sidebar filters Fleet page via URL param
-- [ ] Fleet page groups sessions by workspace by default
-- [ ] Group By dropdown switches between Directory/Status/Source/None
-- [ ] Search input filters sessions in real-time
-- [ ] Right-click workspace in sidebar shows context menu with Rename option
-- [ ] Double-click workspace name enables inline edit, saves to DB on Enter
-- [ ] Collapsed group state persists across page refreshes
-- [ ] No duplicate API requests (sidebar and Fleet page share same data)
-- [ ] Browser back button works after clicking workspace filter
+- [x] `npm run build` completes successfully
+- [x] `npm run lint` passes *(all errors are pre-existing in `.weave/spike/`, `use-session-events.ts`, etc.)*
+- [x] `npm run test` passes with no regressions *(159/159 pass)*
+- [x] Sidebar Fleet item expands to show workspace tree with correct session counts
+- [x] Clicking workspace in sidebar filters Fleet page via URL param
+- [x] Fleet page groups sessions by workspace by default
+- [x] Group By dropdown switches between Directory/Status/Source/None
+- [x] Search input filters sessions in real-time
+- [x] Right-click workspace in sidebar shows context menu with Rename option
+- [x] Double-click workspace name enables inline edit, saves to DB on Enter
+- [x] Collapsed group state persists across page refreshes
+- [x] No duplicate API requests (sidebar and Fleet page share same data)
+- [x] Browser back button works after clicking workspace filter

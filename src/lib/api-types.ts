@@ -34,6 +34,7 @@ export interface SessionListItem {
   instanceId: string;
   workspaceId: string;
   workspaceDirectory: string;
+  workspaceDisplayName: string | null;
   isolationStrategy: string;
   sessionStatus: "active" | "stopped" | "disconnected";
   session: Session;

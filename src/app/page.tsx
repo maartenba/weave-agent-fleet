@@ -1,123 +1,39 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Header, NewSessionButton } from "@/components/layout/header";
 import { SummaryBar } from "@/components/fleet/summary-bar";
-import { useSessions } from "@/hooks/use-sessions";
+import { FleetToolbar, loadPrefs } from "@/components/fleet/fleet-toolbar";
+import type { GroupBy, SortBy } from "@/components/fleet/fleet-toolbar";
+import { SessionGroup } from "@/components/fleet/session-group";
+import { LiveSessionCard } from "@/components/fleet/live-session-card";
+import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
-import { useFleetSummary } from "@/hooks/use-fleet-summary";
-import type { SessionListItem } from "@/lib/api-types";
+import { useWorkspaces } from "@/hooks/use-workspaces";
 import type { FleetSummary } from "@/lib/types";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, Loader2, Trash2 } from "lucide-react";
+import type { SessionListItem } from "@/lib/api-types";
+import { Loader2 } from "lucide-react";
 
-function timeSince(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
-
-function LiveSessionCard({
-  item,
-  onTerminate,
-}: {
-  item: SessionListItem;
-  onTerminate: (sessionId: string, instanceId: string) => void;
-}) {
-  const { instanceId, session, instanceStatus, sessionStatus, isolationStrategy } = item;
-  const isDead = instanceStatus === "dead";
-  const isDisconnected = sessionStatus === "disconnected";
-  const isStopped = sessionStatus === "stopped";
-  const isInactive = isDisconnected || isStopped;
-
-  const dotColor = isDisconnected
-    ? "bg-amber-400"
-    : isStopped
-    ? "bg-slate-500"
-    : isDead
-    ? "bg-red-500"
-    : "bg-green-500 animate-pulse";
-
-  const badgeVariant: "destructive" | "secondary" | "outline" =
-    isDisconnected ? "outline" : isDead ? "destructive" : "secondary";
-
-  const statusLabel = isDisconnected
-    ? "disconnected"
-    : isStopped
-    ? "stopped"
-    : isDead
-    ? "dead"
-    : "running";
-
-  const canTerminate = !isStopped;
-
-  return (
-    <div className={`relative group ${isInactive ? "opacity-60" : ""}`}>
-      <Link href={`/sessions/${encodeURIComponent(session.id)}?instanceId=${encodeURIComponent(instanceId)}`}>
-        <Card className="transition-all hover:border-foreground/20 hover:shadow-md cursor-pointer">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
-                <h3 className="font-semibold text-sm font-mono truncate max-w-[140px]">
-                  {session.title || session.id.slice(0, 12)}
-                </h3>
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Badge variant={badgeVariant} className="text-[10px] px-1.5 py-0">
-                {statusLabel}
-              </Badge>
-              {isolationStrategy && isolationStrategy !== "existing" && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-purple-400 border-purple-400/40">
-                  {isolationStrategy}
-                </Badge>
-              )}
-              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
-                {session.directory}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>{timeSince(session.time.created)}</span>
-              <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">
-                {session.id.slice(0, 8)}…
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </Link>
-      {canTerminate && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onTerminate(session.id, instanceId);
-          }}
-          title="Terminate session"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-    </div>
-  );
-}
-
-export default function FleetPage() {
-  const { sessions, isLoading, error, refetch } = useSessions(5000);
+function FleetPageInner() {
+  const { sessions, isLoading, error, refetch, summary: liveSummary } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
-  const { summary: liveSummary } = useFleetSummary(10000);
+  const searchParams = useSearchParams();
+  const workspaceFilter = searchParams.get("workspace");
+
+  // Toolbar state — use lazy initializer so localStorage is only read client-side
+  const [prefs, setPrefs] = useState<{ groupBy: GroupBy; sortBy: SortBy }>(
+    loadPrefs
+  );
+  const [search, setSearch] = useState("");
+
+  const handleGroupByChange = (groupBy: GroupBy) => {
+    setPrefs((prev) => ({ ...prev, groupBy }));
+  };
+
+  const handleSortByChange = (sortBy: SortBy) => {
+    setPrefs((prev) => ({ ...prev, sortBy }));
+  };
 
   const handleTerminate = async (sessionId: string, instanceId: string) => {
     try {
@@ -128,9 +44,51 @@ export default function FleetPage() {
     }
   };
 
+  // Apply workspace URL filter
+  const workspaceFiltered = useMemo(() => {
+    if (!workspaceFilter) return sessions;
+    return sessions.filter((s) => s.workspaceId === workspaceFilter);
+  }, [sessions, workspaceFilter]);
+
+  // Apply search filter
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return workspaceFiltered;
+    return workspaceFiltered.filter((s) => {
+      const title = s.session.title?.toLowerCase() ?? "";
+      const dir = s.workspaceDirectory.toLowerCase();
+      const displayName = s.workspaceDisplayName?.toLowerCase() ?? "";
+      return title.includes(q) || dir.includes(q) || displayName.includes(q);
+    });
+  }, [workspaceFiltered, search]);
+
+  // Apply sort within session arrays
+  const sortSessions = (items: SessionListItem[]): SessionListItem[] => {
+    const sorted = [...items];
+    if (prefs.sortBy === "recent") {
+      sorted.sort((a, b) => b.session.time.created - a.session.time.created);
+    } else if (prefs.sortBy === "name") {
+      sorted.sort((a, b) => {
+        const aTitle = a.session.title ?? a.session.id;
+        const bTitle = b.session.title ?? b.session.id;
+        return aTitle.localeCompare(bTitle);
+      });
+    } else if (prefs.sortBy === "status") {
+      const order = { active: 0, disconnected: 1, stopped: 2 } as const;
+      sorted.sort((a, b) => {
+        const aOrd = order[a.sessionStatus] ?? 3;
+        const bOrd = order[b.sessionStatus] ?? 3;
+        return aOrd - bOrd;
+      });
+    }
+    return sorted;
+  };
+
+  // Derive workspace groups from filtered sessions
+  const allWorkspaces = useWorkspaces(searchFiltered);
+
   const liveCount = liveSummary?.activeSessions ?? sessions.filter((s) => s.sessionStatus === "active").length;
 
-  // Use real summary from API; pipeline/queue default to 0 (not implemented in V2)
   const summary: FleetSummary = {
     activeSessions: liveSummary?.activeSessions ?? liveCount,
     idleSessions: liveSummary?.idleSessions ?? 0,
@@ -147,6 +105,140 @@ export default function FleetPage() {
       ? `${liveCount} active session${liveCount !== 1 ? "s" : ""}`
       : "No active sessions";
 
+  // Group by "Status"
+  const renderGroupedByStatus = () => {
+    const statusGroups: Record<string, SessionListItem[]> = {
+      active: [],
+      disconnected: [],
+      stopped: [],
+    };
+    for (const s of searchFiltered) {
+      (statusGroups[s.sessionStatus] ?? []).push(s);
+    }
+    return (
+      <div className="space-y-4">
+        {(["active", "disconnected", "stopped"] as const).map((status) => {
+          const items = sortSessions(statusGroups[status]);
+          if (items.length === 0) return null;
+          return (
+            <div key={status}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {status}
+                </span>
+                <span className="text-xs text-muted-foreground">({items.length})</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {items.map((item) => (
+                  <LiveSessionCard
+                    key={`${item.instanceId}-${item.session.id}`}
+                    item={item}
+                    onTerminate={handleTerminate}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Group by "Source" (isolationStrategy)
+  const renderGroupedBySource = () => {
+    const sourceMap = new Map<string, SessionListItem[]>();
+    for (const s of searchFiltered) {
+      const key = s.isolationStrategy ?? "existing";
+      const arr = sourceMap.get(key);
+      if (arr) {
+        arr.push(s);
+      } else {
+        sourceMap.set(key, [s]);
+      }
+    }
+    return (
+      <div className="space-y-4">
+        {Array.from(sourceMap.entries()).map(([source, items]) => {
+          const sorted = sortSessions(items);
+          return (
+            <div key={source}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {source}
+                </span>
+                <span className="text-xs text-muted-foreground">({sorted.length})</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {sorted.map((item) => (
+                  <LiveSessionCard
+                    key={`${item.instanceId}-${item.session.id}`}
+                    item={item}
+                    onTerminate={handleTerminate}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderContent = () => {
+    if (searchFiltered.length === 0 && !isLoading) {
+      if (search.trim()) {
+        return (
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+            No sessions match your search.
+          </div>
+        );
+      }
+      if (workspaceFilter) {
+        return (
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+            No sessions in this workspace.
+          </div>
+        );
+      }
+      return null;
+    }
+
+    if (prefs.groupBy === "none") {
+      return (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {sortSessions(searchFiltered).map((item) => (
+            <LiveSessionCard
+              key={`${item.instanceId}-${item.session.id}`}
+              item={item}
+              onTerminate={handleTerminate}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (prefs.groupBy === "status") {
+      return renderGroupedByStatus();
+    }
+
+    if (prefs.groupBy === "source") {
+      return renderGroupedBySource();
+    }
+
+    // Default: "directory" — render SessionGroup per workspace
+    return (
+      <div className="space-y-2">
+        {allWorkspaces.map((group) => (
+          <SessionGroup
+            key={group.workspaceId}
+            group={{ ...group, sessions: sortSessions(group.sessions) }}
+            onTerminate={handleTerminate}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -156,6 +248,15 @@ export default function FleetPage() {
       />
       <div className="flex-1 overflow-auto p-6 space-y-6">
         <SummaryBar summary={summary} />
+
+        <FleetToolbar
+          groupBy={prefs.groupBy}
+          sortBy={prefs.sortBy}
+          search={search}
+          onGroupByChange={handleGroupByChange}
+          onSortByChange={handleSortByChange}
+          onSearchChange={setSearch}
+        />
 
         {isLoading && sessions.length === 0 && (
           <div className="flex items-center justify-center h-32 text-muted-foreground gap-2 text-sm">
@@ -170,17 +271,7 @@ export default function FleetPage() {
           </div>
         )}
 
-        {sessions.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {sessions.map((item) => (
-              <LiveSessionCard
-                key={`${item.instanceId}-${item.session.id}`}
-                item={item}
-                onTerminate={handleTerminate}
-              />
-            ))}
-          </div>
-        )}
+        {renderContent()}
 
         {!isLoading && sessions.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-3">
@@ -190,5 +281,20 @@ export default function FleetPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function FleetPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-full text-muted-foreground gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      }
+    >
+      <FleetPageInner />
+    </Suspense>
   );
 }
