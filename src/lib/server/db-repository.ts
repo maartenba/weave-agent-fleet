@@ -89,6 +89,17 @@ export function getWorkspace(id: string): DbWorkspace | undefined {
     .get(id) as DbWorkspace | undefined;
 }
 
+export function getWorkspaceByDirectory(
+  directory: string,
+  isolationStrategy: string
+): DbWorkspace | undefined {
+  return getDb()
+    .prepare(
+      "SELECT * FROM workspaces WHERE directory = ? AND isolation_strategy = ? AND cleaned_up_at IS NULL ORDER BY created_at DESC LIMIT 1"
+    )
+    .get(directory, isolationStrategy) as DbWorkspace | undefined;
+}
+
 export function listWorkspaces(): DbWorkspace[] {
   return getDb().prepare("SELECT * FROM workspaces ORDER BY created_at DESC").all() as DbWorkspace[];
 }

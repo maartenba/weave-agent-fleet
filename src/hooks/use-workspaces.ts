@@ -25,15 +25,25 @@ export function useWorkspaces(sessions: SessionListItem[]): WorkspaceGroup[] {
     const map = new Map<string, WorkspaceGroup>();
 
     for (const session of sessions) {
-      const existing = map.get(session.workspaceId);
+      // Group by directory path, not workspaceId — multiple workspace records
+      // can point at the same directory and should be treated as one group.
+      const key = session.workspaceDirectory;
+      const existing = map.get(key);
       if (existing) {
         existing.sessions.push(session);
         existing.sessionCount += 1;
         if (session.sessionStatus === "active" && session.instanceStatus === "running") {
           existing.hasRunningSession = true;
         }
+        // Prefer an explicit display name if one session has it
+        if (!existing.displayName || existing.displayName === deriveDisplayName(session)) {
+          const candidateName = session.workspaceDisplayName;
+          if (candidateName) {
+            existing.displayName = candidateName;
+          }
+        }
       } else {
-        map.set(session.workspaceId, {
+        map.set(key, {
           workspaceId: session.workspaceId,
           workspaceDirectory: session.workspaceDirectory,
           displayName: deriveDisplayName(session),

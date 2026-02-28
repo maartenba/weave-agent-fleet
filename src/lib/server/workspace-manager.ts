@@ -18,6 +18,7 @@ import { randomUUID } from "crypto";
 import {
   insertWorkspace,
   getWorkspace,
+  getWorkspaceByDirectory,
   markWorkspaceCleaned,
   type DbWorkspace,
 } from "./db-repository";
@@ -88,7 +89,14 @@ export async function createWorkspace(
 
   switch (strategy) {
     case "existing": {
-      // Use the directory as-is — just record it in the DB
+      // Reuse an existing workspace record for this directory if one exists,
+      // so that all sessions targeting the same directory share a workspace.
+      const existing = getWorkspaceByDirectory(sourceDirectory, "existing");
+      if (existing) {
+        return { id: existing.id, directory: existing.directory, strategy };
+      }
+
+      // No workspace for this directory yet — create one
       insertWorkspace({
         id,
         directory: sourceDirectory,
