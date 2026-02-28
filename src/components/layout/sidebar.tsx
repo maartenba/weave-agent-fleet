@@ -144,9 +144,10 @@ export function Sidebar() {
       )}
     >
       {/* Weave branding */}
-      <div
+      <Link
+        href="/"
         className={cn(
-          "flex items-center border-b border-sidebar-border px-4 py-4",
+          "flex items-center border-b border-sidebar-border px-4 py-4 cursor-pointer transition-opacity hover:opacity-80",
           collapsed ? "justify-center" : "gap-3"
         )}
       >
@@ -167,7 +168,7 @@ export function Sidebar() {
             </p>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-1">
