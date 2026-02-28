@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header, NewSessionButton } from "@/components/layout/header";
 import { SummaryBar } from "@/components/fleet/summary-bar";
-import { FleetToolbar, loadPrefs } from "@/components/fleet/fleet-toolbar";
+import { FleetToolbar, loadPrefs, loadSavedPrefs } from "@/components/fleet/fleet-toolbar";
 import type { GroupBy, SortBy } from "@/components/fleet/fleet-toolbar";
 import { SessionGroup } from "@/components/fleet/session-group";
 import { LiveSessionCard } from "@/components/fleet/live-session-card";
@@ -22,11 +22,16 @@ function FleetPageInner() {
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
 
-  // Toolbar state — use lazy initializer so localStorage is only read client-side
+  // Toolbar state — start with defaults (SSR-safe), then hydrate from localStorage
   const [prefs, setPrefs] = useState<{ groupBy: GroupBy; sortBy: SortBy }>(
     loadPrefs
   );
   const [search, setSearch] = useState("");
+
+  // Hydrate saved preferences after mount to avoid SSR/client mismatch
+  useEffect(() => {
+    setPrefs(loadSavedPrefs());
+  }, []);
 
   const handleGroupByChange = (groupBy: GroupBy) => {
     setPrefs((prev) => ({ ...prev, groupBy }));

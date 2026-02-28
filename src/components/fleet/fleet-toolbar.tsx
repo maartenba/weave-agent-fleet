@@ -34,10 +34,15 @@ interface FleetPrefs {
   sortBy: SortBy;
 }
 
+const DEFAULT_PREFS: FleetPrefs = { groupBy: "directory", sortBy: "recent" };
+
+/** Always returns defaults — safe for SSR and initial client render. */
 function loadPrefs(): FleetPrefs {
-  if (typeof window === "undefined") {
-    return { groupBy: "directory", sortBy: "recent" };
-  }
+  return DEFAULT_PREFS;
+}
+
+/** Reads saved prefs from localStorage (client-only, call inside useEffect). */
+function loadSavedPrefs(): FleetPrefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (raw) {
@@ -50,7 +55,7 @@ function loadPrefs(): FleetPrefs {
   } catch {
     // ignore
   }
-  return { groupBy: "directory", sortBy: "recent" };
+  return DEFAULT_PREFS;
 }
 
 function savePrefs(prefs: FleetPrefs) {
@@ -145,4 +150,4 @@ export function FleetToolbar({
   );
 }
 
-export { loadPrefs };
+export { loadPrefs, loadSavedPrefs };
