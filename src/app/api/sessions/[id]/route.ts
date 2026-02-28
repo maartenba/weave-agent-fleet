@@ -125,7 +125,14 @@ export async function DELETE(
     // Non-fatal
   }
 
-  // Step 2: Kill the instance only if no other sessions are using it
+  // Step 2: Gracefully abort the session before killing, then destroy instance if safe
+  try {
+    const sessionClient = getClientForInstance(instanceId);
+    await sessionClient.session.abort({ sessionID: sessionId });
+  } catch {
+    // Abort is best-effort — instance may already be dead or session may not be running
+  }
+
   if (otherActiveSessions === 0) {
     try {
       destroyInstance(instanceId);

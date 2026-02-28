@@ -253,7 +253,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
       timeout: SPAWN_TIMEOUT_MS,
       config: {
         plugin: [],
-        permission: { edit: "allow", bash: "allow" },
+        permission: { edit: "allow", bash: "allow", external_directory: "allow" },
       },
     });
   } catch (err) {
@@ -311,6 +311,21 @@ export function destroyInstance(id: string): void {
   // Update DB first so even if kill fails, the DB reflects intent
   try {
     updateInstanceStatus(id, "stopped", new Date().toISOString());
+  } catch {
+    // Non-fatal
+  }
+
+  // Cascade: mark all active sessions on this instance as disconnected
+  try {
+    const activeSessions = getSessionsForInstance(id);
+    for (const session of activeSessions) {
+      updateSessionStatus(session.id, "disconnected", new Date().toISOString());
+      createSessionDisconnectedNotification(
+        session.opencode_session_id,
+        id,
+        session.title
+      );
+    }
   } catch {
     // Non-fatal
   }
