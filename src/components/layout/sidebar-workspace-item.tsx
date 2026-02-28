@@ -44,7 +44,9 @@ export function SidebarWorkspaceItem({
 }: SidebarWorkspaceItemProps) {
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
-  const isActiveWorkspace = workspaceFilter === group.workspaceId;
+  const isActiveWorkspace = workspaceFilter
+    ? group.sessions.some((s) => s.workspaceId === workspaceFilter)
+    : false;
 
   const { refetch } = useSessionsContext();
   const { renameWorkspace } = useRenameWorkspace();
@@ -118,7 +120,6 @@ export function SidebarWorkspaceItem({
               <button
                 data-tree-expand
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                 }}
                 className="shrink-0 text-muted-foreground hover:text-foreground"

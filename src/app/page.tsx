@@ -11,6 +11,7 @@ import { LiveSessionCard } from "@/components/fleet/live-session-card";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
 import type { FleetSummary } from "@/lib/types";
 import type { SessionListItem } from "@/lib/api-types";
 import { Loader2 } from "lucide-react";
@@ -44,11 +45,12 @@ function FleetPageInner() {
     }
   };
 
-  // Apply workspace URL filter
-  const workspaceFiltered = useMemo(() => {
-    if (!workspaceFilter) return sessions;
-    return sessions.filter((s) => s.workspaceId === workspaceFilter);
-  }, [sessions, workspaceFilter]);
+  // Apply workspace URL filter — resolves workspaceId to directory so that all
+  // sessions sharing the same workspace directory are included.
+  const workspaceFiltered = useMemo(
+    () => filterSessionsByWorkspace(sessions, workspaceFilter),
+    [sessions, workspaceFilter]
+  );
 
   // Apply search filter
   const searchFiltered = useMemo(() => {
