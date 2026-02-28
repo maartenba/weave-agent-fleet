@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: darwin-arm64
+            node_arch: arm64
+            node_platform: darwin
+          - os: macos-13
+            target: darwin-x64
+            node_arch: x64
+            node_platform: darwin
+          - os: ubuntu-latest
+            target: linux-x64
+            node_arch: x64
+            node_platform: linux
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+            node_arch: arm64
+            node_platform: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node.js version
+        id: node-version
+        run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node-version.outputs.version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build standalone
+        run: npm run build
+
+      - name: Assemble standalone
+        run: bash scripts/assemble-standalone.sh
+
+      - name: Download Node.js binary
+        run: |
+          NODE_VERSION="${{ steps.node-version.outputs.version }}"
+          PLATFORM="${{ matrix.node_platform }}"
+          ARCH="${{ matrix.node_arch }}"
+          NODE_DIST="node-v${NODE_VERSION}-${PLATFORM}-${ARCH}"
+
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIST}.tar.gz" -o node-dist.tar.gz
+          tar xzf node-dist.tar.gz
+          mkdir -p staging/bin
+          cp "${NODE_DIST}/bin/node" staging/bin/node
+          chmod +x staging/bin/node
+
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TARGET="${{ matrix.target }}"
+          DIR_NAME="weave-fleet-v${VERSION}-${TARGET}"
+
+          mkdir -p "${DIR_NAME}/bin" "${DIR_NAME}/app"
+
+          # Copy Node.js binary
+          cp staging/bin/node "${DIR_NAME}/bin/node"
+
+          # Copy launcher script
+          cp scripts/launcher.sh "${DIR_NAME}/bin/weave-fleet"
+          chmod +x "${DIR_NAME}/bin/weave-fleet"
+
+          # Determine standalone directory (may be nested under project name)
+          if [ -f ".next/standalone/server.js" ]; then
+            STANDALONE_SRC=".next/standalone"
+          else
+            STANDALONE_SRC="$(find .next/standalone -name server.js -maxdepth 2 -exec dirname {} \; | head -1)"
+          fi
+
+          if [ -z "$STANDALONE_SRC" ]; then
+            echo "Error: standalone server.js not found" >&2
+            exit 1
+          fi
+
+          # Copy standalone app
+          cp -r "${STANDALONE_SRC}/." "${DIR_NAME}/app/"
+
+          # Write version
+          echo "${VERSION}" > "${DIR_NAME}/VERSION"
+
+          # Create tarball
+          tar czf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+
+          # Generate checksum (use sha256sum on Linux, shasum on macOS)
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${DIR_NAME}.tar.gz" > "${DIR_NAME}.tar.gz.sha256"
+          else
+            shasum -a 256 "${DIR_NAME}.tar.gz" > "${DIR_NAME}.tar.gz.sha256"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.target }}
+          path: |
+            weave-fleet-*.tar.gz
+            weave-fleet-*.tar.gz.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Merge checksums
+        run: cat artifacts/*.sha256 > artifacts/checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/weave-fleet-*.tar.gz
+            artifacts/checksums.txt
+            scripts/install.sh

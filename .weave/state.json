@@ -1,10 +1,8 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/collapsible-sidebar.md",
-  "started_at": "2026-02-28T11:06:02.195Z",
-  "session_ids": [
-    "ses_35c1c82afffelakzLyyMHagBvi"
-  ],
-  "plan_name": "collapsible-sidebar",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/curl-installer-distribution.md",
+  "started_at": "2026-02-28T16:00:00.000Z",
+  "session_ids": [],
+  "plan_name": "curl-installer-distribution",
   "agent": "tapestry",
-  "start_sha": "adb1766fd44c88f28d0448f8d18b2ae6fd9fc87a"
+  "start_sha": "75f927fd937c342d65acbffa888645523f04e590"
 }

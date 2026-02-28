@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Release build artifacts
+staging/
+weave-fleet-*.tar.gz
+weave-fleet-*.tar.gz.sha256

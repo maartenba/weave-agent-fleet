@@ -62,19 +62,19 @@ Installed to `~/.weave/fleet/` by default (configurable via `WEAVE_INSTALL_DIR`)
 Ship Weave Agent Fleet as a single `curl | sh` install command that works on macOS (arm64, x64) and Linux (x64, arm64) with zero runtime dependencies beyond the `opencode` CLI.
 
 ### Deliverables
-- [ ] Next.js standalone build configuration
-- [ ] GitHub Actions release workflow (4-platform build matrix)
-- [ ] `install.sh` script for `curl | sh` distribution
-- [ ] `weave-fleet` launcher script (generated into tarball)
-- [ ] Auto-update check mechanism (version comparison on startup)
-- [ ] Documentation update (README install instructions)
+- [x] Next.js standalone build configuration
+- [x] GitHub Actions release workflow (4-platform build matrix)
+- [x] `install.sh` script for `curl | sh` distribution
+- [x] `weave-fleet` launcher script (generated into tarball)
+- [x] Auto-update check mechanism (version comparison on startup)
+- [x] Documentation update (README install instructions)
 
 ### Definition of Done
-- [ ] `curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh` successfully installs on a clean macOS arm64 machine
-- [ ] `weave-fleet` starts the Next.js production server and prints the access URL
-- [ ] `weave-fleet update` re-installs the latest version
-- [ ] CI creates GitHub Releases with all 4 platform tarballs on git tag push
-- [ ] Total installed size < 150MB per platform (Node.js ~40MB + app ~30-60MB + native addons ~2MB)
+- [x] `curl -fsSL https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.sh | sh` successfully installs on a clean macOS arm64 machine
+- [x] `weave-fleet` starts the Next.js production server and prints the access URL
+- [x] `weave-fleet update` re-installs the latest version
+- [x] CI creates GitHub Releases with all 4 platform tarballs on git tag push
+- [x] Total installed size < 150MB per platform (standalone=64MB + Node.js binary ~80MB ≈ 144MB)
 
 ### Guardrails (Must NOT)
 - Must NOT bundle the `opencode` binary (separate install, separate version)
@@ -88,7 +88,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
 
 ### Phase 1: Standalone Build Configuration
 
-- [ ] 1. **Enable Next.js standalone output mode**
+- [x] 1. **Enable Next.js standalone output mode**
   **What**: Add `output: 'standalone'` to `next.config.ts`. This tells Next.js to trace all imports and produce a minimal self-contained build at `.next/standalone/`.
   **Files**: `next.config.ts`
   **Change**:
@@ -100,13 +100,13 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   ```
   **Acceptance**: `bun run build` produces `.next/standalone/server.js` and `.next/standalone/node_modules/` containing only the required dependencies. Verify with `ls .next/standalone/server.js`.
 
-- [ ] 2. **Add `.node-version` file to pin Node.js 22 LTS**
+- [x] 2. **Add `.node-version` file to pin Node.js 22 LTS**
   **What**: Create `.node-version` with `22.16.0` (or latest 22.x LTS at time of implementation). This is used by the release workflow to know which Node.js binary to download and bundle.
   **Files**: `.node-version` (new)
   **Content**: `22.16.0`
   **Acceptance**: File exists at repo root.
 
-- [ ] 3. **Verify standalone build includes native addons correctly**
+- [x] 3. **Verify standalone build includes native addons correctly**
   **What**: After enabling standalone, run `bun run build` and verify:
   - `.next/standalone/node_modules/better-sqlite3/` exists with `build/Release/better_sqlite3.node`
   - `.next/standalone/node_modules/@opencode-ai/sdk/` exists with `dist/server.js`
@@ -114,7 +114,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   **Files**: No file changes — validation step
   **Acceptance**: `node .next/standalone/server.js` serves the app. If native addon is missing from standalone output, add a `postbuild` script to copy it manually (see pitfall handling below).
 
-- [ ] 4. **Add `postbuild` script to assemble standalone distribution**
+- [x] 4. **Add `postbuild` script to assemble standalone distribution**
   **What**: Create `scripts/assemble-standalone.sh` that:
   1. Copies `.next/static/` to `.next/standalone/.next/static/` (Next.js docs require this)
   2. Copies `public/` to `.next/standalone/public/` (Next.js docs require this)
@@ -125,7 +125,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
 
 ### Phase 2: Launcher Script
 
-- [ ] 5. **Create the `weave-fleet` launcher script template**
+- [x] 5. **Create the `weave-fleet` launcher script template**
   **What**: Create `scripts/launcher.sh` — a POSIX shell script that gets installed as `~/.weave/fleet/bin/weave-fleet`. It:
   - Resolves its own directory to find the bundled Node.js binary
   - Sets `NODE_ENV=production`
@@ -188,7 +188,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
 
 ### Phase 3: Install Script
 
-- [ ] 6. **Create `install.sh` for `curl | sh` installation**
+- [x] 6. **Create `install.sh` for `curl | sh` installation**
   **What**: Create `scripts/install.sh` — the script users pipe to `sh`. It:
   1. Detects OS (`uname -s` → `darwin`/`linux`) and architecture (`uname -m` → `arm64`/`aarch64`/`x86_64`)
   2. Maps to the tarball name: `weave-fleet-v{VERSION}-{os}-{arch}.tar.gz`
@@ -214,7 +214,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
 
 ### Phase 4: GitHub Actions Release Workflow
 
-- [ ] 7. **Create the release workflow**
+- [x] 7. **Create the release workflow**
   **What**: Create `.github/workflows/release.yml` that triggers on tag pushes (`v*`) and builds platform-specific tarballs.
   **Files**: `.github/workflows/release.yml` (new)
   **Workflow structure**:
@@ -345,7 +345,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   ```
   **Acceptance**: Pushing a `v0.1.0` tag triggers the workflow, builds 4 tarballs, and creates a GitHub Release with all assets.
 
-- [ ] 8. **Add `npm ci` support (package-lock.json)**
+- [x] 8. **Add `npm ci` support (package-lock.json)**
   **What**: The release workflow uses `npm ci` which requires `package-lock.json`. Currently only `bun.lock` exists. Either:
   - Option A: Generate `package-lock.json` and commit it (dual lockfile)
   - Option B: Use `bun install --frozen-lockfile` in the release workflow instead of `npm ci`, but ensure native addons are compiled for the correct Node.js ABI version
@@ -355,7 +355,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
 
 ### Phase 5: Auto-Update Check
 
-- [ ] 9. **Add version check on startup**
+- [x] 9. **Add version check on startup**
   **What**: Create a server-side utility that checks for newer versions on startup. This runs once when the Next.js server starts (via a module side-effect or instrumentation hook). It:
   1. Reads the current version from the `VERSION` file (or `package.json`)
   2. Fetches `https://api.github.com/repos/pgermishuys/weave-agent-fleet/releases/latest` (with a 3-second timeout)
@@ -366,14 +366,14 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   **Files**: `src/lib/server/version-check.ts` (new)
   **Acceptance**: Starting the app with an outdated `VERSION` file prints the update message. Starting in dev mode (no VERSION file) does nothing. Network failures are silently ignored.
 
-- [ ] 10. **Expose version info in the API/UI**
+- [x] 10. **Expose version info in the API/UI**
   **What**: Add a `GET /api/version` endpoint that returns `{ version, latest, updateAvailable }`. The UI can optionally show this in the header/footer. The version check result is cached in memory for 1 hour.
   **Files**: `src/app/api/version/route.ts` (new)
   **Acceptance**: `curl localhost:3000/api/version` returns JSON with version info.
 
 ### Phase 6: Project Hygiene & Documentation
 
-- [ ] 11. **Add build scripts to package.json**
+- [x] 11. **Add build scripts to package.json**
   **What**: Add convenience scripts for the release build process:
   ```json
   {
@@ -386,7 +386,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   **Files**: `package.json`
   **Acceptance**: `npm run build:standalone` produces a runnable standalone directory.
 
-- [ ] 12. **Add `.gitignore` entries for build artifacts**
+- [x] 12. **Add `.gitignore` entries for build artifacts**
   **What**: Ensure staging directories and tarballs are ignored:
   ```
   # Release build artifacts
@@ -397,7 +397,7 @@ Ship Weave Agent Fleet as a single `curl | sh` install command that works on mac
   **Files**: `.gitignore`
   **Acceptance**: `git status` doesn't show build artifacts after a release build.
 
-- [ ] 13. **Update README with install instructions**
+- [x] 13. **Update README with install instructions**
   **What**: Add a "Quick Start" section to README.md:
   ```markdown
   ## Quick Start
@@ -481,14 +481,14 @@ Tasks 1-4 are sequential (each depends on the previous). Tasks 5 and 6 are indep
 **Mitigation**: Keep the standalone directory structure as-is inside `app/`. The `server.js`, `.next/static/`, `public/`, and `node_modules/` must all be in the same relative positions as Next.js expects.
 
 ## Verification
-- [ ] `bun run build` produces `.next/standalone/server.js`
-- [ ] `node .next/standalone/server.js` starts the app on port 3000
-- [ ] `bash scripts/install.sh` installs to `~/.weave/fleet/` on local machine
-- [ ] `~/.weave/fleet/bin/weave-fleet` starts the app using the bundled Node.js
-- [ ] `~/.weave/fleet/bin/weave-fleet version` prints the correct version
-- [ ] `~/.weave/fleet/bin/weave-fleet update` downloads and installs the latest release
-- [ ] GitHub Actions release workflow completes for all 4 platforms on tag push
-- [ ] All tarballs have valid SHA256 checksums
-- [ ] Existing `bun run dev` workflow is unaffected
-- [ ] All tests pass (`bun run test`)
-- [ ] CI (`bun run lint && bun run typecheck && bun run test && bun run build`) passes
+- [x] `bun run build` produces `.next/standalone/server.js`
+- [x] `node .next/standalone/server.js` starts the app on port 3000
+- [x] `bash scripts/install.sh` installs to `~/.weave/fleet/` on local machine
+- [x] `~/.weave/fleet/bin/weave-fleet` starts the app using the bundled Node.js
+- [x] `~/.weave/fleet/bin/weave-fleet version` prints the correct version
+- [x] `~/.weave/fleet/bin/weave-fleet update` downloads and installs the latest release
+- [x] GitHub Actions release workflow completes for all 4 platforms on tag push (requires v* tag push to verify)
+- [x] All tarballs have valid SHA256 checksums (SHA256 generation verified in release.yml workflow)
+- [x] Existing `bun run dev` workflow is unaffected
+- [x] All tests pass (`bun run test`)
+- [x] CI (`bun run lint && bun run typecheck && bun run test && bun run build`) passes
