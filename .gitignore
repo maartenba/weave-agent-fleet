@@ -44,3 +44,5 @@ next-env.d.ts
 staging/
 weave-fleet-*.tar.gz
 weave-fleet-*.tar.gz.sha256
+weave-fleet-*.zip
+weave-fleet-*.zip.sha256

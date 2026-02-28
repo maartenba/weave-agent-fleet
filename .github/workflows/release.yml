@@ -28,6 +28,14 @@ jobs:
             target: linux-arm64
             node_arch: arm64
             node_platform: linux
+          - os: windows-latest
+            target: windows-x64
+            node_arch: x64
+            node_platform: win
+          # NOTE: Windows arm64 is not yet supported — GitHub Actions does not
+          # provide Windows arm64 runners. Node.js ships win-arm64 binaries, so
+          # when runners become available, add a windows-arm64 entry here.
+          # The install.ps1 script already detects ARM64 and prints an error.
 
     runs-on: ${{ matrix.os }}
 
@@ -36,6 +44,7 @@ jobs:
 
       - name: Read Node.js version
         id: node-version
+        shell: bash
         run: echo "version=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
@@ -48,10 +57,20 @@ jobs:
       - name: Build standalone
         run: npm run build
 
-      - name: Assemble standalone
+      # --- Unix assembly ---
+      - name: Assemble standalone (Unix)
+        if: runner.os != 'Windows'
         run: bash scripts/assemble-standalone.sh
 
-      - name: Download Node.js binary
+      # --- Windows assembly ---
+      - name: Assemble standalone (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh scripts/assemble-standalone.ps1
+
+      # --- Unix: Download Node.js binary ---
+      - name: Download Node.js binary (Unix)
+        if: runner.os != 'Windows'
         run: |
           NODE_VERSION="${{ steps.node-version.outputs.version }}"
           PLATFORM="${{ matrix.node_platform }}"
@@ -64,7 +83,25 @@ jobs:
           cp "${NODE_DIST}/bin/node" staging/bin/node
           chmod +x staging/bin/node
 
-      - name: Package tarball
+      # --- Windows: Download Node.js binary ---
+      - name: Download Node.js binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $NodeVersion = "${{ steps.node-version.outputs.version }}"
+          $Arch = "${{ matrix.node_arch }}"
+          $NodeDist = "node-v${NodeVersion}-win-${Arch}"
+          $ZipUrl = "https://nodejs.org/dist/v${NodeVersion}/${NodeDist}.zip"
+
+          Invoke-WebRequest -Uri $ZipUrl -OutFile node-dist.zip -UseBasicParsing
+          Expand-Archive -Path node-dist.zip -DestinationPath . -Force
+
+          New-Item -ItemType Directory -Path staging/bin -Force | Out-Null
+          Copy-Item "${NodeDist}/node.exe" staging/bin/node.exe
+
+      # --- Unix: Package tarball ---
+      - name: Package tarball (Unix)
+        if: runner.os != 'Windows'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           TARGET="${{ matrix.target }}"
@@ -107,13 +144,73 @@ jobs:
             shasum -a 256 "${DIR_NAME}.tar.gz" > "${DIR_NAME}.tar.gz.sha256"
           fi
 
-      - name: Upload artifact
+      # --- Windows: Package zip ---
+      - name: Package zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Version = "$env:GITHUB_REF_NAME" -replace '^v', ''
+          $Target = "${{ matrix.target }}"
+          $DirName = "weave-fleet-v${Version}-${Target}"
+
+          New-Item -ItemType Directory -Path "${DirName}/bin" -Force | Out-Null
+          New-Item -ItemType Directory -Path "${DirName}/app" -Force | Out-Null
+
+          # Copy Node.js binary
+          Copy-Item staging/bin/node.exe "${DirName}/bin/node.exe"
+
+          # Copy launcher script
+          Copy-Item scripts/launcher.cmd "${DirName}/bin/weave-fleet.cmd"
+
+          # Determine standalone directory (may be nested under project name)
+          $StandaloneSrc = $null
+          if (Test-Path ".next/standalone/server.js") {
+            $StandaloneSrc = ".next/standalone"
+          } else {
+            $nested = Get-ChildItem -Path ".next/standalone" -Directory | Where-Object {
+              Test-Path (Join-Path $_.FullName "server.js")
+            } | Select-Object -First 1
+            if ($nested) {
+              $StandaloneSrc = $nested.FullName
+            }
+          }
+
+          if (-not $StandaloneSrc) {
+            Write-Error "standalone server.js not found"
+            exit 1
+          }
+
+          # Copy standalone app
+          Copy-Item -Path "${StandaloneSrc}/*" -Destination "${DirName}/app/" -Recurse -Force
+
+          # Write version
+          Set-Content -Path "${DirName}/VERSION" -Value $Version -NoNewline
+
+          # Create zip
+          Compress-Archive -Path $DirName -DestinationPath "${DirName}.zip" -Force
+
+          # Generate checksum
+          $hash = (Get-FileHash -Path "${DirName}.zip" -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "${DirName}.zip.sha256" -Value "${hash}  ${DirName}.zip"
+
+      # --- Upload artifacts ---
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: tarball-${{ matrix.target }}
           path: |
             weave-fleet-*.tar.gz
             weave-fleet-*.tar.gz.sha256
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.target }}
+          path: |
+            weave-fleet-*.zip
+            weave-fleet-*.zip.sha256
 
   release:
     needs: build
@@ -136,5 +233,7 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/weave-fleet-*.tar.gz
+            artifacts/weave-fleet-*.zip
             artifacts/checksums.txt
             scripts/install.sh
+            scripts/install.ps1

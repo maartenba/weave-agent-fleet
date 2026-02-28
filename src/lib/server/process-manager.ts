@@ -15,7 +15,7 @@
 import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
 import { statSync } from "fs";
 import { homedir } from "os";
-import { resolve } from "path";
+import { resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import {
   insertInstance,
@@ -72,7 +72,8 @@ let _cleanupRun = false;
 function getAllowedRoots(): string[] {
   const envRoots = process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
   if (envRoots) {
-    return envRoots.split(":").map((r) => resolve(r.trim())).filter(Boolean);
+    const separator = process.platform === "win32" ? ";" : ":";
+    return envRoots.split(separator).map((r) => resolve(r.trim())).filter(Boolean);
   }
   return [resolve(homedir())];
 }
@@ -90,7 +91,7 @@ export function validateDirectory(directory: string): string {
 
   const roots = getAllowedRoots();
   const underAllowedRoot = roots.some(
-    (root) => resolved === root || resolved.startsWith(root + "/")
+    (root) => resolved === root || resolved.startsWith(root + sep)
   );
   if (!underAllowedRoot) {
     throw new Error("Directory is outside the allowed workspace roots");
