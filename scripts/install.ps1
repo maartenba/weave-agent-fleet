@@ -75,18 +75,79 @@ function Get-LatestVersion {
 
 # --- Verify checksum ---
 
+function Get-FileSHA256 {
+    param([string]$FilePath)
+
+    # Get-FileHash requires PowerShell 4.0+; fall back to .NET for older versions
+    if (Get-Command "Get-FileHash" -ErrorAction SilentlyContinue) {
+        return (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    }
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+            return [BitConverter]::ToString($hashBytes).Replace('-', '').ToLower()
+        }
+        finally {
+            $stream.Close()
+        }
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
 function Test-Checksum {
     param(
         [string]$FilePath,
         [string]$ExpectedHash
     )
 
-    $actualHash = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    $actualHash = Get-FileSHA256 -FilePath $FilePath
     $expected = $ExpectedHash.ToLower()
 
     if ($actualHash -ne $expected) {
         Write-ErrorAndExit "Checksum verification failed!`n  Expected: $expected`n  Actual:   $actualHash`nThe download may be corrupted. Please try again."
     }
+}
+
+# --- Extract zip ---
+
+function Expand-ZipFile {
+    param(
+        [string]$ZipPath,
+        [string]$DestinationPath
+    )
+
+    New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+
+    # Expand-Archive requires PowerShell 5.0+; fall back to .NET / COM for older versions
+    if (Get-Command "Expand-Archive" -ErrorAction SilentlyContinue) {
+        Expand-Archive -Path $ZipPath -DestinationPath $DestinationPath -Force
+        return
+    }
+
+    # Try .NET 4.5+ ZipFile class
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $DestinationPath)
+        return
+    }
+    catch {
+        # Fall through to COM Shell.Application
+    }
+
+    # Last resort: COM Shell.Application (works on all Windows versions)
+    $shell = New-Object -ComObject Shell.Application
+    $zip = $shell.NameSpace((Resolve-Path $ZipPath).Path)
+    $dest = $shell.NameSpace((Resolve-Path $DestinationPath).Path)
+    if (-not $zip -or -not $dest) {
+        Write-ErrorAndExit "Failed to extract archive. Could not open zip file or destination."
+    }
+    # 0x14 = overwrite + no progress dialog
+    $dest.CopyHere($zip.Items(), 0x14)
 }
 
 # --- Add to PATH ---
@@ -171,7 +232,7 @@ function Main {
         # Extract zip
         Write-Info "Installing to $InstallDir..."
         $extractDir = Join-Path $tmpDir "extracted"
-        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+        Expand-ZipFile -ZipPath $zipPath -DestinationPath $extractDir
 
         # The zip extracts to a named directory — find it
         $innerDir = Get-ChildItem -Path $extractDir -Directory | Where-Object { $_.Name -match "^weave-fleet-" } | Select-Object -First 1
