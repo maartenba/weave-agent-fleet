@@ -147,8 +147,9 @@ jobs:
           # Copy standalone app
           cp -r "${STANDALONE_SRC}/." "${DIR_NAME}/app/"
 
-          # Write version
+          # Write version (root for launcher, app/ for version-check at runtime)
           echo "${VERSION}" > "${DIR_NAME}/VERSION"
+          echo "${VERSION}" > "${DIR_NAME}/app/VERSION"
 
           # Create tarball
           tar czf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
@@ -199,8 +200,9 @@ jobs:
           # Copy standalone app
           Copy-Item -Path "${StandaloneSrc}/*" -Destination "${DirName}/app/" -Recurse -Force
 
-          # Write version
+          # Write version (root for launcher, app/ for version-check at runtime)
           Set-Content -Path "${DirName}/VERSION" -Value $Version -NoNewline
+          Set-Content -Path "${DirName}/app/VERSION" -Value $Version -NoNewline
 
           # Create zip
           Compress-Archive -Path $DirName -DestinationPath "${DirName}.zip" -Force
