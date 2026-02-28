@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import type { AutocompleteAgent } from "@/lib/api-types";
+import { resolveAgentColor } from "@/lib/agent-colors";
 import { ChevronDownIcon } from "lucide-react";
 
 interface AgentSelectorProps {
@@ -54,10 +55,10 @@ export function AgentSelector({
           disabled={disabled}
           className="h-9 gap-1.5 px-2.5 text-xs"
         >
-          {currentAgent?.color && (
+          {currentAgent && (
             <span
               className="inline-block h-2 w-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: currentAgent.color }}
+              style={{ backgroundColor: resolveAgentColor(currentAgent.name, currentAgent.color) }}
             />
           )}
           {label}
@@ -82,7 +83,7 @@ export function AgentSelector({
             >
               <span
                 className="inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0"
-                style={{ backgroundColor: agent.color ?? "var(--muted-foreground)" }}
+                style={{ backgroundColor: resolveAgentColor(agent.name, agent.color) }}
               />
               <span className="flex-1">{toTitleCase(agent.name)}</span>
               {agent.model && (

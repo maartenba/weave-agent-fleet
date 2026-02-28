@@ -8,6 +8,7 @@ import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, Autocomp
 import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
+import { resolveAgentColor } from "@/lib/agent-colors";
 import { TodoListInline } from "./todo-list-inline";
 import { MarkdownRenderer } from "./markdown-renderer";
 
@@ -136,9 +137,9 @@ function MessageItem({ message, agents, allMessages }: MessageItemProps) {
     .map((p) => (p.type === "text" ? p.text : ""))
     .join("");
 
-  // Look up agent metadata for color
+  // Look up agent metadata for color (with fallback)
   const agentMeta = message.agent ? agents?.find((a) => a.name === message.agent) : undefined;
-  const agentColor = agentMeta?.color;
+  const agentColor = message.agent ? resolveAgentColor(message.agent, agentMeta?.color) : undefined;
 
   // Compute duration for assistant messages
   let durationStr: string | null = null;
@@ -245,6 +246,7 @@ export function ActivityStreamV1({
     ? [...messages].reverse().find((m) => m.role === "user" && m.agent)?.agent ?? null
     : null;
   const activeAgentMeta = activeAgentName ? agents?.find((a) => a.name === activeAgentName) : undefined;
+  const activeAgentColor = activeAgentName ? resolveAgentColor(activeAgentName, activeAgentMeta?.color) : undefined;
 
   return (
     <div className="flex flex-col h-full">
@@ -314,7 +316,7 @@ export function ActivityStreamV1({
           style={{
             backgroundColor:
               sessionStatus === "busy"
-                ? (activeAgentMeta?.color ?? "#22c55e")
+                ? (activeAgentColor ?? "#22c55e")
                 : status === "connected"
                 ? "var(--color-zinc-500)"
                 : "var(--color-amber-500)",
