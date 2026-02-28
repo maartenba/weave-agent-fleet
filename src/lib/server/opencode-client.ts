@@ -12,6 +12,7 @@ export type {
   Session,
   Message,
   Part,
+  FileDiff,
 } from "@opencode-ai/sdk/v2";
 
 /**

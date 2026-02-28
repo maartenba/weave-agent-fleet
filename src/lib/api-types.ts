@@ -132,3 +132,15 @@ export function getTaskToolSessionId(part: AccumulatedToolPart): string | null {
 }
 
 // File search returns Array<string> (file paths) — no wrapper type needed
+
+// ─── Diff Types ─────────────────────────────────────────────────────────────
+
+/** Mirrors the SDK's FileDiff shape for frontend consumption (decouples frontend from SDK types) */
+export interface FileDiffItem {
+  file: string;
+  before: string;
+  after: string;
+  additions: number;
+  deletions: number;
+  status: "added" | "deleted" | "modified";
+}

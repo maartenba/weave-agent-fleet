@@ -1,8 +1,15 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/curl-installer-distribution.md",
-  "started_at": "2026-02-28T16:00:00.000Z",
-  "session_ids": [],
-  "plan_name": "curl-installer-distribution",
-  "agent": "tapestry",
-  "start_sha": "75f927fd937c342d65acbffa888645523f04e590"
+  "active_plan": null,
+  "completed_plans": [
+    {
+      "plan": ".weave/plans/diff-viewer.md",
+      "plan_name": "diff-viewer",
+      "started_at": "2026-02-28T18:00:00.000Z",
+      "completed_at": "2026-02-28T19:10:00.000Z",
+      "start_sha": "641a6af9dff6148c8b8de809c5f885b0e2d419ab",
+      "tasks_total": 25,
+      "tasks_completed": 25,
+      "status": "completed"
+    }
+  ]
 }
