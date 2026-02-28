@@ -3,11 +3,8 @@ import { formatTokens, formatCost } from "@/lib/format-utils";
 import {
   Zap,
   Pause,
-  CheckCircle2,
-  AlertCircle,
   Coins,
   Hash,
-  GitBranch,
   ListTodo,
 } from "lucide-react";
 
@@ -30,18 +27,6 @@ export function SummaryBar({ summary }: SummaryBarProps) {
       color: "text-zinc-400",
     },
     {
-      label: "Completed",
-      value: summary.completedSessions,
-      icon: CheckCircle2,
-      color: "text-blue-500",
-    },
-    {
-      label: "Errors",
-      value: summary.errorSessions,
-      icon: AlertCircle,
-      color: "text-red-500",
-    },
-    {
       label: "Cost",
       value: formatCost(summary.totalCost),
       icon: Coins,
@@ -54,12 +39,6 @@ export function SummaryBar({ summary }: SummaryBarProps) {
       color: "text-purple-500",
     },
     {
-      label: "Pipelines",
-      value: summary.runningPipelines,
-      icon: GitBranch,
-      color: "text-cyan-500",
-    },
-    {
       label: "Queued",
       value: summary.queuedTasks,
       icon: ListTodo,
@@ -68,7 +47,7 @@ export function SummaryBar({ summary }: SummaryBarProps) {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+    <div className="grid grid-cols-5 gap-3">
       {items.map((item) => (
         <div
           key={item.label}

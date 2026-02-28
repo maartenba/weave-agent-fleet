@@ -44,7 +44,7 @@ export function groupSessionsByWorkspace(
       existing.sessions.push(session);
       existing.sessionCount += 1;
       if (
-        session.sessionStatus === "active" &&
+        (session.sessionStatus === "active" || session.sessionStatus === "idle") &&
         session.instanceStatus === "running"
       ) {
         existing.hasRunningSession = true;
@@ -66,7 +66,7 @@ export function groupSessionsByWorkspace(
         displayName: deriveDisplayName(session),
         sessionCount: 1,
         hasRunningSession:
-          session.sessionStatus === "active" &&
+          (session.sessionStatus === "active" || session.sessionStatus === "idle") &&
           session.instanceStatus === "running",
         sessions: [session],
       });

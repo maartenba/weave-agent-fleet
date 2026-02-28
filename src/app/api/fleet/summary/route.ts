@@ -5,11 +5,8 @@ import { listSessions } from "@/lib/server/db-repository";
 export interface FleetSummaryResponse {
   activeSessions: number;
   idleSessions: number;
-  completedSessions: number;
-  errorSessions: number;
   totalTokens: number;
   totalCost: number;
-  runningPipelines: number;
   queuedTasks: number;
 }
 
@@ -21,19 +18,15 @@ export async function GET(): Promise<NextResponse> {
     const sessions = listSessions();
 
     const activeSessions = sessions.filter((s) => s.status === "active").length;
-    const completedSessions = sessions.filter((s) => s.status === "stopped").length;
-    const errorSessions = sessions.filter((s) => s.status === "disconnected").length;
+    const idleSessions = sessions.filter((s) => s.status === "idle").length;
 
     const summary: FleetSummaryResponse = {
       activeSessions,
-      idleSessions: 0,
-      completedSessions,
-      errorSessions,
+      idleSessions,
       // Tokens/cost not yet tracked per-session in DB — default to 0
       totalTokens: 0,
       totalCost: 0,
-      // Pipelines and queue not implemented in V2
-      runningPipelines: 0,
+      // Queue not implemented in V2
       queuedTasks: 0,
     };
 

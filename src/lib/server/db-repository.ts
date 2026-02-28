@@ -37,7 +37,7 @@ export interface DbSession {
   instance_id: string;
   opencode_session_id: string;
   title: string;
-  status: "active" | "stopped" | "disconnected";
+  status: "active" | "idle" | "stopped" | "completed" | "disconnected";
   directory: string;
   created_at: string;
   stopped_at: string | null;
@@ -206,13 +206,13 @@ export function listSessions(): DbSession[] {
 
 export function listActiveSessions(): DbSession[] {
   return getDb()
-    .prepare("SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC")
+    .prepare("SELECT * FROM sessions WHERE status IN ('active', 'idle') ORDER BY created_at DESC")
     .all() as DbSession[];
 }
 
 export function updateSessionStatus(
   id: string,
-  status: "active" | "stopped" | "disconnected",
+  status: "active" | "idle" | "stopped" | "completed" | "disconnected",
   stoppedAt?: string
 ): void {
   getDb()
@@ -224,7 +224,7 @@ export function updateSessionStatus(
 
 export function getSessionsForInstance(instanceId: string): DbSession[] {
   return getDb()
-    .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status = 'active'")
+    .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status IN ('active', 'idle')")
     .all(instanceId) as DbSession[];
 }
 

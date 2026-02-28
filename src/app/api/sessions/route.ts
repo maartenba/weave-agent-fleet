@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
-import { insertSession, listSessions, getWorkspace, getInstance } from "@/lib/server/db-repository";
+import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus } from "@/lib/server/db-repository";
 import { randomUUID } from "crypto";
 import type {
   CreateSessionRequest,
@@ -135,16 +135,65 @@ export async function GET(): Promise<NextResponse> {
 
   const items: SessionListItem[] = [];
 
+  // Batch-fetch session statuses from each live instance to detect idle sessions
+  // that may not have an SSE observer. This adds at most N network calls where
+  // N = number of live instances.
+  type SessionStatusMap = Record<string, { type: string }>;
+  const instanceStatusMaps = new Map<string, SessionStatusMap>();
+  await Promise.allSettled(
+    liveInstances
+      .filter((i) => i.status === "running")
+      .map(async (instance) => {
+        try {
+          const result = await instance.client.session.status({
+            directory: instance.directory,
+          });
+          if (result.data) {
+            instanceStatusMaps.set(instance.id, result.data as SessionStatusMap);
+          }
+        } catch {
+          // session.status() failure is non-fatal — fall through to DB-only behavior
+        }
+      })
+  );
+
   for (const dbSession of dbSessions) {
     // Determine the live instance state
     const liveInstance = liveInstanceMap.get(dbSession.instance_id);
 
     let instanceStatus: "running" | "dead" = "dead";
-    let sessionStatus: "active" | "stopped" | "disconnected";
+    let sessionStatus: SessionListItem["sessionStatus"];
 
     if (liveInstance) {
       instanceStatus = liveInstance.status;
-      sessionStatus = liveInstance.status === "running" ? "active" : "stopped";
+      if (liveInstance.status === "running") {
+        // Check live session status from the SDK polling (catches idle transitions
+        // that happened without an SSE observer)
+        const statusMap = instanceStatusMaps.get(dbSession.instance_id);
+        const liveStatus = statusMap?.[dbSession.opencode_session_id];
+        if (liveStatus?.type === "idle" && dbSession.status === "active") {
+          // Session went idle without SSE observer — persist correction
+          try {
+            updateSessionStatus(dbSession.id, "idle");
+          } catch {
+            // Non-fatal
+          }
+          sessionStatus = "idle";
+        } else if (liveStatus?.type === "busy" && dbSession.status === "idle") {
+          // Session became busy again — correct stale idle state
+          try {
+            updateSessionStatus(dbSession.id, "active");
+          } catch {
+            // Non-fatal
+          }
+          sessionStatus = "active";
+        } else {
+          // Respect persisted idle status from the SSE stream
+          sessionStatus = dbSession.status === "idle" ? "idle" : "active";
+        }
+      } else {
+        sessionStatus = "stopped";
+      }
     } else {
       // Not in live map — check DB instance status
       let dbInst: ReturnType<typeof getInstance>;
@@ -157,7 +206,20 @@ export async function GET(): Promise<NextResponse> {
         // DB says running but not in live Map → orphan / disconnected
         sessionStatus = "disconnected";
       } else {
-        sessionStatus = dbSession.status === "active" ? "disconnected" : (dbSession.status as "stopped" | "disconnected");
+        // Instance is dead — map DB status to appropriate session status
+        if (dbSession.status === "completed") {
+          sessionStatus = "completed";
+        } else if (dbSession.status === "idle") {
+          // Was idle when instance died → naturally completed
+          sessionStatus = "completed";
+        } else if (dbSession.status === "stopped") {
+          sessionStatus = "stopped";
+        } else if (dbSession.status === "disconnected") {
+          sessionStatus = "disconnected";
+        } else {
+          // active session with dead instance → disconnected
+          sessionStatus = "disconnected";
+        }
       }
     }
 

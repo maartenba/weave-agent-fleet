@@ -27,28 +27,38 @@ export function LiveSessionCard({
   const isDead = instanceStatus === "dead";
   const isDisconnected = sessionStatus === "disconnected";
   const isStopped = sessionStatus === "stopped";
-  const isInactive = isDisconnected || isStopped;
+  const isIdle = sessionStatus === "idle";
+  const isCompleted = sessionStatus === "completed";
+  const isInactive = isDisconnected || isStopped || isCompleted;
 
   const dotColor = isDisconnected
     ? "bg-amber-400"
+    : isCompleted
+    ? "bg-blue-500"
     : isStopped
     ? "bg-slate-500"
+    : isIdle
+    ? "bg-yellow-400"
     : isDead
     ? "bg-red-500"
     : "bg-green-500 animate-pulse";
 
   const badgeVariant: "destructive" | "secondary" | "outline" =
-    isDisconnected ? "outline" : isDead ? "destructive" : "secondary";
+    isDisconnected ? "outline" : isCompleted ? "outline" : isIdle ? "secondary" : isDead ? "destructive" : "secondary";
 
   const statusLabel = isDisconnected
     ? "disconnected"
+    : isCompleted
+    ? "completed"
     : isStopped
     ? "stopped"
+    : isIdle
+    ? "idle"
     : isDead
     ? "dead"
     : "running";
 
-  const canTerminate = !isStopped;
+  const canTerminate = !isStopped && !isCompleted;
 
   return (
     <div className={`relative group ${isInactive ? "opacity-60" : ""}`}>

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import { getInstance } from "@/lib/server/process-manager";
 import { isRelevantToSession } from "@/lib/event-state";
-import { getSessionByOpencodeId } from "@/lib/server/db-repository";
+import { getSessionByOpencodeId, updateSessionStatus } from "@/lib/server/db-repository";
 import {
   createSessionCompletedNotification,
   createSessionErrorNotification,
@@ -110,10 +110,16 @@ export async function GET(
               const statusType: string = properties?.status?.type ?? "";
               if (statusType === "busy") {
                 lastSessionStatus = "busy";
+                // Transition back to active when session becomes busy again
+                const dbSession = getSessionByOpencodeId(sessionId);
+                if (dbSession && dbSession.status === "idle") {
+                  updateSessionStatus(dbSession.id, "active");
+                }
               } else if (statusType === "idle" && lastSessionStatus === "busy") {
                 lastSessionStatus = "idle";
                 const dbSession = getSessionByOpencodeId(sessionId);
                 if (dbSession) {
+                  updateSessionStatus(dbSession.id, "idle");
                   createSessionCompletedNotification(
                     dbSession.opencode_session_id,
                     instanceId,
@@ -125,6 +131,7 @@ export async function GET(
               lastSessionStatus = "idle";
               const dbSession = getSessionByOpencodeId(sessionId);
               if (dbSession) {
+                updateSessionStatus(dbSession.id, "idle");
                 createSessionCompletedNotification(
                   dbSession.opencode_session_id,
                   instanceId,

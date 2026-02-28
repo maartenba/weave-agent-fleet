@@ -143,10 +143,17 @@ export async function DELETE(
   // If other sessions exist, keep the instance running — don't touch it
 
   // Step 3: Update session status in DB using the resolved DB id
+  // If session was idle (finished its task), mark as "completed".
+  // If session was active (still processing), mark as "stopped" (user-interrupted).
   if (resolvedDbId) {
     try {
       const now = new Date().toISOString();
-      updateSessionStatus(resolvedDbId, "stopped", now);
+      const currentSession = getSession(resolvedDbId);
+      if (currentSession?.status === "idle") {
+        updateSessionStatus(resolvedDbId, "completed", now);
+      } else {
+        updateSessionStatus(resolvedDbId, "stopped", now);
+      }
     } catch {
       // DB update failure is non-fatal
     }

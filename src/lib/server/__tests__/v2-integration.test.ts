@@ -442,10 +442,12 @@ describe("fleet summary — real aggregate stats from DB", () => {
     } = await import("@/lib/server/db-repository");
 
     // Create sessions with different statuses
-    const statuses: Array<{ status: "active" | "stopped" | "disconnected"; title: string }> = [
+    const statuses: Array<{ status: "active" | "idle" | "stopped" | "completed" | "disconnected"; title: string }> = [
       { status: "active", title: "Active 1" },
       { status: "active", title: "Active 2" },
+      { status: "idle", title: "Idle 1" },
       { status: "stopped", title: "Stopped 1" },
+      { status: "completed", title: "Completed 1" },
       { status: "disconnected", title: "Disconnected 1" },
       { status: "disconnected", title: "Disconnected 2" },
       { status: "disconnected", title: "Disconnected 3" },
@@ -476,13 +478,11 @@ describe("fleet summary — real aggregate stats from DB", () => {
     // Compute summary exactly like GET /api/fleet/summary does
     const sessions = listSessions();
     const activeSessions = sessions.filter((s) => s.status === "active").length;
-    const completedSessions = sessions.filter((s) => s.status === "stopped").length;
-    const errorSessions = sessions.filter((s) => s.status === "disconnected").length;
+    const idleSessions = sessions.filter((s) => s.status === "idle").length;
 
     expect(activeSessions).toBe(2);
-    expect(completedSessions).toBe(1);
-    expect(errorSessions).toBe(3);
-    expect(sessions.length).toBe(6);
+    expect(idleSessions).toBe(1);
+    expect(sessions.length).toBe(8);
   });
 
   it("EmptyDbReturnsZeroCounts", async () => {
@@ -492,12 +492,10 @@ describe("fleet summary — real aggregate stats from DB", () => {
     expect(sessions.length).toBe(0);
 
     const activeSessions = sessions.filter((s) => s.status === "active").length;
-    const completedSessions = sessions.filter((s) => s.status === "stopped").length;
-    const errorSessions = sessions.filter((s) => s.status === "disconnected").length;
+    const idleSessions = sessions.filter((s) => s.status === "idle").length;
 
     expect(activeSessions).toBe(0);
-    expect(completedSessions).toBe(0);
-    expect(errorSessions).toBe(0);
+    expect(idleSessions).toBe(0);
   });
 });
 

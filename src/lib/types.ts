@@ -209,10 +209,7 @@ export interface Notification {
 export interface FleetSummary {
   activeSessions: number;
   idleSessions: number;
-  completedSessions: number;
-  errorSessions: number;
   totalTokens: number;
   totalCost: number;
-  runningPipelines: number;
   queuedTasks: number;
 }

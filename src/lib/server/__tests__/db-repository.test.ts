@@ -311,4 +311,58 @@ describe("session repository", () => {
     expect(sessions.length).toBe(1);
     expect(sessions[0]?.id).toBe(id2);
   });
+
+  it("UpdatesSessionStatusToIdle", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id, "idle");
+    const sess = getSession(id);
+    expect(sess?.status).toBe("idle");
+  });
+
+  it("UpdatesSessionStatusToCompleted", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    const now = new Date().toISOString();
+    updateSessionStatus(id, "completed", now);
+    const sess = getSession(id);
+    expect(sess?.status).toBe("completed");
+    expect(sess?.stopped_at).toBe(now);
+  });
+
+  it("GetSessionsForInstanceReturnsIdleSessions", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id2, "idle");
+    const sessions = getSessionsForInstance(instId);
+    expect(sessions.length).toBe(2);
+    const ids = sessions.map((s) => s.id);
+    expect(ids).toContain(id1);
+    expect(ids).toContain(id2);
+  });
+
+  it("ListActiveSessionsIncludesIdleSessions", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    const id3 = mkSessionId();
+    const id4 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id3, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id4, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id2, "idle");
+    updateSessionStatus(id3, "stopped");
+    updateSessionStatus(id4, "disconnected");
+    const active = listActiveSessions();
+    expect(active.length).toBe(2);
+    const ids = active.map((s) => s.id);
+    expect(ids).toContain(id1); // active
+    expect(ids).toContain(id2); // idle
+  });
 });

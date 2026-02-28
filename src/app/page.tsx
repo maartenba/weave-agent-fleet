@@ -79,10 +79,10 @@ function FleetPageInner() {
         return aTitle.localeCompare(bTitle);
       });
     } else if (prefs.sortBy === "status") {
-      const order = { active: 0, disconnected: 1, stopped: 2 } as const;
+      const order: Record<string, number> = { active: 0, idle: 1, disconnected: 2, stopped: 3, completed: 3 };
       sorted.sort((a, b) => {
-        const aOrd = order[a.sessionStatus] ?? 3;
-        const bOrd = order[b.sessionStatus] ?? 3;
+        const aOrd = order[a.sessionStatus] ?? 4;
+        const bOrd = order[b.sessionStatus] ?? 4;
         return aOrd - bOrd;
       });
     }
@@ -96,12 +96,9 @@ function FleetPageInner() {
 
   const summary: FleetSummary = {
     activeSessions: liveSummary?.activeSessions ?? liveCount,
-    idleSessions: liveSummary?.idleSessions ?? 0,
-    completedSessions: liveSummary?.completedSessions ?? sessions.filter((s) => s.sessionStatus === "stopped").length,
-    errorSessions: liveSummary?.errorSessions ?? sessions.filter((s) => s.sessionStatus === "disconnected").length,
+    idleSessions: liveSummary?.idleSessions ?? sessions.filter((s) => s.sessionStatus === "idle").length,
     totalTokens: liveSummary?.totalTokens ?? 0,
     totalCost: liveSummary?.totalCost ?? 0,
-    runningPipelines: 0,
     queuedTasks: 0,
   };
 
@@ -114,15 +111,17 @@ function FleetPageInner() {
   const renderGroupedByStatus = () => {
     const statusGroups: Record<string, SessionListItem[]> = {
       active: [],
+      idle: [],
       disconnected: [],
       stopped: [],
+      completed: [],
     };
     for (const s of searchFiltered) {
       (statusGroups[s.sessionStatus] ?? []).push(s);
     }
     return (
       <div className="space-y-4">
-        {(["active", "disconnected", "stopped"] as const).map((status) => {
+        {(["active", "idle", "disconnected", "stopped", "completed"] as const).map((status) => {
           const items = sortSessions(statusGroups[status]);
           if (items.length === 0) return null;
           return (

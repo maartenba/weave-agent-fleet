@@ -191,6 +191,28 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
+  it("sets hasRunningSession true when idle+running", () => {
+    const session = makeSession({
+      sessionStatus: "idle",
+      instanceStatus: "running",
+    });
+
+    const groups = groupSessionsByWorkspace([session]);
+
+    expect(groups[0].hasRunningSession).toBe(true);
+  });
+
+  it("sets hasRunningSession false when completed+dead", () => {
+    const session = makeSession({
+      sessionStatus: "completed",
+      instanceStatus: "dead",
+    });
+
+    const groups = groupSessionsByWorkspace([session]);
+
+    expect(groups[0].hasRunningSession).toBe(false);
+  });
+
   it("sets hasRunningSession true if ANY session in the group is active+running", () => {
     const dead = makeSession({
       instanceId: "inst-dead",

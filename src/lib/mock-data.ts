@@ -678,11 +678,8 @@ export const mockQueueItems: QueueItem[] = [
 export const mockFleetSummary: FleetSummary = {
   activeSessions: 4,
   idleSessions: 1,
-  completedSessions: 1,
-  errorSessions: 1,
   totalTokens: 142000,
   totalCost: 4.23,
-  runningPipelines: 1,
   queuedTasks: 4,
 };
 

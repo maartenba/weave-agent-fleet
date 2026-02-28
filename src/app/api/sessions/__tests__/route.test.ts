@@ -461,6 +461,42 @@ describe("GET /api/sessions", () => {
     expect(body[0].isolationStrategy).toBe("worktree");
   });
 
+  it("ReturnsIdleStatusWhenDbSessionIsIdleAndInstanceIsRunning", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ status: "idle" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("idle");
+    expect(body[0].instanceStatus).toBe("running");
+  });
+
+  it("ReturnsCompletedStatusWhenDbSessionIsCompletedAndInstanceIsDead", async () => {
+    const dbSession = makeDbSession({ status: "completed" });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([]);
+    mockGetInstance.mockReturnValue(undefined as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("completed");
+    expect(body[0].instanceStatus).toBe("dead");
+  });
+
   it("SynthesizesStubSessionForDisconnectedSessionsWhenSdkFetchFails", async () => {
     const dbSession = makeDbSession({
       status: "stopped",
@@ -547,8 +583,8 @@ describe("DELETE /api/sessions/[id]", () => {
     expect(mockDestroyInstance).not.toHaveBeenCalled();
   });
 
-  it("UpdatesSessionStatusToStoppedInDb", async () => {
-    const dbSession = makeDbSession({ id: "db-sess-resolved" });
+  it("UpdatesSessionStatusToStoppedWhenActiveInDb", async () => {
+    const dbSession = makeDbSession({ id: "db-sess-resolved", status: "active" });
     mockGetSession.mockReturnValue(dbSession as never);
     mockGetSessionsForInstance.mockReturnValue([]);
 
@@ -563,6 +599,26 @@ describe("DELETE /api/sessions/[id]", () => {
     expect(mockUpdateSessionStatus).toHaveBeenCalledWith(
       "db-sess-resolved",
       "stopped",
+      expect.any(String)
+    );
+  });
+
+  it("UpdatesSessionStatusToCompletedWhenIdleInDb", async () => {
+    const dbSession = makeDbSession({ id: "db-sess-idle", status: "idle" });
+    mockGetSession.mockReturnValue(dbSession as never);
+    mockGetSessionsForInstance.mockReturnValue([]);
+
+    const req = new NextRequest(
+      "http://localhost/api/sessions/session-id?instanceId=inst-abc",
+      { method: "DELETE" }
+    );
+    const context = { params: Promise.resolve({ id: "session-id" }) };
+
+    await DELETE(req, context);
+
+    expect(mockUpdateSessionStatus).toHaveBeenCalledWith(
+      "db-sess-idle",
+      "completed",
       expect.any(String)
     );
   });
