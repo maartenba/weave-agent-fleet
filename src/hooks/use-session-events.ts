@@ -44,6 +44,7 @@ export function useSessionEvents(
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track whether we've ever successfully connected — if so, do state recovery on reconnect
   const hasConnectedOnce = useRef(false);
+  const connectRef = useRef<(() => void) | null>(null);
 
   /**
    * Fetch existing messages from the API and convert to AccumulatedMessage[].
@@ -154,13 +155,18 @@ export function useSessionEvents(
       const delay = reconnectDelay.current;
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
       reconnectTimerRef.current = setTimeout(() => {
-        if (isMounted.current) connect();
+        if (isMounted.current) connectRef.current?.();
       }, delay);
     };
   }, [sessionId, instanceId, loadMessages]);
 
   useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
     isMounted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- connect subscribes to EventSource (external system), setState is called asynchronously in event callbacks
     connect();
     return () => {
       isMounted.current = false;
