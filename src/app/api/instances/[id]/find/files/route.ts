@@ -38,7 +38,7 @@ export async function GET(
   }
 
   try {
-    const result = await client.find.files({ query: { query: query.trim() } });
+    const result = await client.find.files({ query: query.trim() });
     const files = result.data ?? [];
     // Cap results to prevent rendering extremely large lists
     const limited = files.slice(0, MAX_FILE_RESULTS);

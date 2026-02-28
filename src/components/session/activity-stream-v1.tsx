@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Bot, User, Wrench, Loader2, AlertCircle } from "lucide-react";
-import type { AccumulatedMessage, AccumulatedPart } from "@/lib/api-types";
+import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AutocompleteAgent } from "@/lib/api-types";
+import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
 import { TodoListInline } from "./todo-list-inline";
@@ -14,9 +15,62 @@ interface ActivityStreamV1Props {
   status: SessionConnectionStatus;
   sessionStatus: "idle" | "busy";
   error?: string;
+  agents?: AutocompleteAgent[];
 }
 
+function toTitleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
+// ─── Task Delegation Block ─────────────────────────────────────────────────
+
+function TaskDelegationItem({ part }: { part: AccumulatedToolPart }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const state = part.state as any;
+  const input = getTaskToolInput(part);
+  if (!input) return null;
+
+  const isRunning = state?.status === "running" || state?.status === "pending" || !state?.status;
+  const isError = state?.status === "error";
+
+  const title = input.subagent_type
+    ? `${toTitleCase(input.subagent_type)} Task`
+    : "Subagent Task";
+
+  return (
+    <div className="my-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs border-l-2 border-l-indigo-500/60">
+      <div className="flex items-center gap-2 font-medium text-foreground/80">
+        {isRunning && <Loader2 className="h-3 w-3 animate-spin text-indigo-400 shrink-0" />}
+        {!isRunning && !isError && (
+          <span className="h-2 w-2 rounded-full bg-green-500 shrink-0 inline-block" />
+        )}
+        {isError && (
+          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0 inline-block" />
+        )}
+        <span>{title}</span>
+      </div>
+      {input.description && (
+        <p className="mt-1 text-muted-foreground leading-relaxed">{input.description}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Tool Call Item ─────────────────────────────────────────────────────────
+
 function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
+  // Delegate task tool calls to the delegation block renderer
+  if (isTaskToolCall(part) && getTaskToolInput(part)) {
+    return <TaskDelegationItem part={part} />;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const state = part.state as any;
   const isRunning = state?.status === "running" || !state?.status;
@@ -62,7 +116,15 @@ function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
   );
 }
 
-function MessageItem({ message }: { message: AccumulatedMessage }) {
+// ─── Message Item ───────────────────────────────────────────────────────────
+
+interface MessageItemProps {
+  message: AccumulatedMessage;
+  agents?: AutocompleteAgent[];
+  allMessages?: AccumulatedMessage[];
+}
+
+function MessageItem({ message, agents, allMessages }: MessageItemProps) {
   const isUser = message.role === "user";
   const textParts = message.parts.filter((p) => p.type === "text");
   const toolParts = message.parts.filter(
@@ -73,8 +135,24 @@ function MessageItem({ message }: { message: AccumulatedMessage }) {
     .map((p) => (p.type === "text" ? p.text : ""))
     .join("");
 
+  // Look up agent metadata for color
+  const agentMeta = message.agent ? agents?.find((a) => a.name === message.agent) : undefined;
+  const agentColor = agentMeta?.color;
+
+  // Compute duration for assistant messages
+  let durationStr: string | null = null;
+  if (!isUser && message.completedAt && message.parentID && allMessages) {
+    const parent = allMessages.find((m) => m.messageId === message.parentID);
+    if (parent?.createdAt) {
+      durationStr = formatDuration(message.completedAt - parent.createdAt);
+    }
+  }
+
   return (
-    <div className="flex gap-3 px-4 py-3 hover:bg-accent/20 border-b border-border/40">
+    <div
+      className="flex gap-3 px-4 py-3 hover:bg-accent/20 border-b border-border/40 border-l-2"
+      style={{ borderLeftColor: agentColor ?? "transparent" }}
+    >
       <div className="mt-0.5 shrink-0">
         {isUser ? (
           <User className="h-4 w-4 text-foreground" />
@@ -83,10 +161,33 @@ function MessageItem({ message }: { message: AccumulatedMessage }) {
         )}
       </div>
       <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">
-            {isUser ? "You" : "Assistant"}
-          </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isUser ? (
+            <span className="text-xs font-medium">You</span>
+          ) : (
+            <>
+              {/* TUI pattern: ▣ AgentName · modelID · duration */}
+              <span
+                className="text-xs font-medium"
+                style={{ color: agentColor }}
+              >
+                ▣
+              </span>
+              <span className="text-xs font-medium">
+                {message.agent ? toTitleCase(message.agent) : "Assistant"}
+              </span>
+              {message.modelID && (
+                <span className="text-[10px] text-muted-foreground">
+                  · {message.modelID}
+                </span>
+              )}
+              {durationStr && (
+                <span className="text-[10px] text-muted-foreground">
+                  · {durationStr}
+                </span>
+              )}
+            </>
+          )}
           {message.cost != null && message.cost > 0 && (
             <span className="text-[10px] text-muted-foreground">
               ${message.cost.toFixed(4)}
@@ -114,7 +215,9 @@ function MessageItem({ message }: { message: AccumulatedMessage }) {
         {!isUser && !fullText && toolParts.length === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
-            <span>Thinking…</span>
+            <span>
+              {message.agent ? `${toTitleCase(message.agent)} thinking…` : "Thinking…"}
+            </span>
           </div>
         )}
       </div>
@@ -122,11 +225,14 @@ function MessageItem({ message }: { message: AccumulatedMessage }) {
   );
 }
 
+// ─── Activity Stream ────────────────────────────────────────────────────────
+
 export function ActivityStreamV1({
   messages,
   status,
   sessionStatus,
   error,
+  agents,
 }: ActivityStreamV1Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -134,6 +240,12 @@ export function ActivityStreamV1({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Derive active agent from the latest user message when busy
+  const activeAgentName = sessionStatus === "busy"
+    ? [...messages].reverse().find((m) => m.role === "user" && m.agent)?.agent ?? null
+    : null;
+  const activeAgentMeta = activeAgentName ? agents?.find((a) => a.name === activeAgentName) : undefined;
 
   return (
     <div className="flex flex-col h-full">
@@ -167,7 +279,12 @@ export function ActivityStreamV1({
           )}
 
           {messages.map((message) => (
-            <MessageItem key={message.messageId} message={message} />
+            <MessageItem
+              key={message.messageId}
+              message={message}
+              agents={agents}
+              allMessages={messages}
+            />
           ))}
 
           {/* "Thinking" indicator when agent is busy but no new message yet */}
@@ -178,7 +295,11 @@ export function ActivityStreamV1({
                 <Bot className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Thinking…</span>
+                  <span>
+                    {activeAgentName
+                      ? `${toTitleCase(activeAgentName)} thinking…`
+                      : "Thinking…"}
+                  </span>
                 </div>
               </div>
             )}
@@ -190,17 +311,24 @@ export function ActivityStreamV1({
       {/* Status bar */}
       <div className="px-4 py-1.5 border-t border-border/40 flex items-center gap-2">
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
-            sessionStatus === "busy"
-              ? "bg-green-500 animate-pulse"
-              : status === "connected"
-              ? "bg-zinc-500"
-              : "bg-amber-500"
-          }`}
+          className="h-1.5 w-1.5 rounded-full"
+          style={{
+            backgroundColor:
+              sessionStatus === "busy"
+                ? (activeAgentMeta?.color ?? "#22c55e")
+                : status === "connected"
+                ? "var(--color-zinc-500)"
+                : "var(--color-amber-500)",
+            ...(sessionStatus === "busy" || status !== "connected"
+              ? {}
+              : {}),
+          }}
         />
         <span className="text-[10px] text-muted-foreground">
           {sessionStatus === "busy"
-            ? "Agent working…"
+            ? activeAgentName
+              ? `${toTitleCase(activeAgentName)} working…`
+              : "Agent working…"
             : status === "connected"
             ? "Idle"
             : status === "connecting"

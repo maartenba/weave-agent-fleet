@@ -78,7 +78,7 @@ export async function GET(
 
       try {
         const subscribeResult = await client.event.subscribe({
-          query: { directory },
+          directory,
         });
 
         // SDK returns { stream: AsyncGenerator } or the generator directly

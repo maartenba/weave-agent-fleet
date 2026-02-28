@@ -333,7 +333,7 @@ describe("POST /api/sessions", () => {
     await POST(req);
 
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ body: { title: "Custom Title" } })
+      expect.objectContaining({ title: "Custom Title" })
     );
   });
 });

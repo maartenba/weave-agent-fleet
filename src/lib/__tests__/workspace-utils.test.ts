@@ -4,7 +4,7 @@ import {
   filterSessionsByWorkspace,
 } from "@/lib/workspace-utils";
 import type { SessionListItem } from "@/lib/api-types";
-import type { Session } from "@opencode-ai/sdk";
+import type { Session } from "@opencode-ai/sdk/v2";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

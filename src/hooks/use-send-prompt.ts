@@ -6,7 +6,8 @@ export interface UseSendPromptResult {
   sendPrompt: (
     sessionId: string,
     instanceId: string,
-    text: string
+    text: string,
+    agent?: string
   ) => Promise<void>;
   isSending: boolean;
   error?: string;
@@ -17,7 +18,7 @@ export function useSendPrompt(): UseSendPromptResult {
   const [error, setError] = useState<string | undefined>();
 
   const sendPrompt = useCallback(
-    async (sessionId: string, instanceId: string, text: string): Promise<void> => {
+    async (sessionId: string, instanceId: string, text: string, agent?: string): Promise<void> => {
       setIsSending(true);
       setError(undefined);
       try {
@@ -26,7 +27,7 @@ export function useSendPrompt(): UseSendPromptResult {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ instanceId, text }),
+            body: JSON.stringify({ instanceId, text, agent }),
           }
         );
 

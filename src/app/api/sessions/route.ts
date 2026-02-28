@@ -51,7 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Step 3: Create the session in OpenCode
     const result = await instance.client.session.create({
-      body: { title: title ?? "New Session" },
+      title: title ?? "New Session",
     });
 
     const session = result.data;
@@ -180,7 +180,7 @@ export async function GET(): Promise<NextResponse> {
     if (liveInstance && instanceStatus === "running") {
       try {
         const result = await liveInstance.client.session.get({
-          path: { id: dbSession.opencode_session_id },
+          sessionID: dbSession.opencode_session_id,
         });
         if (result.data) {
           items.push({

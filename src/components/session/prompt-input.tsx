@@ -6,15 +6,28 @@ import { Button } from "@/components/ui/button";
 import { Send, Loader2, AlertCircle } from "lucide-react";
 import { useAutocomplete } from "@/hooks/use-autocomplete";
 import { AutocompletePopup } from "@/components/session/autocomplete-popup";
+import { AgentSelector } from "@/components/session/agent-selector";
+import type { AutocompleteAgent } from "@/lib/api-types";
 
 interface PromptInputProps {
-  onSend?: (text: string) => Promise<void>;
+  onSend?: (text: string, agent?: string) => Promise<void>;
   disabled?: boolean;
   sendError?: string;
   instanceId?: string;
+  agents?: AutocompleteAgent[];
+  selectedAgent?: string | null;
+  onAgentChange?: (agent: string | null) => void;
 }
 
-export function PromptInput({ onSend, disabled, sendError, instanceId = "" }: PromptInputProps) {
+export function PromptInput({
+  onSend,
+  disabled,
+  sendError,
+  instanceId = "",
+  agents = [],
+  selectedAgent = null,
+  onAgentChange,
+}: PromptInputProps) {
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [cursorPos, setCursorPos] = useState(0);
@@ -72,7 +85,7 @@ export function PromptInput({ onSend, disabled, sendError, instanceId = "" }: Pr
           setValue("");
           setIsSending(true);
           try {
-            await onSend?.(text);
+            await onSend?.(text, selectedAgent ?? undefined);
           } finally {
             setIsSending(false);
             inputRef.current?.focus();
@@ -80,6 +93,14 @@ export function PromptInput({ onSend, disabled, sendError, instanceId = "" }: Pr
         }}
         className="flex items-center gap-2"
       >
+        {agents.length > 0 && (
+          <AgentSelector
+            agents={agents}
+            selectedAgent={selectedAgent}
+            onSelect={onAgentChange ?? (() => {})}
+            disabled={isDisabled}
+          />
+        )}
         <Input
           ref={inputRef}
           value={value}

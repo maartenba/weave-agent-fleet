@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { useSendPrompt } from "@/hooks/use-send-prompt";
 import { useCallback, useEffect, useState } from "react";
+import { useAgents } from "@/hooks/use-agents";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, GitBranch, Server, Clock, Hash, Coins, Square } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
@@ -30,11 +31,15 @@ export default function SessionDetailPage() {
   const sessionId = params.id as string;
   const instanceId = searchParams.get("instanceId") ?? "";
 
+  const { sendPrompt, isSending, error: sendError } = useSendPrompt();
+  const { agents } = useAgents(instanceId);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+
   const { messages, status, sessionStatus, error } = useSessionEvents(
     sessionId,
-    instanceId
+    instanceId,
+    setSelectedAgent
   );
-  const { sendPrompt, isSending, error: sendError } = useSendPrompt();
   const { terminateSession, isTerminating } = useTerminateSession();
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
@@ -70,9 +75,30 @@ export default function SessionDetailPage() {
   );
   const latestTodos = extractLatestTodos(messages);
 
+  // Derive active agent from the last user message
+  const activeAgentName = sessionStatus === "busy"
+    ? [...messages].reverse().find((m) => m.role === "user" && m.agent)?.agent ?? null
+    : null;
+  const activeAgentMeta = activeAgentName
+    ? agents.find((a) => a.name === activeAgentName)
+    : null;
+
+  // Compute participating agents with message counts for sidebar
+  const participatingAgents = (() => {
+    const counts = new Map<string, number>();
+    for (const m of messages) {
+      if (m.agent) counts.set(m.agent, (counts.get(m.agent) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([name, count]) => ({
+      name,
+      count,
+      meta: agents.find((a) => a.name === name),
+    }));
+  })();
+
   const handleSend = useCallback(
-    async (text: string) => {
-      await sendPrompt(sessionId, instanceId, text);
+    async (text: string, agent?: string) => {
+      await sendPrompt(sessionId, instanceId, text, agent);
     },
     [sendPrompt, sessionId, instanceId]
   );
@@ -123,6 +149,15 @@ export default function SessionDetailPage() {
             <Badge variant="secondary" className="text-xs">
               {isStopped ? "Stopped" : sessionStatus === "busy" ? "Working" : "Idle"}
             </Badge>
+            {activeAgentName && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: activeAgentMeta?.color ?? "currentColor" }}
+                />
+                {activeAgentName.charAt(0).toUpperCase() + activeAgentName.slice(1)}
+              </Badge>
+            )}
             {!isStopped && (
               <Button
                 variant={stopConfirm ? "destructive" : "ghost"}
@@ -163,6 +198,7 @@ export default function SessionDetailPage() {
               status={status}
               sessionStatus={sessionStatus}
               error={error}
+              agents={agents}
             />
           </div>
           <PromptInput
@@ -170,6 +206,9 @@ export default function SessionDetailPage() {
             onSend={handleSend}
             disabled={isStopped || status === "error"}
             sendError={sendError}
+            agents={agents}
+            selectedAgent={selectedAgent}
+            onAgentChange={setSelectedAgent}
           />
         </div>
 
@@ -252,6 +291,30 @@ export default function SessionDetailPage() {
                 </div>
                 <p className="text-xs font-mono">${totalCost.toFixed(4)}</p>
               </div>
+
+              {/* Active Agents */}
+              {participatingAgents.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Agents</p>
+                    {participatingAgents.map(({ name, count, meta }) => (
+                      <div key={name} className="flex items-center gap-1.5">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: meta?.color ?? "var(--muted-foreground)" }}
+                        />
+                        <span className="text-xs flex-1">
+                          {name.charAt(0).toUpperCase() + name.slice(1)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {count} msg{count !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <Separator />
 

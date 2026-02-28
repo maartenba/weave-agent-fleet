@@ -35,6 +35,8 @@ export async function GET(
       description: agent.description,
       mode: agent.mode,
       color: agent.color,
+      model: agent.model,
+      hidden: agent.hidden,
     }));
     return NextResponse.json(response, { status: 200 });
   } catch (err) {

@@ -8,6 +8,7 @@ import type {
 } from "@/lib/api-types";
 import {
   ensureMessage,
+  mergeMessageUpdate,
   applyPartUpdate,
   applyTextDelta,
 } from "@/lib/event-state";
@@ -31,7 +32,8 @@ const BASE_RECONNECT_DELAY_MS = 1_000;
 
 export function useSessionEvents(
   sessionId: string,
-  instanceId: string
+  instanceId: string,
+  onAgentSwitch?: (agent: string) => void
 ): UseSessionEventsResult {
   const [messages, setMessages] = useState<AccumulatedMessage[]>([]);
   const [status, setStatus] = useState<SessionConnectionStatus>("connecting");
@@ -45,6 +47,9 @@ export function useSessionEvents(
   // Track whether we've ever successfully connected — if so, do state recovery on reconnect
   const hasConnectedOnce = useRef(false);
   const connectRef = useRef<(() => void) | null>(null);
+  // Keep onAgentSwitch in a ref to avoid stale closures in the event handler
+  const onAgentSwitchRef = useRef(onAgentSwitch);
+  useEffect(() => { onAgentSwitchRef.current = onAgentSwitch; }, [onAgentSwitch]);
 
   /**
    * Fetch existing messages from the API and convert to AccumulatedMessage[].
@@ -58,7 +63,7 @@ export function useSessionEvents(
       if (!response.ok) return;
       const data = await response.json() as {
         messages?: Array<{
-          info: { id: string; sessionID: string; role: string; time?: { created?: number }; cost?: number; tokens?: { input: number; output: number; reasoning: number } };
+          info: { id: string; sessionID: string; role: string; time?: { created?: number; completed?: number }; cost?: number; tokens?: { input: number; output: number; reasoning: number }; agent?: string; modelID?: string; parentID?: string };
           parts: Array<{ id: string; messageID: string; sessionID: string; type: string; text?: string; tool?: string; callID?: string; state?: unknown; cost?: number; tokens?: { input: number; output: number; reasoning: number } }>;
         }>;
       };
@@ -90,6 +95,10 @@ export function useSessionEvents(
           role: msg.info.role === "user" ? "user" as const : "assistant" as const,
           parts,
           createdAt: msg.info.time?.created,
+          completedAt: msg.info.time?.completed,
+          agent: msg.info.agent,
+          modelID: msg.info.modelID,
+          parentID: msg.info.parentID,
           cost: cost || (msg.info.cost ?? 0),
           tokens: (tokensInput || tokensOutput || tokensReasoning)
             ? { input: tokensInput, output: tokensOutput, reasoning: tokensReasoning }
@@ -143,7 +152,7 @@ export function useSessionEvents(
       } catch {
         return;
       }
-      handleEvent(event, sessionId, setMessages, setStatus, setSessionStatus, setError);
+      handleEvent(event, sessionId, setMessages, setStatus, setSessionStatus, setError, onAgentSwitchRef);
     };
 
     es.onerror = () => {
@@ -196,6 +205,7 @@ function handleEvent(
   setStatus: SetStatus,
   setSessionStatus: SetSessionStatus,
   setError: SetError,
+  onAgentSwitchRef: React.MutableRefObject<((agent: string) => void) | undefined>,
 ): void {
   const { type, properties } = event;
 
@@ -225,7 +235,7 @@ function handleEvent(
   if (type === "message.updated") {
     const info = properties?.info;
     if (!info?.id) return;
-    setMessages((prev) => ensureMessage(prev, info));
+    setMessages((prev) => mergeMessageUpdate(ensureMessage(prev, info), info));
     return;
   }
 
@@ -233,6 +243,15 @@ function handleEvent(
     const part = properties?.part;
     if (!part?.messageID || !part?.sessionID) return;
     setMessages((prev) => applyPartUpdate(prev, part));
+
+    // Auto-switch agent on plan_exit/plan_enter tool completions (matching TUI behavior)
+    if (part.type === "tool" && part.state?.status === "completed") {
+      if (part.tool === "plan_exit") {
+        onAgentSwitchRef.current?.("build");
+      } else if (part.tool === "plan_enter") {
+        onAgentSwitchRef.current?.("plan");
+      }
+    }
     return;
   }
 

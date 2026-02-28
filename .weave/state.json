@@ -1,10 +1,10 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/prompt-autocomplete.md",
-  "started_at": "2026-02-28T08:48:14.693Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/agent-switching-ui.md",
+  "started_at": "2026-02-28T10:18:02.525Z",
   "session_ids": [
-    "ses_35c98f1b0ffeKrTg5inIwiECKU"
+    "ses_35c3eaa86ffewscVaGGaTXwG6w"
   ],
-  "plan_name": "prompt-autocomplete",
+  "plan_name": "agent-switching-ui",
   "agent": "tapestry",
-  "start_sha": "d18b82136be77d214168acbc8f636083e5d0003f"
+  "start_sha": "38fe8d34367a970595eb0e3eb2babb03cf954829"
 }

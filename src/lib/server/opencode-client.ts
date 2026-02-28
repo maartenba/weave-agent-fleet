@@ -4,7 +4,7 @@
  */
 
 import { getInstance } from "./process-manager";
-import type { OpencodeClient } from "@opencode-ai/sdk";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 
 // Re-export SDK types for use in API routes
 export type { OpencodeClient };
@@ -12,7 +12,7 @@ export type {
   Session,
   Message,
   Part,
-} from "@opencode-ai/sdk";
+} from "@opencode-ai/sdk/v2";
 
 /**
  * Retrieve the OpencodeClient for a running managed instance.

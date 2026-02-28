@@ -35,8 +35,8 @@ export async function GET(
 
   try {
     const [sessionResult, messagesResult] = await Promise.all([
-      client.session.get({ path: { id: sessionId } }),
-      client.session.messages({ path: { id: sessionId } }),
+      client.session.get({ sessionID: sessionId }),
+      client.session.messages({ sessionID: sessionId }),
     ]);
 
     const session = sessionResult.data;

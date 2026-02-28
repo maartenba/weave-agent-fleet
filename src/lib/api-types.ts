@@ -3,7 +3,7 @@
  * These are the types shared between API routes, React hooks, and UI components.
  */
 
-import type { Session, Part, SessionStatus } from "@opencode-ai/sdk";
+import type { Session, Part, SessionStatus } from "@opencode-ai/sdk/v2";
 
 // Re-export SDK types used across the UI
 export type { Session as SDKSession, Part, SessionStatus };
@@ -26,6 +26,7 @@ export interface CreateSessionResponse {
 export interface SendPromptRequest {
   instanceId: string;
   text: string;
+  agent?: string;
 }
 
 // ─── Session List ──────────────────────────────────────────────────────────
@@ -83,6 +84,11 @@ export interface AccumulatedMessage {
   tokens?: { input: number; output: number; reasoning: number };
   /** ISO timestamp */
   createdAt?: number;
+  /** The agent name — sourced from info.agent for both user and assistant messages (v2) */
+  agent?: string;
+  modelID?: string;
+  completedAt?: number;
+  parentID?: string;
 }
 
 // ─── Autocomplete Types ─────────────────────────────────────────────────────
@@ -99,6 +105,30 @@ export interface AutocompleteAgent {
   description?: string;
   mode: string;
   color?: string;
+  model?: { modelID: string; providerID: string };
+  hidden?: boolean;
+}
+
+// ─── Task Tool Call Helpers ─────────────────────────────────────────────────
+
+export function isTaskToolCall(part: AccumulatedToolPart): boolean {
+  return part.tool === "task";
+}
+
+export function getTaskToolInput(
+  part: AccumulatedToolPart
+): { subagent_type?: string; description?: string } | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const state = part.state as any;
+  const input = state?.input;
+  if (!input?.subagent_type && !input?.description) return null;
+  return { subagent_type: input.subagent_type, description: input.description };
+}
+
+export function getTaskToolSessionId(part: AccumulatedToolPart): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const state = part.state as any;
+  return state?.metadata?.sessionId ?? null;
 }
 
 // File search returns Array<string> (file paths) — no wrapper type needed

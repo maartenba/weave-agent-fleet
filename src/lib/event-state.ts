@@ -27,8 +27,32 @@ export function ensureMessage(
     role,
     parts: [],
     createdAt: info.time?.created,
+    // v2: both UserMessage and AssistantMessage have agent: string
+    agent: info.agent,
+    modelID: info.modelID,
+    parentID: info.parentID,
   };
   return [...prev, newMsg];
+}
+
+/**
+ * Merges completion data into an existing message.
+ * Isolated from ensureMessage() for easy revert if needed.
+ * Only updates fields that were previously unset (null-safe merge).
+ */
+export function mergeMessageUpdate(
+  prev: AccumulatedMessage[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  info: { id: string; time?: { completed?: number }; [key: string]: unknown }
+): AccumulatedMessage[] {
+  const index = prev.findIndex((m) => m.messageId === info.id);
+  if (index === -1) return prev; // message not found, no-op
+  const existing = prev[index];
+  const completedAt = info.time?.completed;
+  if (!completedAt || existing.completedAt) return prev; // nothing new to merge
+  const updated = [...prev];
+  updated[index] = { ...existing, completedAt };
+  return updated;
 }
 
 export function applyPartUpdate(

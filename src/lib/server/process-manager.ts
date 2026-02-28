@@ -12,7 +12,7 @@
  * Uses port-based recovery (not PID) since the SDK doesn't expose the child PID.
  */
 
-import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
 import { statSync } from "fs";
 import { homedir } from "os";
 import { resolve } from "path";
@@ -29,7 +29,7 @@ import {
 } from "./notification-service";
 
 // Re-export for convenience
-export type { OpencodeClient } from "@opencode-ai/sdk";
+export type { OpencodeClient } from "@opencode-ai/sdk/v2";
 
 export interface ManagedInstance {
   id: string;
