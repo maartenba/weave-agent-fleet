@@ -12,7 +12,8 @@
  * Uses port-based recovery (not PID) since the SDK doesn't expose the child PID.
  */
 
-import { createOpencodeServer, createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
+import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
+import { spawn } from "child_process";
 import { existsSync, statSync } from "fs";
 import { homedir } from "os";
 import { dirname, resolve, sep } from "path";
@@ -30,9 +31,8 @@ import {
 
 // ─── OPENCODE_BIN support ─────────────────────────────────────────────────────
 // If OPENCODE_BIN is set to the full path of the opencode binary, prepend its
-// parent directory to PATH so the SDK's `spawn('opencode', ...)` can find it.
-// This works around Windows environments where `where opencode` fails even when
-// the binary is installed (e.g. via winget).
+// parent directory to PATH so `opencode` is findable by name (e.g. for
+// createOpencodeClient or any other spawn sites).
 if (process.env.OPENCODE_BIN) {
   const binPath = resolve(process.env.OPENCODE_BIN);
   if (existsSync(binPath)) {
@@ -42,6 +42,111 @@ if (process.env.OPENCODE_BIN) {
   } else {
     console.warn(`[process-manager] OPENCODE_BIN set to "${process.env.OPENCODE_BIN}" but file does not exist`);
   }
+}
+
+// ─── OpenCode server spawn ────────────────────────────────────────────────────
+// Custom implementation that replaces the SDK's createOpencodeServer().
+// On Windows, Node.js child_process.spawn() uses CreateProcessW which only
+// resolves .exe files on PATH — it cannot find .cmd/.bat wrappers. Using
+// `shell: true` on Windows routes through cmd.exe which resolves PATHEXT
+// correctly.
+interface SpawnServerOptions {
+  hostname?: string;
+  port?: number;
+  timeout?: number;
+  signal?: AbortSignal;
+  config?: Record<string, unknown>;
+}
+
+async function spawnOpencodeServer(
+  options: SpawnServerOptions
+): Promise<{ url: string; close: () => void }> {
+  const hostname = options.hostname ?? "127.0.0.1";
+  const port = options.port ?? 4096;
+  const timeout = options.timeout ?? 5000;
+
+  const command = process.env.OPENCODE_BIN ?? "opencode";
+  const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
+  const config = options.config ?? {};
+  if ((config as { logLevel?: string }).logLevel) {
+    args.push(`--log-level=${(config as { logLevel: string }).logLevel}`);
+  }
+
+  const proc = spawn(command, args, {
+    signal: options.signal,
+    // On Windows, shell: true is required so cmd.exe resolves .cmd/.bat via PATHEXT
+    shell: process.platform === "win32",
+    env: {
+      ...process.env,
+      OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
+    },
+  });
+
+  const url = await new Promise<string>((resolve, reject) => {
+    const id = setTimeout(() => {
+      reject(
+        new Error(
+          `Timeout waiting for opencode server to start after ${timeout}ms`
+        )
+      );
+    }, timeout);
+
+    let output = "";
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      const lines = output.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("opencode server listening")) {
+          const match = line.match(/on\s+(https?:\/\/[^\s\r]+)/);
+          if (!match) {
+            clearTimeout(id);
+            reject(
+              new Error(
+                `Failed to parse server url from output: ${line}`
+              )
+            );
+            return;
+          }
+          clearTimeout(id);
+          resolve(match[1]);
+          return;
+        }
+      }
+    });
+
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+
+    proc.on("exit", (code) => {
+      clearTimeout(id);
+      let msg = `opencode server exited with code ${code}`;
+      if (output.trim()) {
+        msg += `\nServer output: ${output}`;
+      }
+      reject(new Error(msg));
+    });
+
+    proc.on("error", (error) => {
+      clearTimeout(id);
+      reject(error);
+    });
+
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => {
+        clearTimeout(id);
+        reject(new Error("Aborted"));
+      });
+    }
+  });
+
+  return {
+    url,
+    close() {
+      proc.kill();
+    },
+  };
 }
 
 // Re-export for convenience
@@ -265,7 +370,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
 
   let server: { url: string; close: () => void };
   try {
-    server = await createOpencodeServer({
+    server = await spawnOpencodeServer({
       port,
       timeout: SPAWN_TIMEOUT_MS,
       config: {
