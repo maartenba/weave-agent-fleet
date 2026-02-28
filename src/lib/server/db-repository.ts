@@ -228,6 +228,14 @@ export function getSessionsForInstance(instanceId: string): DbSession[] {
     .all(instanceId) as DbSession[];
 }
 
+export function updateSessionForResume(id: string, instanceId: string): void {
+  getDb()
+    .prepare(
+      "UPDATE sessions SET instance_id = @instance_id, status = 'active', stopped_at = NULL WHERE id = @id"
+    )
+    .run({ id, instance_id: instanceId });
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 export interface DbNotification {

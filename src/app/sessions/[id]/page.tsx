@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { ActivityStreamV1 } from "@/components/session/activity-stream-v1";
 import { PromptInput } from "@/components/session/prompt-input";
@@ -14,8 +14,9 @@ import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
+import { useResumeSession } from "@/hooks/use-resume-session";
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
@@ -44,9 +45,12 @@ export default function SessionDetailPage() {
     setSelectedAgent
   );
   const { terminateSession, isTerminating } = useTerminateSession();
+  const { resumeSession, isResuming } = useResumeSession();
+  const router = useRouter();
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
+  const [isResumable, setIsResumable] = useState(false);
 
   const [metadata, setMetadata] = useState<SessionMetadata>({
     workspaceId: null,
@@ -59,8 +63,16 @@ export default function SessionDetailPage() {
     if (!sessionId || !instanceId) return;
     const url = `/api/sessions/${encodeURIComponent(sessionId)}?instanceId=${encodeURIComponent(instanceId)}`;
     fetch(url)
-      .then((r) => r.json())
-      .then((data: { workspaceId?: string; workspaceDirectory?: string; isolationStrategy?: string; session?: { time?: { created?: number } } }) => {
+      .then((r) => {
+        if (!r.ok) {
+          // Instance dead — show resume banner
+          setIsResumable(true);
+          return null;
+        }
+        return r.json();
+      })
+      .then((data: { workspaceId?: string; workspaceDirectory?: string; isolationStrategy?: string; session?: { time?: { created?: number } } } | null) => {
+        if (!data) return;
         setMetadata({
           workspaceId: data.workspaceId ?? null,
           workspaceDirectory: data.workspaceDirectory ?? null,
@@ -68,7 +80,9 @@ export default function SessionDetailPage() {
           createdAt: data.session?.time?.created,
         });
       })
-      .catch(() => {/* best-effort */});
+      .catch(() => {
+        setIsResumable(true);
+      });
   }, [sessionId, instanceId]);
 
   // Compute aggregate cost + tokens from accumulated messages
@@ -132,6 +146,17 @@ export default function SessionDetailPage() {
       setStopConfirm(false);
     }
   }, [stopConfirm, terminateSession, sessionId, instanceId]);
+
+  const handleResume = useCallback(async () => {
+    try {
+      const result = await resumeSession(sessionId);
+      router.replace(
+        `/sessions/${encodeURIComponent(result.session.id)}?instanceId=${encodeURIComponent(result.instanceId)}`
+      );
+    } catch {
+      // error surfaced via useResumeSession
+    }
+  }, [resumeSession, router, sessionId]);
 
   if (!instanceId) {
     return (
@@ -207,6 +232,23 @@ export default function SessionDetailPage() {
               Session stopped — conversation history preserved above.
             </div>
           )}
+          {isResumable && !isStopped && (
+            <div className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+              <span className="text-sm text-amber-400">
+                Session disconnected — the opencode instance is no longer running.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResume}
+                disabled={isResuming}
+                className="gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {isResuming ? "Resuming…" : "Resume Session"}
+              </Button>
+            </div>
+          )}
           <Tabs
             defaultValue="activity"
             className="flex flex-1 flex-col overflow-hidden"
@@ -234,7 +276,7 @@ export default function SessionDetailPage() {
               <PromptInput
                 instanceId={instanceId}
                 onSend={handleSend}
-                disabled={isStopped || status === "error"}
+                disabled={isStopped || isResumable || status === "error"}
                 sendError={sendError}
                 agents={agents}
                 selectedAgent={selectedAgent}

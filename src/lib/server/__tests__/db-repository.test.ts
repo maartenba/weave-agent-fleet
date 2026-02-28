@@ -21,6 +21,7 @@ import {
   listActiveSessions,
   updateSessionStatus,
   getSessionsForInstance,
+  updateSessionForResume,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -364,5 +365,67 @@ describe("session repository", () => {
     const ids = active.map((s) => s.id);
     expect(ids).toContain(id1); // active
     expect(ids).toContain(id2); // idle
+  });
+
+  it("UpdateSessionForResumeUpdatesInstanceIdAndSetsStatusActive", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id, "disconnected");
+
+    const newInstId = mkInstanceId();
+    insertInstance({ id: newInstId, port: 4300, directory: "/tmp/proj", url: "http://localhost:4300" });
+    updateSessionForResume(id, newInstId);
+
+    const sess = getSession(id);
+    expect(sess?.instance_id).toBe(newInstId);
+    expect(sess?.status).toBe("active");
+  });
+
+  it("UpdateSessionForResumeClearsStoppedAt", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id, "stopped", new Date().toISOString());
+    expect(getSession(id)?.stopped_at).not.toBeNull();
+
+    const newInstId = mkInstanceId();
+    insertInstance({ id: newInstId, port: 4301, directory: "/tmp/proj", url: "http://localhost:4301" });
+    updateSessionForResume(id, newInstId);
+
+    expect(getSession(id)?.stopped_at).toBeNull();
+  });
+
+  it("UpdateSessionForResumeWorksForDisconnectedSession", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id, "disconnected");
+
+    const newInstId = mkInstanceId();
+    insertInstance({ id: newInstId, port: 4302, directory: "/tmp/proj", url: "http://localhost:4302" });
+    updateSessionForResume(id, newInstId);
+
+    const sess = getSession(id);
+    expect(sess?.status).toBe("active");
+    expect(sess?.instance_id).toBe(newInstId);
+  });
+
+  it("UpdateSessionForResumeWorksForStoppedSession", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id, "stopped", new Date().toISOString());
+
+    const newInstId = mkInstanceId();
+    insertInstance({ id: newInstId, port: 4303, directory: "/tmp/proj", url: "http://localhost:4303" });
+    updateSessionForResume(id, newInstId);
+
+    expect(getSession(id)?.status).toBe("active");
+  });
+
+  it("UpdateSessionForResumeIsNoOpForNonexistentSession", () => {
+    // Should not throw — updating a non-existent row is a no-op in SQLite
+    expect(() => updateSessionForResume("nonexistent-id", "some-inst-id")).not.toThrow();
   });
 });

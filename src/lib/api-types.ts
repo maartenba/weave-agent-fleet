@@ -23,6 +23,11 @@ export interface CreateSessionResponse {
   session: Session;
 }
 
+export interface ResumeSessionResponse {
+  instanceId: string;
+  session: Session;
+}
+
 export interface SendPromptRequest {
   instanceId: string;
   text: string;

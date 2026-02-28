@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Header, NewSessionButton } from "@/components/layout/header";
 import { SummaryBar } from "@/components/fleet/summary-bar";
 import { FleetToolbar } from "@/components/fleet/fleet-toolbar";
@@ -10,6 +10,7 @@ import { SessionGroup } from "@/components/fleet/session-group";
 import { LiveSessionCard } from "@/components/fleet/live-session-card";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
+import { useResumeSession } from "@/hooks/use-resume-session";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
@@ -20,6 +21,8 @@ import { Loader2 } from "lucide-react";
 function FleetPageInner() {
   const { sessions, isLoading, error, refetch, summary: liveSummary } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
+  const { resumeSession } = useResumeSession();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
 
@@ -45,6 +48,18 @@ function FleetPageInner() {
       refetch();
     } catch {
       // error surfaced inside useTerminateSession
+    }
+  };
+
+  const handleResume = async (sessionId: string) => {
+    try {
+      const result = await resumeSession(sessionId);
+      router.push(
+        `/sessions/${encodeURIComponent(result.session.id)}?instanceId=${encodeURIComponent(result.instanceId)}`
+      );
+    } catch {
+      // error surfaced inside useResumeSession
+      refetch();
     }
   };
 
@@ -134,12 +149,13 @@ function FleetPageInner() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {items.map((item) => (
-                  <LiveSessionCard
-                    key={`${item.instanceId}-${item.session.id}`}
-                    item={item}
-                    onTerminate={handleTerminate}
-                  />
-                ))}
+                   <LiveSessionCard
+                     key={`${item.instanceId}-${item.session.id}`}
+                     item={item}
+                     onTerminate={handleTerminate}
+                     onResume={handleResume}
+                   />
+                 ))}
               </div>
             </div>
           );
@@ -174,12 +190,13 @@ function FleetPageInner() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {sorted.map((item) => (
-                  <LiveSessionCard
-                    key={`${item.instanceId}-${item.session.id}`}
-                    item={item}
-                    onTerminate={handleTerminate}
-                  />
-                ))}
+                   <LiveSessionCard
+                     key={`${item.instanceId}-${item.session.id}`}
+                     item={item}
+                     onTerminate={handleTerminate}
+                     onResume={handleResume}
+                   />
+                 ))}
               </div>
             </div>
           );
@@ -215,6 +232,7 @@ function FleetPageInner() {
               key={`${item.instanceId}-${item.session.id}`}
               item={item}
               onTerminate={handleTerminate}
+              onResume={handleResume}
             />
           ))}
         </div>
@@ -234,10 +252,11 @@ function FleetPageInner() {
       <div className="space-y-2">
         {allWorkspaces.map((group) => (
           <SessionGroup
-            key={group.workspaceId}
-            group={{ ...group, sessions: sortSessions(group.sessions) }}
-            onTerminate={handleTerminate}
-          />
+              key={group.workspaceId}
+              group={{ ...group, sessions: sortSessions(group.sessions) }}
+              onTerminate={handleTerminate}
+              onResume={handleResume}
+            />
         ))}
       </div>
     );

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, Trash2 } from "lucide-react";
+import { ArrowRight, Clock, RotateCcw, Trash2 } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
 
 export function timeSince(timestamp: number): string {
@@ -19,9 +19,11 @@ export function timeSince(timestamp: number): string {
 export function LiveSessionCard({
   item,
   onTerminate,
+  onResume,
 }: {
   item: SessionListItem;
   onTerminate: (sessionId: string, instanceId: string) => void;
+  onResume?: (sessionId: string) => void;
 }) {
   const { instanceId, session, instanceStatus, sessionStatus, isolationStrategy } = item;
   const isDead = instanceStatus === "dead";
@@ -112,6 +114,21 @@ export function LiveSessionCard({
           title="Terminate session"
         >
           <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {isInactive && onResume && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-10 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-green-500 hover:bg-green-500/10"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onResume(session.id);
+          }}
+          title="Resume session"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
         </Button>
       )}
     </div>
