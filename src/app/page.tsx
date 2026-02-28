@@ -11,9 +11,11 @@ import { LiveSessionCard } from "@/components/fleet/live-session-card";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
+import { useDeleteSession } from "@/hooks/use-delete-session";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
+import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-session-dialog";
 import type { FleetSummary } from "@/lib/types";
 import type { SessionListItem } from "@/lib/api-types";
 import { Loader2 } from "lucide-react";
@@ -22,9 +24,16 @@ function FleetPageInner() {
   const { sessions, isLoading, error, refetch, summary: liveSummary } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
   const { resumeSession, resumingSessionId } = useResumeSession();
+  const { deleteSession, isDeleting } = useDeleteSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    sessionId: string;
+    instanceId: string;
+    title: string;
+  } | null>(null);
 
   // SSR-safe persisted prefs — useSyncExternalStore under the hood
   // ensures server renders defaults and client hydrates from localStorage.
@@ -60,6 +69,27 @@ function FleetPageInner() {
     } catch {
       // error surfaced inside useResumeSession
       refetch();
+    }
+  };
+
+  const handleDeleteRequest = (sessionId: string, instanceId: string) => {
+    const item = sessions.find((s) => s.session.id === sessionId);
+    setDeleteTarget({
+      sessionId,
+      instanceId,
+      title: item?.session.title || sessionId.slice(0, 12),
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteSession(deleteTarget.sessionId, deleteTarget.instanceId);
+      refetch();
+    } catch {
+      // error surfaced inside useDeleteSession
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -148,25 +178,26 @@ function FleetPageInner() {
                 <span className="text-xs text-muted-foreground">({items.length})</span>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {items.map((item) => (
-                   <LiveSessionCard
-                     key={`${item.instanceId}-${item.session.id}`}
-                     item={item}
-                     onTerminate={handleTerminate}
-                     onResume={handleResume}
-                     isResuming={resumingSessionId === item.session.id}
-                   />
-                 ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+                 {items.map((item) => (
+                    <LiveSessionCard
+                      key={`${item.instanceId}-${item.session.id}`}
+                      item={item}
+                      onTerminate={handleTerminate}
+                      onResume={handleResume}
+                      onDelete={handleDeleteRequest}
+                      isResuming={resumingSessionId === item.session.id}
+                    />
+                  ))}
+               </div>
+             </div>
+           );
+         })}
+       </div>
+     );
+   };
 
-  // Group by "Source" (isolationStrategy)
-  const renderGroupedBySource = () => {
+   // Group by "Source" (isolationStrategy)
+   const renderGroupedBySource = () => {
     const sourceMap = new Map<string, SessionListItem[]>();
     for (const s of searchFiltered) {
       const key = s.isolationStrategy ?? "existing";
@@ -189,17 +220,18 @@ function FleetPageInner() {
                 </span>
                 <span className="text-xs text-muted-foreground">({sorted.length})</span>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {sorted.map((item) => (
-                   <LiveSessionCard
-                     key={`${item.instanceId}-${item.session.id}`}
-                     item={item}
-                     onTerminate={handleTerminate}
-                     onResume={handleResume}
-                     isResuming={resumingSessionId === item.session.id}
-                   />
-                 ))}
-              </div>
+               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                 {sorted.map((item) => (
+                    <LiveSessionCard
+                      key={`${item.instanceId}-${item.session.id}`}
+                      item={item}
+                      onTerminate={handleTerminate}
+                      onResume={handleResume}
+                      onDelete={handleDeleteRequest}
+                      isResuming={resumingSessionId === item.session.id}
+                    />
+                  ))}
+               </div>
             </div>
           );
         })}
@@ -235,6 +267,7 @@ function FleetPageInner() {
               item={item}
               onTerminate={handleTerminate}
               onResume={handleResume}
+              onDelete={handleDeleteRequest}
               isResuming={resumingSessionId === item.session.id}
             />
           ))}
@@ -259,6 +292,7 @@ function FleetPageInner() {
               group={{ ...group, sessions: sortSessions(group.sessions) }}
               onTerminate={handleTerminate}
               onResume={handleResume}
+              onDelete={handleDeleteRequest}
               resumingSessionId={resumingSessionId}
             />
         ))}
@@ -307,6 +341,14 @@ function FleetPageInner() {
           </div>
         )}
       </div>
+
+      <ConfirmDeleteSessionDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        sessionTitle={deleteTarget?.title ?? ""}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

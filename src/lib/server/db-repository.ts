@@ -236,6 +236,19 @@ export function updateSessionForResume(id: string, instanceId: string): void {
     .run({ id, instance_id: instanceId });
 }
 
+export function getSessionsForWorkspace(workspaceId: string): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE workspace_id = ?")
+    .all(workspaceId) as DbSession[];
+}
+
+export function deleteSession(id: string): boolean {
+  const result = getDb()
+    .prepare("DELETE FROM sessions WHERE id = ?")
+    .run(id);
+  return result.changes > 0;
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 export interface DbNotification {
@@ -307,4 +320,11 @@ export function deleteNotification(id: string): void {
   getDb()
     .prepare("DELETE FROM notifications WHERE id = ?")
     .run(id);
+}
+
+export function deleteNotificationsForSession(sessionId: string): number {
+  const result = getDb()
+    .prepare("DELETE FROM notifications WHERE session_id = ?")
+    .run(sessionId);
+  return result.changes;
 }

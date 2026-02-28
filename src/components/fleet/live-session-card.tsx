@@ -20,11 +20,13 @@ export function LiveSessionCard({
   item,
   onTerminate,
   onResume,
+  onDelete,
   isResuming = false,
 }: {
   item: SessionListItem;
   onTerminate: (sessionId: string, instanceId: string) => void;
   onResume?: (sessionId: string) => void;
+  onDelete?: (sessionId: string, instanceId: string) => void;
   isResuming?: boolean;
 }) {
   const { instanceId, session, instanceStatus, sessionStatus, isolationStrategy } = item;
@@ -63,6 +65,7 @@ export function LiveSessionCard({
     : "running";
 
   const canTerminate = !isStopped && !isCompleted;
+  const canDelete = (isStopped || isCompleted || isDisconnected) && !!onDelete;
 
   return (
     <div className={`relative group ${isInactive ? "opacity-60" : ""}`}>
@@ -114,6 +117,21 @@ export function LiveSessionCard({
             onTerminate(session.id, instanceId);
           }}
           title="Terminate session"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-500 hover:bg-red-500/10"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete!(session.id, instanceId);
+          }}
+          title="Permanently delete session"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>

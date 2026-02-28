@@ -169,21 +169,41 @@ const PORT_START = 4097;
 const PORT_END = 4200;
 const SPAWN_TIMEOUT_MS = 30_000;
 
+// ─── globalThis-based singletons ──────────────────────────────────────────────
+// Next.js dev mode with Turbopack may load this module multiple times in
+// separate route compilation chunks, creating distinct module-level variables.
+// Using globalThis ensures all chunks share the same Maps/Sets/state.
+
+const _g = globalThis as unknown as {
+  __weaveInstances?: Map<string, ManagedInstance>;
+  __weaveUsedPorts?: Set<number>;
+  __weaveDirToInstance?: Map<string, string>;
+  __weaveRecoveryResolve?: (() => void) | null;
+  __weaveRecoveryPromise?: Promise<void>;
+  __weaveCleanupRun?: boolean;
+  __weaveHealthFailCounts?: Map<string, number>;
+  __weaveHealthCheckInterval?: ReturnType<typeof setInterval> | null;
+  __weaveInitDone?: boolean;
+};
+
 // Module-level singleton map — persists across API route invocations in one Next.js process
-const instances = new Map<string, ManagedInstance>();
+const instances: Map<string, ManagedInstance> = (_g.__weaveInstances ??= new Map());
 // Track which ports are in use
-const usedPorts = new Set<number>();
+const usedPorts: Set<number> = (_g.__weaveUsedPorts ??= new Set());
 // Track which directories already have an instance
-const directoryToInstanceId = new Map<string, string>();
+const directoryToInstanceId: Map<string, string> = (_g.__weaveDirToInstance ??= new Map());
 
 // Recovery state — resolved once startup recovery is complete
-let _recoveryCompleteResolve: (() => void) | null = null;
-export const _recoveryComplete: Promise<void> = new Promise((resolve) => {
-  _recoveryCompleteResolve = resolve;
-});
+if (!_g.__weaveRecoveryPromise) {
+  _g.__weaveRecoveryPromise = new Promise<void>((resolve) => {
+    _g.__weaveRecoveryResolve = resolve;
+  });
+}
+let _recoveryCompleteResolve: (() => void) | null = _g.__weaveRecoveryResolve ?? null;
+export const _recoveryComplete: Promise<void> = _g.__weaveRecoveryPromise!;
 
 // Guard against double cleanup
-let _cleanupRun = false;
+let _cleanupRun: boolean = (_g.__weaveCleanupRun ??= false);
 
 /**
  * Allowed workspace base directories. Only directories under these roots can be
@@ -251,9 +271,11 @@ export function releasePort(port: number): void {
 export function _resetForTests(): void {
   // Reset the cleanup guard so destroyAll() actually runs
   _cleanupRun = false;
+  _g.__weaveCleanupRun = false;
   destroyAll();
   // Reset again after destroyAll sets it to true, so subsequent calls work
   _cleanupRun = false;
+  _g.__weaveCleanupRun = false;
   usedPorts.clear();
   directoryToInstanceId.clear();
 }
@@ -273,6 +295,7 @@ export async function recoverInstances(): Promise<void> {
     // DB not available — skip recovery
     _recoveryCompleteResolve?.();
     _recoveryCompleteResolve = null;
+    _g.__weaveRecoveryResolve = null;
     return;
   }
 
@@ -322,6 +345,7 @@ export async function recoverInstances(): Promise<void> {
 
   _recoveryCompleteResolve?.();
   _recoveryCompleteResolve = null;
+  _g.__weaveRecoveryResolve = null;
 }
 
 /**
@@ -466,6 +490,7 @@ export function destroyInstance(id: string): void {
 export function destroyAll(): void {
   if (_cleanupRun) return;
   _cleanupRun = true;
+  _g.__weaveCleanupRun = true;
 
   for (const id of [...instances.keys()]) {
     destroyInstance(id);
@@ -473,20 +498,23 @@ export function destroyAll(): void {
 }
 
 // Kick off recovery as soon as the module is first loaded.
-// This is intentionally fire-and-forget — callers await `_recoveryComplete` if they need to.
-recoverInstances().catch((err) => {
-  console.error("[process-manager] Recovery failed:", err);
-});
+// Guard: only run once across Turbopack module re-evaluations.
+if (!_g.__weaveInitDone) {
+  _g.__weaveInitDone = true;
+
+  // This is intentionally fire-and-forget — callers await `_recoveryComplete` if they need to.
+  recoverInstances().catch((err) => {
+    console.error("[process-manager] Recovery failed:", err);
+  });
+}
 
 // ─── Health Check Loop ────────────────────────────────────────────────────────
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const HEALTH_CHECK_FAIL_THRESHOLD = 3;
 
-// Track consecutive failure counts per instance
-const _healthFailCounts = new Map<string, number>();
-
-let _healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+// Track consecutive failure counts per instance (shared via globalThis)
+const _healthFailCounts: Map<string, number> = (_g.__weaveHealthFailCounts ??= new Map());
 
 /**
  * Start a periodic health check loop that verifies each managed instance
@@ -494,8 +522,8 @@ let _healthCheckInterval: ReturnType<typeof setInterval> | null = null;
  * Called once after recovery completes.
  */
 export function startHealthCheckLoop(): void {
-  if (_healthCheckInterval) return; // already running
-  _healthCheckInterval = setInterval(async () => {
+  if (_g.__weaveHealthCheckInterval) return; // already running
+  _g.__weaveHealthCheckInterval = setInterval(async () => {
     for (const [id, instance] of instances) {
       if (instance.status !== "running") continue;
 
@@ -538,12 +566,14 @@ export function startHealthCheckLoop(): void {
   }, HEALTH_CHECK_INTERVAL_MS);
 }
 
-// Start health checks after recovery completes
+// Start health checks after recovery completes (guarded by startHealthCheckLoop's idempotency)
 _recoveryComplete.then(() => {
   startHealthCheckLoop();
 }).catch(() => {/* non-fatal */});
 
-// Clean up all instances when the Node.js process exits
+// Clean up all instances when the Node.js process exits.
+// Signal handlers are registered every time this module is loaded by a new Turbopack chunk,
+// but destroyAll() has its own _cleanupRun guard, so duplicate invocations are harmless.
 process.on("exit", destroyAll);
 process.on("SIGTERM", () => {
   destroyAll();

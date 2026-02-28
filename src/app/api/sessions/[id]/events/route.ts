@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
-import { getInstance } from "@/lib/server/process-manager";
+import { getInstance, _recoveryComplete } from "@/lib/server/process-manager";
 import { isRelevantToSession } from "@/lib/event-state";
 import { getSessionByOpencodeId, updateSessionStatus } from "@/lib/server/db-repository";
 import {
@@ -20,6 +20,9 @@ export async function GET(
   request: NextRequest,
   context: RouteContext
 ): Promise<Response> {
+  // Wait for startup recovery before serving — ensures instances Map is populated
+  await _recoveryComplete;
+
   const { id: sessionId } = await context.params;
   const instanceId = request.nextUrl.searchParams.get("instanceId");
 

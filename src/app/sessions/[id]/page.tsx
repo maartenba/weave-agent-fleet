@@ -14,9 +14,11 @@ import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2 } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
+import { useDeleteSession } from "@/hooks/use-delete-session";
+import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-session-dialog";
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
@@ -46,11 +48,13 @@ export default function SessionDetailPage() {
   );
   const { terminateSession, isTerminating } = useTerminateSession();
   const { resumeSession, isResuming } = useResumeSession();
+  const { deleteSession: permanentDelete, isDeleting } = useDeleteSession();
   const router = useRouter();
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
   const [isResumable, setIsResumable] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [metadata, setMetadata] = useState<SessionMetadata>({
     workspaceId: null,
@@ -84,6 +88,15 @@ export default function SessionDetailPage() {
         setIsResumable(true);
       });
   }, [sessionId, instanceId]);
+
+  // Safety net: if SSE connects successfully, the instance is alive.
+  // Clear any false isResumable flag from a transient metadata fetch failure
+  // (e.g. caused by module re-evaluation during dev HMR).
+  useEffect(() => {
+    if (status === "connected" && isResumable && !isStopped) {
+      setIsResumable(false);
+    }
+  }, [status, isResumable, isStopped]);
 
   // Compute aggregate cost + tokens from accumulated messages
   const totalCost = messages.reduce((sum, m) => sum + (m.cost ?? 0), 0);
@@ -158,6 +171,15 @@ export default function SessionDetailPage() {
     }
   }, [resumeSession, router, sessionId]);
 
+  const handlePermanentDelete = useCallback(async () => {
+    try {
+      await permanentDelete(sessionId, instanceId);
+      router.push("/");
+    } catch {
+      // error surfaced via useDeleteSession
+    }
+  }, [permanentDelete, router, sessionId, instanceId]);
+
   if (!instanceId) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -219,6 +241,17 @@ export default function SessionDetailPage() {
                 disabled={isTerminating}
               >
                 Cancel
+              </Button>
+            )}
+            {(isStopped || isResumable) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1 text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
               </Button>
             )}
           </div>
@@ -440,6 +473,14 @@ export default function SessionDetailPage() {
           </ScrollArea>
         </aside>
       </div>
+
+      <ConfirmDeleteSessionDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        sessionTitle={sessionId.slice(0, 12)}
+        onConfirm={handlePermanentDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

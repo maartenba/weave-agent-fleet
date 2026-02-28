@@ -22,6 +22,11 @@ import {
   updateSessionStatus,
   getSessionsForInstance,
   updateSessionForResume,
+  deleteSession,
+  getSessionsForWorkspace,
+  insertNotification,
+  deleteNotificationsForSession,
+  listNotifications,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -427,5 +432,119 @@ describe("session repository", () => {
   it("UpdateSessionForResumeIsNoOpForNonexistentSession", () => {
     // Should not throw — updating a non-existent row is a no-op in SQLite
     expect(() => updateSessionForResume("nonexistent-id", "some-inst-id")).not.toThrow();
+  });
+});
+
+// ─── Session Deletion ─────────────────────────────────────────────────────────
+
+describe("session deletion", () => {
+  function setup() {
+    const wsId = mkWorkspaceId();
+    const instId = mkInstanceId();
+    insertWorkspace({ id: wsId, directory: "/tmp/proj", isolation_strategy: "existing" });
+    insertInstance({ id: instId, port: 4500, directory: "/tmp/proj", url: "http://localhost:4500" });
+    return { wsId, instId };
+  }
+
+  it("DeletesSessionFromDatabase", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({
+      id,
+      workspace_id: wsId,
+      instance_id: instId,
+      opencode_session_id: mkOpencodeSessionId(),
+      directory: "/tmp/proj",
+    });
+    expect(getSession(id)).toBeDefined();
+
+    deleteSession(id);
+
+    expect(getSession(id)).toBeUndefined();
+  });
+
+  it("DeleteSessionReturnsTrueWhenRowDeleted", () => {
+    const { wsId, instId } = setup();
+    const id = mkSessionId();
+    insertSession({
+      id,
+      workspace_id: wsId,
+      instance_id: instId,
+      opencode_session_id: mkOpencodeSessionId(),
+      directory: "/tmp/proj",
+    });
+
+    const result = deleteSession(id);
+
+    expect(result).toBe(true);
+  });
+
+  it("DeleteSessionReturnsFalseForNonexistentSession", () => {
+    const result = deleteSession("nonexistent-session-id");
+    expect(result).toBe(false);
+  });
+
+  it("DeleteSessionDoesNotAffectOtherSessions", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    deleteSession(id1);
+
+    expect(getSession(id1)).toBeUndefined();
+    expect(getSession(id2)).toBeDefined();
+  });
+
+  it("GetSessionsForWorkspaceReturnsAllSessionsForWorkspace", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    const sessions = getSessionsForWorkspace(wsId);
+
+    expect(sessions.length).toBe(2);
+    const ids = sessions.map((s) => s.id);
+    expect(ids).toContain(id1);
+    expect(ids).toContain(id2);
+  });
+
+  it("DeleteNotificationsForSessionRemovesMatchingNotifications", () => {
+    const sessionId = randomUUID();
+    const otherSessionId = randomUUID();
+
+    insertNotification({ id: randomUUID(), type: "info", message: "msg1", session_id: sessionId });
+    insertNotification({ id: randomUUID(), type: "info", message: "msg2", session_id: sessionId });
+    insertNotification({ id: randomUUID(), type: "info", message: "msg3", session_id: otherSessionId });
+    insertNotification({ id: randomUUID(), type: "info", message: "msg4" }); // no session_id
+
+    deleteNotificationsForSession(sessionId);
+
+    const remaining = listNotifications() as { session_id: string | null; message: string }[];
+    const messages = remaining.map((n) => n.message);
+    expect(messages).not.toContain("msg1");
+    expect(messages).not.toContain("msg2");
+    expect(messages).toContain("msg3");
+    expect(messages).toContain("msg4");
+  });
+
+  it("DeleteNotificationsForSessionReturnsDeletedCount", () => {
+    const sessionId = randomUUID();
+
+    insertNotification({ id: randomUUID(), type: "info", message: "a", session_id: sessionId });
+    insertNotification({ id: randomUUID(), type: "info", message: "b", session_id: sessionId });
+    insertNotification({ id: randomUUID(), type: "info", message: "c", session_id: sessionId });
+
+    const count = deleteNotificationsForSession(sessionId);
+
+    expect(count).toBe(3);
+  });
+
+  it("DeleteNotificationsForSessionReturnsZeroWhenNoneMatch", () => {
+    const count = deleteNotificationsForSession("nonexistent-session-id");
+    expect(count).toBe(0);
   });
 });

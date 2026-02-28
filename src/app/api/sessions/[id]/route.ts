@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
-import { destroyInstance } from "@/lib/server/process-manager";
-import { getSession, getSessionByOpencodeId, getWorkspace, updateSessionStatus, getSessionsForInstance } from "@/lib/server/db-repository";
+import { destroyInstance, _recoveryComplete } from "@/lib/server/process-manager";
+import {
+  getSession,
+  getSessionByOpencodeId,
+  getWorkspace,
+  updateSessionStatus,
+  getSessionsForInstance,
+  deleteSession,
+  deleteNotificationsForSession,
+  getSessionsForWorkspace,
+} from "@/lib/server/db-repository";
 import { cleanupWorkspace } from "@/lib/server/workspace-manager";
 
 interface RouteContext {
@@ -13,6 +22,9 @@ export async function GET(
   request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
+  // Wait for startup recovery before serving — ensures instances Map is populated
+  await _recoveryComplete;
+
   const { id: sessionId } = await context.params;
   const instanceId = request.nextUrl.searchParams.get("instanceId");
 
@@ -26,7 +38,9 @@ export async function GET(
   let client;
   try {
     client = getClientForInstance(instanceId);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[GET /api/sessions/${sessionId}] getClientForInstance failed for instanceId=${instanceId}:`, msg);
     return NextResponse.json(
       { error: "Instance not found or unavailable" },
       { status: 404 }
@@ -82,7 +96,7 @@ export async function GET(
   }
 }
 
-// DELETE /api/sessions/[id]?instanceId=xxx&cleanupWorkspace=true — terminate a session
+// DELETE /api/sessions/[id]?instanceId=xxx&cleanupWorkspace=true&permanent=true — terminate (and optionally permanently delete) a session
 export async function DELETE(
   request: NextRequest,
   context: RouteContext
@@ -91,6 +105,7 @@ export async function DELETE(
   const instanceId = request.nextUrl.searchParams.get("instanceId");
   const shouldCleanupWorkspace =
     request.nextUrl.searchParams.get("cleanupWorkspace") === "true";
+  const permanent = request.nextUrl.searchParams.get("permanent") === "true";
 
   if (!instanceId) {
     return NextResponse.json(
@@ -112,6 +127,19 @@ export async function DELETE(
     // DB lookup failure — proceed with process kill only
   }
 
+  // Determine if session is already in a terminal state (stopped/completed/disconnected).
+  // For permanent deletes of terminal sessions, skip abort+destroy to avoid killing a live
+  // instance that shares the same instanceId with other active sessions.
+  let isAlreadyTerminal = false;
+  try {
+    const dbSession = resolvedDbId ? getSession(resolvedDbId) : null;
+    if (dbSession) {
+      isAlreadyTerminal = ["stopped", "completed", "disconnected"].includes(dbSession.status);
+    }
+  } catch {
+    // Non-fatal
+  }
+
   // Step 1: Check if other sessions are still using this instance before killing
   let otherActiveSessions = 0;
   try {
@@ -125,27 +153,33 @@ export async function DELETE(
     // Non-fatal
   }
 
-  // Step 2: Gracefully abort the session before killing, then destroy instance if safe
-  try {
-    const sessionClient = getClientForInstance(instanceId);
-    await sessionClient.session.abort({ sessionID: sessionId });
-  } catch {
-    // Abort is best-effort — instance may already be dead or session may not be running
-  }
-
-  if (otherActiveSessions === 0) {
+  // Step 2: Gracefully abort the session before killing, then destroy instance if safe.
+  // Skip entirely for permanent deletes of already-terminal sessions — the process is already
+  // dead, and getSessionsForInstance (active/idle only) would return 0 even if other active
+  // sessions share this instance, incorrectly triggering destroyInstance.
+  const skipAbortAndDestroy = permanent && isAlreadyTerminal;
+  if (!skipAbortAndDestroy) {
     try {
-      destroyInstance(instanceId);
+      const sessionClient = getClientForInstance(instanceId);
+      await sessionClient.session.abort({ sessionID: sessionId });
     } catch {
-      // Instance may already be dead — that's fine
+      // Abort is best-effort — instance may already be dead or session may not be running
     }
-  }
-  // If other sessions exist, keep the instance running — don't touch it
 
-  // Step 3: Update session status in DB using the resolved DB id
+    if (otherActiveSessions === 0) {
+      try {
+        destroyInstance(instanceId);
+      } catch {
+        // Instance may already be dead — that's fine
+      }
+    }
+    // If other sessions exist, keep the instance running — don't touch it
+  }
+
+  // Step 3: Update session status in DB (only for non-permanent termination)
   // If session was idle (finished its task), mark as "completed".
   // If session was active (still processing), mark as "stopped" (user-interrupted).
-  if (resolvedDbId) {
+  if (resolvedDbId && !permanent) {
     try {
       const now = new Date().toISOString();
       const currentSession = getSession(resolvedDbId);
@@ -159,8 +193,8 @@ export async function DELETE(
     }
   }
 
-  // Step 4: Optionally clean up workspace (worktree/clone only)
-  if (shouldCleanupWorkspace && workspaceId) {
+  // Step 4: Optionally clean up workspace (worktree/clone only) — for non-permanent terminate
+  if (!permanent && shouldCleanupWorkspace && workspaceId) {
     try {
       await cleanupWorkspace(workspaceId);
     } catch (err) {
@@ -168,8 +202,49 @@ export async function DELETE(
     }
   }
 
+  if (!permanent) {
+    return NextResponse.json(
+      { message: "Session terminated", sessionId, instanceId },
+      { status: 200 }
+    );
+  }
+
+  // ── Permanent delete ─────────────────────────────────────────────────────────
+  // Step 5: Delete related notifications
+  if (resolvedDbId) {
+    try {
+      deleteNotificationsForSession(resolvedDbId);
+    } catch (err) {
+      console.warn(`[DELETE /api/sessions/${sessionId}] Notification cleanup failed:`, err);
+    }
+
+    // Step 6: Delete the session row itself
+    try {
+      deleteSession(resolvedDbId);
+    } catch (err) {
+      console.warn(`[DELETE /api/sessions/${sessionId}] Session deletion failed:`, err);
+    }
+  }
+
+  // Step 7: Always clean up workspace for non-"existing" isolation strategies,
+  // but only if no other sessions still reference the same workspace.
+  if (workspaceId) {
+    try {
+      const workspace = getWorkspace(workspaceId);
+      if (workspace && workspace.isolation_strategy !== "existing") {
+        // Session row is already deleted — any remaining sessions belong to other agents
+        const remainingSessions = getSessionsForWorkspace(workspaceId);
+        if (remainingSessions.length === 0) {
+          await cleanupWorkspace(workspaceId);
+        }
+      }
+    } catch (err) {
+      console.warn(`[DELETE /api/sessions/${sessionId}] Workspace cleanup failed:`, err);
+    }
+  }
+
   return NextResponse.json(
-    { message: "Session terminated", sessionId, instanceId },
+    { message: "Session permanently deleted", sessionId, instanceId },
     { status: 200 }
   );
 }
