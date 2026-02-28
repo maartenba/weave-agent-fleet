@@ -1,8 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Bell, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { NewSessionDialog } from "@/components/session/new-session-dialog";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface HeaderProps {
   title: string;
@@ -21,12 +22,7 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
       </div>
       <div className="flex items-center gap-2">
         {actions}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full weave-gradient-bg text-[10px] text-white">
-            2
-          </span>
-        </Button>
+        <NotificationBell />
       </div>
     </header>
   );

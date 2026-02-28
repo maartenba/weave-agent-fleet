@@ -2,6 +2,11 @@ import { NextRequest } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import { getInstance } from "@/lib/server/process-manager";
 import { isRelevantToSession } from "@/lib/event-state";
+import { getSessionByOpencodeId } from "@/lib/server/db-repository";
+import {
+  createSessionCompletedNotification,
+  createSessionErrorNotification,
+} from "@/lib/server/notification-service";
 import type { SSEEvent } from "@/lib/api-types";
 
 interface RouteContext {
@@ -82,6 +87,9 @@ export async function GET(
             ? (subscribeResult as { stream: AsyncIterable<unknown> }).stream
             : (subscribeResult as AsyncIterable<unknown>);
 
+        // Track session busy state for completion detection
+        let lastSessionStatus: "idle" | "busy" = "idle";
+
         for await (const rawEvent of eventStream) {
           if (abortController.signal.aborted) break;
 
@@ -95,6 +103,47 @@ export async function GET(
           if (!isRelevantToSession(type, properties, sessionId)) continue;
 
           send({ type, properties });
+
+          // Notification triggers (best-effort, after forwarding)
+          try {
+            if (type === "session.status") {
+              const statusType: string = properties?.status?.type ?? "";
+              if (statusType === "busy") {
+                lastSessionStatus = "busy";
+              } else if (statusType === "idle" && lastSessionStatus === "busy") {
+                lastSessionStatus = "idle";
+                const dbSession = getSessionByOpencodeId(sessionId);
+                if (dbSession) {
+                  createSessionCompletedNotification(
+                    dbSession.opencode_session_id,
+                    instanceId,
+                    dbSession.title
+                  );
+                }
+              }
+            } else if (type === "session.idle" && lastSessionStatus === "busy") {
+              lastSessionStatus = "idle";
+              const dbSession = getSessionByOpencodeId(sessionId);
+              if (dbSession) {
+                createSessionCompletedNotification(
+                  dbSession.opencode_session_id,
+                  instanceId,
+                  dbSession.title
+                );
+              }
+            } else if (type === "error") {
+              const dbSession = getSessionByOpencodeId(sessionId);
+              if (dbSession) {
+                createSessionErrorNotification(
+                  dbSession.opencode_session_id,
+                  instanceId,
+                  dbSession.title
+                );
+              }
+            }
+          } catch {
+            // Notification failure must never break the SSE stream
+          }
         }
       } catch (err) {
         if (!abortController.signal.aborted) {

@@ -189,6 +189,7 @@ export type NotificationType =
   | "input_required"
   | "session_completed"
   | "session_error"
+  | "session_disconnected"
   | "cost_threshold"
   | "pipeline_stage_complete";
 
@@ -196,6 +197,7 @@ export interface Notification {
   id: string;
   type: NotificationType;
   sessionId?: string;
+  instanceId?: string;
   pipelineId?: string;
   message: string;
   read: boolean;

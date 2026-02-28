@@ -4,7 +4,6 @@ import {
   Pipeline,
   TaskTemplate,
   QueueItem,
-  Notification,
   FleetSummary,
 } from "./types";
 
@@ -671,43 +670,6 @@ export const mockQueueItems: QueueItem[] = [
     createdAt: new Date("2026-02-27T08:30:00"),
     startedAt: new Date("2026-02-27T08:35:00"),
     completedAt: new Date("2026-02-27T08:39:12"),
-  },
-];
-
-// === Notifications ===
-
-export const mockNotifications: Notification[] = [
-  {
-    id: "notif-001",
-    type: "input_required",
-    sessionId: "sess-008",
-    message: "proj-frontend needs input: Which color scheme for dark mode?",
-    read: false,
-    createdAt: new Date("2026-02-27T10:35:00"),
-  },
-  {
-    id: "notif-002",
-    type: "session_error",
-    sessionId: "sess-007",
-    message: "proj-ci failed: GitHub Actions config validation error",
-    read: false,
-    createdAt: new Date("2026-02-27T10:20:00"),
-  },
-  {
-    id: "notif-003",
-    type: "session_completed",
-    sessionId: "sess-006",
-    message: "proj-refactor completed successfully (45min, $2.15)",
-    read: true,
-    createdAt: new Date("2026-02-27T08:45:00"),
-  },
-  {
-    id: "notif-004",
-    type: "pipeline_stage_complete",
-    pipelineId: "pipe-001",
-    message: "Pipeline 'Full-Stack Auth': Stage 1 (Design Schema) completed",
-    read: true,
-    createdAt: new Date("2026-02-27T10:28:00"),
   },
 ];
 

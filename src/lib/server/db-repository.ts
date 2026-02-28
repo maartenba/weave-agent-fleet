@@ -209,3 +209,76 @@ export function getSessionsForInstance(instanceId: string): DbSession[] {
     .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status = 'active'")
     .all(instanceId) as DbSession[];
 }
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export interface DbNotification {
+  id: string;
+  type: string;
+  session_id: string | null;
+  instance_id: string | null;
+  pipeline_id: string | null;
+  message: string;
+  read: number; // 0 | 1 (SQLite INTEGER)
+  created_at: string;
+}
+
+export type InsertNotification = Pick<DbNotification, "id" | "type" | "message"> &
+  Partial<Pick<DbNotification, "session_id" | "instance_id" | "pipeline_id">>;
+
+export function insertNotification(notif: InsertNotification): void {
+  getDb()
+    .prepare(
+      `INSERT INTO notifications (id, type, session_id, instance_id, pipeline_id, message)
+       VALUES (@id, @type, @session_id, @instance_id, @pipeline_id, @message)`
+    )
+    .run({
+      id: notif.id,
+      type: notif.type,
+      session_id: notif.session_id ?? null,
+      instance_id: notif.instance_id ?? null,
+      pipeline_id: notif.pipeline_id ?? null,
+      message: notif.message,
+    });
+}
+
+export function listNotifications(opts?: { unreadOnly?: boolean; limit?: number }): DbNotification[] {
+  const where = opts?.unreadOnly ? "WHERE read = 0" : "";
+  const rawLimit = opts?.limit ?? 50;
+  const safeLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50;
+  const limitClause = `LIMIT ${safeLimit}`;
+  return getDb()
+    .prepare(`SELECT * FROM notifications ${where} ORDER BY created_at DESC ${limitClause}`)
+    .all() as DbNotification[];
+}
+
+export function getNotification(id: string): DbNotification | undefined {
+  return getDb()
+    .prepare("SELECT * FROM notifications WHERE id = ?")
+    .get(id) as DbNotification | undefined;
+}
+
+export function markNotificationRead(id: string): void {
+  getDb()
+    .prepare("UPDATE notifications SET read = 1 WHERE id = ?")
+    .run(id);
+}
+
+export function markAllNotificationsRead(): void {
+  getDb()
+    .prepare("UPDATE notifications SET read = 1 WHERE read = 0")
+    .run();
+}
+
+export function countUnreadNotifications(): number {
+  const row = getDb()
+    .prepare("SELECT COUNT(*) as count FROM notifications WHERE read = 0")
+    .get() as { count: number };
+  return row.count;
+}
+
+export function deleteNotification(id: string): void {
+  getDb()
+    .prepare("DELETE FROM notifications WHERE id = ?")
+    .run(id);
+}

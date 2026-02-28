@@ -1,10 +1,10 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/v2-multi-session-workspace-isolation.md",
-  "started_at": "2026-02-27T23:34:43.961Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/notification-system.md",
+  "started_at": "2026-02-28T00:48:59.800Z",
   "session_ids": [
-    "ses_35e96e7b6ffeGyz9LkxmVUsTWL"
+    "ses_35e5c6bc6ffeOzy6W0bXByTV7j"
   ],
-  "plan_name": "v2-multi-session-workspace-isolation",
+  "plan_name": "notification-system",
   "agent": "tapestry",
-  "start_sha": "7d3a0e67170e1b23df298ebd74cb4e974136a754"
+  "start_sha": "95ae3f447bac58ef7871bfde617a2d4aabecd0c3"
 }

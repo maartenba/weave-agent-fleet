@@ -14,18 +14,20 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useNotifications } from "@/hooks/use-notifications";
 
 const navItems = [
   { href: "/", label: "Fleet", icon: LayoutGrid },
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/queue", label: "Queue", icon: ListTodo, badge: 4 },
   { href: "/templates", label: "Templates", icon: FileText },
-  { href: "/alerts", label: "Alerts", icon: Bell, badge: 2 },
+  { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/history", label: "History", icon: History },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { unreadCount } = useNotifications();
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar">
@@ -54,6 +56,13 @@ export function Sidebar() {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
+
+          // Dynamic badge: Alerts uses real unread count; other badges are static
+          const badge =
+            item.href === "/alerts"
+              ? unreadCount > 0 ? unreadCount : undefined
+              : item.badge;
+
           return (
             <Link
               key={item.href}
@@ -67,12 +76,12 @@ export function Sidebar() {
             >
               <item.icon className="h-4 w-4" />
               <span className="flex-1">{item.label}</span>
-              {item.badge && (
+              {badge !== undefined && (
                 <Badge
                   variant="secondary"
                   className="h-5 min-w-5 justify-center px-1.5 text-xs"
                 >
-                  {item.badge}
+                  {badge}
                 </Badge>
               )}
             </Link>

@@ -21,7 +21,12 @@ import {
   insertInstance,
   updateInstanceStatus,
   getRunningInstances,
+  getSessionsForInstance,
+  updateSessionStatus,
 } from "./db-repository";
+import {
+  createSessionDisconnectedNotification,
+} from "./notification-service";
 
 // Re-export for convenience
 export type { OpencodeClient } from "@opencode-ai/sdk";
@@ -369,6 +374,21 @@ export function startHealthCheckLoop(): void {
           _healthFailCounts.delete(id);
           try {
             updateInstanceStatus(id, "stopped", new Date().toISOString());
+          } catch {
+            // Non-fatal
+          }
+          // Create disconnected notifications for all active sessions on this instance
+          // and mark them as disconnected in the DB
+          try {
+            const activeSessions = getSessionsForInstance(id);
+            for (const session of activeSessions) {
+              updateSessionStatus(session.id, "disconnected", new Date().toISOString());
+              createSessionDisconnectedNotification(
+                session.opencode_session_id,
+                id,
+                session.title
+              );
+            }
           } catch {
             // Non-fatal
           }
