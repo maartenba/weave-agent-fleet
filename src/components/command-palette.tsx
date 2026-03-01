@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useCommandRegistry } from "@/contexts/command-registry-context";
 import type { Command, CommandCategory } from "@/lib/command-registry";
 import {
@@ -37,12 +37,12 @@ export function CommandPalette() {
   const { commands, paletteOpen, setPaletteOpen } = useCommandRegistry();
   const [search, setSearch] = useState("");
 
-  // Reset search when palette closes
-  useEffect(() => {
-    if (!paletteOpen) {
+  const handleOpenChange = (open: boolean) => {
+    setPaletteOpen(open);
+    if (!open) {
       setSearch("");
     }
-  }, [paletteOpen]);
+  };
 
   // Group commands by category
   const grouped = CATEGORY_ORDER.map((category) => ({
@@ -81,7 +81,7 @@ export function CommandPalette() {
   return (
     <CommandDialog
       open={paletteOpen}
-      onOpenChange={setPaletteOpen}
+      onOpenChange={handleOpenChange}
       title="Command Palette"
       description="Search for a command to run..."
       showCloseButton={false}
@@ -107,7 +107,7 @@ export function CommandPalette() {
                   onSelect={() => {
                     if (command.disabled) return;
                     command.action();
-                    setPaletteOpen(false);
+                    handleOpenChange(false);
                   }}
                 >
                   {Icon && <Icon />}
