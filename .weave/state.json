@@ -1,8 +1,0 @@
-{
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/deterministic-callbacks.md",
-  "started_at": "2026-03-01T10:00:00.000Z",
-  "session_ids": [],
-  "plan_name": "deterministic-callbacks",
-  "agent": "tapestry",
-  "start_sha": "8d29718810b71879a3b51739fcfe757c3d263505"
-}
