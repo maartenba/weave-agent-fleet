@@ -12,6 +12,8 @@ import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
 import { useDeleteSession } from "@/hooks/use-delete-session";
+import { useOpenDirectory, usePreferredOpenTool } from "@/hooks/use-open-directory";
+import type { OpenTool } from "@/hooks/use-open-directory";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
@@ -26,6 +28,8 @@ function FleetPageInner() {
   const { terminateSession } = useTerminateSession();
   const { resumeSession, resumingSessionId } = useResumeSession();
   const { deleteSession, isDeleting } = useDeleteSession();
+  const { openDirectory } = useOpenDirectory();
+  const [preferredTool, setPreferredTool] = usePreferredOpenTool();
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
@@ -92,6 +96,12 @@ function FleetPageInner() {
     } finally {
       setDeleteTarget(null);
     }
+  };
+
+  const handleOpen = (directory: string, tool?: OpenTool) => {
+    const t = tool ?? preferredTool;
+    if (tool) setPreferredTool(t);
+    openDirectory(directory, t);
   };
 
   // Apply workspace URL filter — resolves workspaceId to directory so that all
@@ -178,7 +188,7 @@ function FleetPageInner() {
                 </span>
                 <span className="text-xs text-muted-foreground">({items.length})</span>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  {nestSessions(items).map(({ item, children }) => (
                    <div key={`${item.instanceId}-${item.session.id}`} className="contents">
                      <LiveSessionCard
@@ -187,6 +197,7 @@ function FleetPageInner() {
                        onTerminate={handleTerminate}
                        onResume={handleResume}
                        onDelete={handleDeleteRequest}
+                       onOpen={(dir) => handleOpen(dir)}
                        isResuming={resumingSessionId === item.session.id}
                      />
                      {children.map((child) => (
@@ -197,6 +208,7 @@ function FleetPageInner() {
                          onTerminate={handleTerminate}
                          onResume={handleResume}
                          onDelete={handleDeleteRequest}
+                         onOpen={(dir) => handleOpen(dir)}
                          isResuming={resumingSessionId === child.session.id}
                        />
                      ))}
@@ -243,6 +255,7 @@ function FleetPageInner() {
                        onTerminate={handleTerminate}
                        onResume={handleResume}
                        onDelete={handleDeleteRequest}
+                       onOpen={(dir) => handleOpen(dir)}
                        isResuming={resumingSessionId === item.session.id}
                      />
                      {children.map((child) => (
@@ -253,6 +266,7 @@ function FleetPageInner() {
                          onTerminate={handleTerminate}
                          onResume={handleResume}
                          onDelete={handleDeleteRequest}
+                         onOpen={(dir) => handleOpen(dir)}
                          isResuming={resumingSessionId === child.session.id}
                        />
                      ))}
@@ -297,6 +311,7 @@ function FleetPageInner() {
                 onTerminate={handleTerminate}
                 onResume={handleResume}
                 onDelete={handleDeleteRequest}
+                onOpen={(dir) => handleOpen(dir)}
                 isResuming={resumingSessionId === item.session.id}
               />
               {children.map((child) => (
@@ -307,6 +322,7 @@ function FleetPageInner() {
                   onTerminate={handleTerminate}
                   onResume={handleResume}
                   onDelete={handleDeleteRequest}
+                  onOpen={(dir) => handleOpen(dir)}
                   isResuming={resumingSessionId === child.session.id}
                 />
               ))}
@@ -334,6 +350,7 @@ function FleetPageInner() {
               onTerminate={handleTerminate}
               onResume={handleResume}
               onDelete={handleDeleteRequest}
+              onOpen={handleOpen}
               resumingSessionId={resumingSessionId}
             />
         ))}

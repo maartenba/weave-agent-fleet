@@ -23,6 +23,8 @@ import { useSessionsContext } from "@/contexts/sessions-context";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import type { WorkspaceGroup } from "@/hooks/use-workspaces";
+import type { OpenTool } from "@/hooks/use-open-directory";
+import { OpenToolDropdownSubmenu } from "@/components/ui/open-tool-menu";
 import { nestSessions } from "@/lib/session-utils";
 import { cn } from "@/lib/utils";
 
@@ -34,10 +36,11 @@ interface SessionGroupProps {
   onNewSession?: (workspaceDirectory: string) => void;
   onResume?: (sessionId: string) => void;
   onDelete?: (sessionId: string, instanceId: string) => void;
+  onOpen?: (directory: string, tool: OpenTool) => void;
   resumingSessionId?: string | null;
 }
 
-export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDelete, resumingSessionId }: SessionGroupProps) {
+export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDelete, onOpen, resumingSessionId }: SessionGroupProps) {
   const { refetch } = useSessionsContext();
   const { renameWorkspace } = useRenameWorkspace();
   const { terminateSession } = useTerminateSession();
@@ -144,6 +147,15 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
               </DropdownMenuItem>
             )}
             {onNewSession && <DropdownMenuSeparator />}
+            {onOpen && (
+              <>
+                <OpenToolDropdownSubmenu
+                  directory={group.workspaceDirectory}
+                  onOpen={onOpen}
+                />
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem
               onClick={handleTerminateAll}
               variant="destructive"
@@ -171,6 +183,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
                   onTerminate={onTerminate}
                   onResume={onResume}
                   onDelete={onDelete}
+                  onOpen={onOpen ? (dir) => onOpen(dir, "vscode") : undefined}
                   isResuming={resumingSessionId === item.session.id}
                 />
                 {children.length > 0 && (
@@ -183,6 +196,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
                         onTerminate={onTerminate}
                         onResume={onResume}
                         onDelete={onDelete}
+                        onOpen={onOpen ? (dir) => onOpen(dir, "vscode") : undefined}
                         isResuming={resumingSessionId === child.session.id}
                       />
                     ))}
