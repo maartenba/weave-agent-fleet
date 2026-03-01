@@ -50,17 +50,17 @@ Users want to quickly jump from a Weave session to their preferred editor (VSCod
 Allow users to open a session's workspace directory in their preferred editor, terminal, or file explorer from any surface in the UI.
 
 ### Deliverables
-- [ ] API route `POST /api/open-directory` with validation and cross-platform spawning
-- [ ] `useOpenDirectory` React hook for calling the API
-- [ ] User preference for default tool via `usePersistedState`
-- [ ] "Open in..." button on `LiveSessionCard` (hover icon)
-- [ ] "Open in..." menu item in `SessionGroup` dropdown
-- [ ] "Open in..." menu item in `SidebarWorkspaceItem` context menu
-- [ ] "Open in..." button on session detail page sidebar
+- [x] API route `POST /api/open-directory` with validation and cross-platform spawning
+- [x] `useOpenDirectory` React hook for calling the API
+- [x] User preference for default tool via `usePersistedState`
+- [x] "Open in..." button on `LiveSessionCard` (hover icon)
+- [x] "Open in..." menu item in `SessionGroup` dropdown
+- [x] "Open in..." menu item in `SidebarWorkspaceItem` context menu
+- [x] "Open in..." button on session detail page sidebar
 
 ### Definition of Done
-- [ ] `npm run build` succeeds with zero errors
-- [ ] `npm run lint` passes
+- [x] `npm run build` succeeds with zero errors
+- [x] `npm run lint` passes
 - [ ] Clicking "Open in VSCode" from any surface opens the directory in VSCode
 - [ ] Clicking "Open in Terminal" opens a terminal in the workspace directory
 - [ ] Clicking "Open in Explorer/Finder" opens the file browser at the directory
@@ -77,7 +77,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
 
 ## TODOs
 
-- [ ] 1. **Create `POST /api/open-directory` API route**
+- [x] 1. **Create `POST /api/open-directory` API route**
   **What**: New server-side route that accepts a directory path and tool name, validates the directory, and shells out to the appropriate command.
 
   Request body:
@@ -109,7 +109,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/app/api/open-directory/route.ts`
   **Acceptance**: `curl -X POST http://localhost:3000/api/open-directory -H 'Content-Type: application/json' -d '{"directory":"/some/valid/path","tool":"vscode"}'` opens VS Code in the directory and returns `{ "ok": true }`.
 
-- [ ] 2. **Create `useOpenDirectory` React hook**
+- [x] 2. **Create `useOpenDirectory` React hook**
   **What**: A reusable hook that wraps the API call, following the exact pattern of `useTerminateSession` and `useDeleteSession`.
 
   Exports:
@@ -132,7 +132,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/hooks/use-open-directory.ts`
   **Acceptance**: Hook compiles, follows the same pattern as `use-terminate-session.ts`, makes correct API call.
 
-- [ ] 3. **Create `OpenDirectoryButton` shared component**
+- [x] 3. **Create `OpenDirectoryButton` shared component**
   **What**: A reusable button/dropdown component used across all four UI surfaces. This avoids duplicating the tool-selection dropdown logic in every surface.
 
   Two visual variants:
@@ -154,7 +154,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/components/ui/open-tool-menu.tsx`, `src/hooks/use-open-directory.ts` (add `usePreferredOpenTool`)
   **Acceptance**: Component renders correctly in both dropdown-menu and context-menu contexts. Selecting a tool calls the API and updates the default preference.
 
-- [ ] 4. **Add "Open in..." to `LiveSessionCard` hover actions**
+- [x] 4. **Add "Open in..." to `LiveSessionCard` hover actions**
   **What**: Add a new hover-revealed icon button to the card, positioned alongside existing terminate/resume/delete buttons.
 
   Changes:
@@ -181,7 +181,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/components/fleet/live-session-card.tsx`
   **Acceptance**: Hovering over a session card reveals an "Open" icon button. Clicking it calls the parent's `onOpen` callback with the workspace directory.
 
-- [ ] 5. **Add "Open in..." submenu to `SessionGroup` dropdown**
+- [x] 5. **Add "Open in..." submenu to `SessionGroup` dropdown**
   **What**: Add an "Open in..." entry to the workspace group's overflow dropdown menu (the `<MoreHorizontal>` button in the group header).
 
   Changes:
@@ -217,7 +217,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
    **Files**: `src/components/fleet/session-group.tsx`, possibly `src/components/ui/dropdown-menu.tsx` (if sub-menu exports are missing — expected to be present already)
   **Acceptance**: The workspace group overflow menu shows "Open in..." with a submenu listing all four tools. Clicking one calls `onOpen` with the directory and tool.
 
-- [ ] 6. **Add "Open in..." submenu to `SidebarWorkspaceItem` context menu**
+- [x] 6. **Add "Open in..." submenu to `SidebarWorkspaceItem` context menu**
   **What**: Add an "Open in..." entry to the workspace item's right-click context menu, following the same submenu pattern.
 
   Changes:
@@ -243,7 +243,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/components/layout/sidebar-workspace-item.tsx`, possibly `src/components/ui/context-menu.tsx` (if sub-menu exports are missing)
   **Acceptance**: Right-clicking a workspace in the sidebar shows the context menu with an "Open in..." submenu. Selecting a tool calls `onOpen`.
 
-- [ ] 7. **Add "Open in..." button to session detail page sidebar**
+- [x] 7. **Add "Open in..." button to session detail page sidebar**
   **What**: Add a clickable "Open" button next to the workspace directory display in the session detail page's sidebar panel.
 
   Changes to `src/app/sessions/[id]/page.tsx`:
@@ -275,7 +275,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/app/sessions/[id]/page.tsx`
   **Acceptance**: The session detail sidebar shows a small "open" button next to the workspace directory. Clicking it opens the directory in the user's preferred tool.
 
-- [ ] 8. **Wire up `onOpen` callback in the fleet page and sidebar**
+- [x] 8. **Wire up `onOpen` callback in the fleet page and sidebar**
   **What**: Connect the `useOpenDirectory` hook to all UI surfaces by passing `onOpen` callbacks from the parent pages/layouts.
 
   Changes:
@@ -297,7 +297,7 @@ Allow users to open a session's workspace directory in their preferred editor, t
   **Files**: `src/app/page.tsx`, `src/components/layout/sidebar-*.tsx` (whichever renders the workspace list), `src/components/fleet/session-group.tsx`
   **Acceptance**: Clicking "Open" on any card, dropdown, or context menu correctly calls the API and opens the directory. The preferred tool is used when no explicit tool is selected.
 
-- [ ] 9. **Pre-check: Verify dropdown/context menu sub-component exports** (30-second check)
+- [x] 9. **Pre-check: Verify dropdown/context menu sub-component exports** (30-second check)
   **What**: Confirm that the shadcn dropdown-menu and context-menu components already export the sub-menu primitives. Based on codebase analysis, these exports already exist — this is a quick verification, not implementation work.
 
   Check `src/components/ui/dropdown-menu.tsx` for exports of:
@@ -337,8 +337,8 @@ Allow users to open a session's workspace directory in their preferred editor, t
 Tasks 4–7 can be done in parallel once tasks 1–3 and 9 are complete.
 
 ## Verification
-- [ ] `npm run build` succeeds with zero errors
-- [ ] `npm run lint` passes
+- [x] `npm run build` succeeds with zero errors
+- [x] `npm run lint` passes
 - [ ] No regressions — existing terminate/resume/delete buttons still work
 - [ ] Manual: Click "Open in VS Code" from LiveSessionCard hover → VS Code opens at workspace directory
 - [ ] Manual: Click "Open in Terminal" from SessionGroup dropdown → terminal opens at workspace directory

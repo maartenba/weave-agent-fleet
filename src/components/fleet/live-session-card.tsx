@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowRight, Clock, ExternalLink, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
 
 export function timeSince(timestamp: number): string {
@@ -21,6 +21,7 @@ export function LiveSessionCard({
   onTerminate,
   onResume,
   onDelete,
+  onOpen,
   isResuming = false,
   isParent = false,
   isChild = false,
@@ -29,6 +30,7 @@ export function LiveSessionCard({
   onTerminate: (sessionId: string, instanceId: string) => void;
   onResume?: (sessionId: string) => void;
   onDelete?: (sessionId: string, instanceId: string) => void;
+  onOpen?: (directory: string) => void;
   isResuming?: boolean;
   isParent?: boolean;
   isChild?: boolean;
@@ -172,6 +174,23 @@ export function LiveSessionCard({
           ) : (
             <RotateCcw className="h-3.5 w-3.5" />
           )}
+        </Button>
+      )}
+      {onOpen && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`absolute top-2 ${
+            isInactive && onResume ? "right-[4.5rem]" : "right-10"
+          } h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpen(item.workspaceDirectory);
+          }}
+          title="Open in editor"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
         </Button>
       )}
     </div>

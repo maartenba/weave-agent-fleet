@@ -29,6 +29,9 @@ import { useRenameWorkspace } from "@/hooks/use-rename-workspace";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { usePersistedState } from "@/hooks/use-persisted-state";
+import { useOpenDirectory, usePreferredOpenTool } from "@/hooks/use-open-directory";
+import type { OpenTool } from "@/hooks/use-open-directory";
+import { OpenToolContextSubmenu } from "@/components/ui/open-tool-menu";
 import type { WorkspaceGroup } from "@/hooks/use-workspaces";
 import { nestSessions } from "@/lib/session-utils";
 
@@ -52,6 +55,8 @@ export function SidebarWorkspaceItem({
   const { refetch } = useSessionsContext();
   const { renameWorkspace } = useRenameWorkspace();
   const { terminateSession } = useTerminateSession();
+  const { openDirectory } = useOpenDirectory();
+  const [, setPreferredTool] = usePreferredOpenTool();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -94,6 +99,14 @@ export function SidebarWorkspaceItem({
     );
     refetch();
   }, [group.sessions, group.displayName, terminateSession, refetch]);
+
+  const handleOpen = useCallback(
+    (directory: string, tool: OpenTool) => {
+      setPreferredTool(tool);
+      openDirectory(directory, tool);
+    },
+    [openDirectory, setPreferredTool]
+  );
 
   return (
     <ContextMenu>
@@ -225,6 +238,10 @@ export function SidebarWorkspaceItem({
           <Plus className="h-3.5 w-3.5" />
           New Session
         </ContextMenuItem>
+        <OpenToolContextSubmenu
+          directory={group.workspaceDirectory}
+          onOpen={handleOpen}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem
           onClick={handleTerminateAll}
