@@ -30,6 +30,7 @@ import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import type { WorkspaceGroup } from "@/hooks/use-workspaces";
+import { nestSessions } from "@/lib/session-utils";
 
 const PINNED_KEY = "weave:sidebar:pinned";
 
@@ -183,15 +184,21 @@ export function SidebarWorkspaceItem({
           {/* Expanded session list with animation */}
           <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 transition-all">
             <div className="space-y-0.5 mt-0.5" role="group">
-              {group.sessions.map((item) => (
-                <SidebarSessionItem
-                  key={`${item.instanceId}-${item.session.id}`}
-                  item={item}
-                  isActive={
-                    activeSessionPath ===
-                    `/sessions/${item.session.id}`
-                  }
-                />
+              {nestSessions(group.sessions).map(({ item, children }) => (
+                <div key={`${item.instanceId}-${item.session.id}`}>
+                  <SidebarSessionItem
+                    item={item}
+                    isActive={activeSessionPath === `/sessions/${item.session.id}`}
+                  />
+                  {children.map((child) => (
+                    <SidebarSessionItem
+                      key={`${child.instanceId}-${child.session.id}`}
+                      item={child}
+                      isActive={activeSessionPath === `/sessions/${child.session.id}`}
+                      isChild
+                    />
+                  ))}
+                </div>
               ))}
             </div>
           </CollapsibleContent>

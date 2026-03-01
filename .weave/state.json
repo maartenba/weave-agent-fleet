@@ -1,15 +1,10 @@
 {
-  "active_plan": null,
-  "completed_plans": [
-    {
-      "plan": ".weave/plans/diff-viewer.md",
-      "plan_name": "diff-viewer",
-      "started_at": "2026-02-28T18:00:00.000Z",
-      "completed_at": "2026-02-28T19:10:00.000Z",
-      "start_sha": "641a6af9dff6148c8b8de809c5f885b0e2d419ab",
-      "tasks_total": 25,
-      "tasks_completed": 25,
-      "status": "completed"
-    }
-  ]
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/fleet-orchestration-callbacks.md",
+  "started_at": "2026-03-01T00:51:00.864Z",
+  "session_ids": [
+    "ses_35966bec5ffecxTsZFFL6fwOB4"
+  ],
+  "plan_name": "fleet-orchestration-callbacks",
+  "agent": "tapestry",
+  "start_sha": "76c198907ac8d4f785bd676abb2a292228d8a618"
 }

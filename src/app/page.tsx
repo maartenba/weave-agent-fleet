@@ -15,6 +15,7 @@ import { useDeleteSession } from "@/hooks/use-delete-session";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { filterSessionsByWorkspace } from "@/lib/workspace-utils";
+import { nestSessions } from "@/lib/session-utils";
 import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-session-dialog";
 import type { FleetSummary } from "@/lib/types";
 import type { SessionListItem } from "@/lib/api-types";
@@ -178,16 +179,29 @@ function FleetPageInner() {
                 <span className="text-xs text-muted-foreground">({items.length})</span>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                 {items.map((item) => (
-                    <LiveSessionCard
-                      key={`${item.instanceId}-${item.session.id}`}
-                      item={item}
-                      onTerminate={handleTerminate}
-                      onResume={handleResume}
-                      onDelete={handleDeleteRequest}
-                      isResuming={resumingSessionId === item.session.id}
-                    />
-                  ))}
+                 {nestSessions(items).map(({ item, children }) => (
+                   <div key={`${item.instanceId}-${item.session.id}`} className="contents">
+                     <LiveSessionCard
+                       item={item}
+                       isParent={children.length > 0}
+                       onTerminate={handleTerminate}
+                       onResume={handleResume}
+                       onDelete={handleDeleteRequest}
+                       isResuming={resumingSessionId === item.session.id}
+                     />
+                     {children.map((child) => (
+                       <LiveSessionCard
+                         key={`${child.instanceId}-${child.session.id}`}
+                         item={child}
+                         isChild
+                         onTerminate={handleTerminate}
+                         onResume={handleResume}
+                         onDelete={handleDeleteRequest}
+                         isResuming={resumingSessionId === child.session.id}
+                       />
+                     ))}
+                   </div>
+                 ))}
                </div>
              </div>
            );
@@ -221,16 +235,29 @@ function FleetPageInner() {
                 <span className="text-xs text-muted-foreground">({sorted.length})</span>
               </div>
                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                 {sorted.map((item) => (
-                    <LiveSessionCard
-                      key={`${item.instanceId}-${item.session.id}`}
-                      item={item}
-                      onTerminate={handleTerminate}
-                      onResume={handleResume}
-                      onDelete={handleDeleteRequest}
-                      isResuming={resumingSessionId === item.session.id}
-                    />
-                  ))}
+                 {nestSessions(sorted).map(({ item, children }) => (
+                   <div key={`${item.instanceId}-${item.session.id}`} className="contents">
+                     <LiveSessionCard
+                       item={item}
+                       isParent={children.length > 0}
+                       onTerminate={handleTerminate}
+                       onResume={handleResume}
+                       onDelete={handleDeleteRequest}
+                       isResuming={resumingSessionId === item.session.id}
+                     />
+                     {children.map((child) => (
+                       <LiveSessionCard
+                         key={`${child.instanceId}-${child.session.id}`}
+                         item={child}
+                         isChild
+                         onTerminate={handleTerminate}
+                         onResume={handleResume}
+                         onDelete={handleDeleteRequest}
+                         isResuming={resumingSessionId === child.session.id}
+                       />
+                     ))}
+                   </div>
+                 ))}
                </div>
             </div>
           );
@@ -259,17 +286,31 @@ function FleetPageInner() {
     }
 
     if (prefs.groupBy === "none") {
+      const nested = nestSessions(sortSessions(searchFiltered));
       return (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sortSessions(searchFiltered).map((item) => (
-            <LiveSessionCard
-              key={`${item.instanceId}-${item.session.id}`}
-              item={item}
-              onTerminate={handleTerminate}
-              onResume={handleResume}
-              onDelete={handleDeleteRequest}
-              isResuming={resumingSessionId === item.session.id}
-            />
+          {nested.map(({ item, children }) => (
+            <div key={`${item.instanceId}-${item.session.id}`} className="contents">
+              <LiveSessionCard
+                item={item}
+                isParent={children.length > 0}
+                onTerminate={handleTerminate}
+                onResume={handleResume}
+                onDelete={handleDeleteRequest}
+                isResuming={resumingSessionId === item.session.id}
+              />
+              {children.map((child) => (
+                <LiveSessionCard
+                  key={`${child.instanceId}-${child.session.id}`}
+                  item={child}
+                  isChild
+                  onTerminate={handleTerminate}
+                  onResume={handleResume}
+                  onDelete={handleDeleteRequest}
+                  isResuming={resumingSessionId === child.session.id}
+                />
+              ))}
+            </div>
           ))}
         </div>
       );

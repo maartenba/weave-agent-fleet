@@ -7,9 +7,10 @@ import type { SessionListItem } from "@/lib/api-types";
 interface SidebarSessionItemProps {
   item: SessionListItem;
   isActive: boolean;
+  isChild?: boolean;
 }
 
-export function SidebarSessionItem({ item, isActive }: SidebarSessionItemProps) {
+export function SidebarSessionItem({ item, isActive, isChild = false }: SidebarSessionItemProps) {
   const { instanceId, session, instanceStatus, sessionStatus } = item;
 
   const isDead = instanceStatus === "dead";
@@ -32,12 +33,14 @@ export function SidebarSessionItem({ item, isActive }: SidebarSessionItemProps) 
       data-tree-leaf
       tabIndex={0}
       className={cn(
-        "flex items-center gap-2 rounded-md pl-12 pr-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "flex items-center gap-2 rounded-md pr-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        isChild ? "pl-16" : "pl-12",
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
       )}
     >
+      {isChild && <span className="text-muted-foreground/50 text-[10px] shrink-0">↳</span>}
       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
       <span className="truncate max-w-[120px]">{title}</span>
     </Link>

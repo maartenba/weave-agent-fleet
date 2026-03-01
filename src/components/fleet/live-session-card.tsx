@@ -22,12 +22,16 @@ export function LiveSessionCard({
   onResume,
   onDelete,
   isResuming = false,
+  isParent = false,
+  isChild = false,
 }: {
   item: SessionListItem;
   onTerminate: (sessionId: string, instanceId: string) => void;
   onResume?: (sessionId: string) => void;
   onDelete?: (sessionId: string, instanceId: string) => void;
   isResuming?: boolean;
+  isParent?: boolean;
+  isChild?: boolean;
 }) {
   const { instanceId, session, instanceStatus, sessionStatus, isolationStrategy } = item;
   const isDead = instanceStatus === "dead";
@@ -88,6 +92,16 @@ export function LiveSessionCard({
               {isolationStrategy && isolationStrategy !== "existing" && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-purple-400 border-purple-400/40">
                   {isolationStrategy}
+                </Badge>
+              )}
+              {isParent && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-cyan-400 border-cyan-400/40">
+                  conductor
+                </Badge>
+              )}
+              {isChild && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-orange-400 border-orange-400/40">
+                  child
                 </Badge>
               )}
               <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">

@@ -28,23 +28,23 @@ Enable a "conductor" session to spawn child sessions via the Fleet REST API and 
 Enable conductor-child session orchestration with automatic completion callbacks, activated via an installable skill.
 
 ### Deliverables
-- [ ] `session_callbacks` SQLite table for storing callback registrations
-- [ ] `parent_session_id` column on `sessions` table for parent-child linking
-- [ ] DB repository CRUD functions for callback lifecycle
-- [ ] Callback service that fires prompts to conductor sessions on child completion
-- [ ] `onComplete` field on `CreateSessionRequest` API type
-- [ ] Session creation route stores callback registration and parent link when `onComplete` is provided
-- [ ] SSE handler fires callbacks on busy→idle and error transitions
-- [ ] Session delete route cleans up associated callbacks
-- [ ] `parentSessionId` field in `SessionListItem` API response
-- [ ] UI: parent-child visual grouping/nesting in the fleet session list and sidebar
-- [ ] Fleet Orchestration SKILL.md teaching agents how to use the orchestration API
+- [x] `session_callbacks` SQLite table for storing callback registrations
+- [x] `parent_session_id` column on `sessions` table for parent-child linking
+- [x] DB repository CRUD functions for callback lifecycle
+- [x] Callback service that fires prompts to conductor sessions on child completion
+- [x] `onComplete` field on `CreateSessionRequest` API type
+- [x] Session creation route stores callback registration and parent link when `onComplete` is provided
+- [x] SSE handler fires callbacks on busy→idle and error transitions
+- [x] Session delete route cleans up associated callbacks
+- [x] `parentSessionId` field in `SessionListItem` API response
+- [x] UI: parent-child visual grouping/nesting in the fleet session list and sidebar
+- [x] Fleet Orchestration SKILL.md teaching agents how to use the orchestration API
 
 ### Definition of Done
-- [ ] `bun run build` succeeds with no type errors
-- [ ] Existing tests pass: `bun test`
-- [ ] Manual test: create a session with `onComplete`, send it a prompt, verify callback prompt arrives at conductor session when child goes idle
-- [ ] Manual test: child sessions appear nested under their parent conductor session in the Fleet UI
+- [x] `bun run build` succeeds with no type errors
+- [x] Existing tests pass: `bun test`
+- [x] Manual test: create a session with `onComplete`, send it a prompt, verify callback prompt arrives at conductor session when child goes idle
+- [x] Manual test: child sessions appear nested under their parent conductor session in the Fleet UI
 
 ### Guardrails (Must NOT)
 - Must NOT add any new API endpoints — only extend existing ones
@@ -58,7 +58,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
 
 ### Phase 1: Backend — Callback Infrastructure
 
-- [ ] 1. **Database — Add `session_callbacks` table and `parent_session_id` column**
+- [x] 1. **Database — Add `session_callbacks` table and `parent_session_id` column**
   **What**: Add the `session_callbacks` table to the schema block in `database.ts`, and add a `parent_session_id` column to the `sessions` table for parent-child linking.
   **Files**: `src/lib/server/database.ts`
   **Details**:
@@ -90,7 +90,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
   - This column is nullable — only set when a session is created via `onComplete` (i.e., it's a child of a conductor). The value is the Fleet DB session ID of the parent (conductor) session.
   **Acceptance**: `bun run build` succeeds. Both the table and column are created on app startup.
 
-- [ ] 2. **DB Repository — Add callback CRUD functions and `parent_session_id` to session types**
+- [x] 2. **DB Repository — Add callback CRUD functions and `parent_session_id` to session types**
   **What**: Add typed CRUD functions for the `session_callbacks` table and extend the session types with `parent_session_id`, following the existing repository pattern.
   **Files**: `src/lib/server/db-repository.ts`
   **Details**:
@@ -190,7 +190,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
     ```
   **Acceptance**: All functions are synchronous (matching better-sqlite3 pattern). `bun run build` succeeds.
 
-- [ ] 3. **Callback Service — `fireSessionCallbacks()` and `fireSessionErrorCallbacks()`**
+- [x] 3. **Callback Service — `fireSessionCallbacks()` and `fireSessionErrorCallbacks()`**
   **What**: Create a new service module that fires callback prompts to conductor sessions when a child session completes or errors. Follows the `notification-service.ts` best-effort pattern.
   **Files**: `src/lib/server/callback-service.ts` (new file)
   **Details**:
@@ -239,7 +239,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
     ```
   **Acceptance**: `bun run build` succeeds. Function is async but callers can fire-and-forget.
 
-- [ ] 4. **API Types — Add `onComplete` to `CreateSessionRequest`**
+- [x] 4. **API Types — Add `onComplete` to `CreateSessionRequest`**
   **What**: Extend `CreateSessionRequest` with an optional `onComplete` field for callback registration.
   **Files**: `src/lib/api-types.ts`
   **Details**:
@@ -254,7 +254,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
   - `notifyInstanceId` = the instance ID of the conductor (needed to get the SDK client).
   **Acceptance**: `bun run build` succeeds. Type is available to the session creation route.
 
-- [ ] 5. **Session Creation Route — Store callback and parent link on create**
+- [x] 5. **Session Creation Route — Store callback and parent link on create**
   **What**: When a session is created with an `onComplete` field, insert a callback registration into the database and set the `parent_session_id` on the child session.
   **Files**: `src/app/api/sessions/route.ts`
   **Details**:
@@ -309,7 +309,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
   - Add `getSessionByOpencodeId` to the import from `@/lib/server/db-repository` (line 4).
   **Acceptance**: Creating a session with `onComplete` in the body inserts a callback row AND sets `parent_session_id` on the child session. Creating without `onComplete` has zero side effects.
 
-- [ ] 6. **SSE Handler — Fire callbacks on completion and error**
+- [x] 6. **SSE Handler — Fire callbacks on completion and error**
   **What**: When the SSE handler detects a busy→idle transition or error, fire any registered callbacks for that session.
   **Files**: `src/app/api/sessions/[id]/events/route.ts`
   **Details**:
@@ -345,7 +345,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
   - The calls pass `dbSession.opencode_session_id` (the OpenCode SDK session ID), which the callback service uses to look up the Fleet DB session via `getSessionByOpencodeId()`.
   **Acceptance**: When a child session completes, any registered callbacks fire a prompt to the conductor session. SSE stream is never interrupted by callback failures.
 
-- [ ] 7. **Session Delete Route — Clean up callbacks**
+- [x] 7. **Session Delete Route — Clean up callbacks**
   **What**: When a session is permanently deleted, remove any callback registrations that reference it (as source or target).
   **Files**: `src/app/api/sessions/[id]/route.ts`
   **Details**:
@@ -364,7 +364,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
 
 ### Phase 2: Skill — Fleet Orchestration
 
-- [ ] 8. **Create the Fleet Orchestration skill**
+- [x] 8. **Create the Fleet Orchestration skill**
   **What**: Create a SKILL.md file that teaches Weave agents how to orchestrate child sessions via the Fleet API with automatic callbacks.
   **Files**: `~/.config/opencode/skills/fleet-orchestration/SKILL.md` (new file)
   **Details**:
@@ -439,7 +439,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
 
 ### Phase 2.5: API Adjustment for Usable Session IDs
 
-- [ ] 9. **Adjust `onComplete` to accept OpenCode session IDs** *(merged into Task 5)*
+- [x] 9. **Adjust `onComplete` to accept OpenCode session IDs** *(merged into Task 5)*
   **What**: The `onComplete.notifySessionId` field should accept the OpenCode session ID (what the agent sees in API responses) rather than the internal Fleet DB id (which isn't exposed). The session creation route resolves it to the fleet DB id before storing.
   **Files**: `src/app/api/sessions/route.ts`
   **Details**:
@@ -449,7 +449,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
 
 ### Phase 3: Parent-Child Session Linking in UI
 
-- [ ] 12. **API Response — Include `parentSessionId` in session list**
+- [x] 12. **API Response — Include `parentSessionId` in session list**
   **What**: Add `parentSessionId` to the `SessionListItem` API type and populate it in the GET handler so the UI can identify child sessions.
   **Files**: `src/lib/api-types.ts`, `src/app/api/sessions/route.ts`
   **Details**:
@@ -490,7 +490,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
     Populate it in both the live-instance and stub paths: `dbId: dbSession.id`.
   **Acceptance**: `GET /api/sessions` response includes `parentSessionId` and `dbId` for each session. `bun run build` succeeds.
 
-- [ ] 13. **Fleet Page — Visual parent-child nesting in session cards**
+- [x] 13. **Fleet Page — Visual parent-child nesting in session cards**
   **What**: In the main fleet page (`src/app/page.tsx`), group child sessions visually under their parent conductor session. Show a small "conductor" badge on parent sessions and indent child session cards beneath them.
   **Files**: `src/app/page.tsx`, `src/components/fleet/live-session-card.tsx`
   **Details**:
@@ -581,7 +581,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
     6. For the "directory" group mode (lines 286–301), the nesting happens inside `SessionGroup`. Pass `nestSessions` via a utility import, or apply it inside `SessionGroup` (see Task 14).
   **Acceptance**: Parent sessions show a "conductor" badge. Child sessions appear nested under their parent with an indented connector. Sessions without parent-child relationships render unchanged. `bun run build` succeeds.
 
-- [ ] 14. **SessionGroup & Sidebar — Parent-child nesting in workspace groups and sidebar**
+- [x] 14. **SessionGroup & Sidebar — Parent-child nesting in workspace groups and sidebar**
   **What**: Apply parent-child nesting inside the workspace group view and the sidebar session list.
   **Files**: `src/components/fleet/session-group.tsx`, `src/components/layout/sidebar-workspace-item.tsx`, `src/components/layout/sidebar-session-item.tsx`
   **Details**:
@@ -701,7 +701,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
 
 ### Phase 4: Verification
 
-- [ ] 10. **Build verification**
+- [x] 10. **Build verification**
   **What**: Verify the entire project builds cleanly with the new code.
   **Files**: None (verification only)
   **Details**:
@@ -709,7 +709,7 @@ Enable conductor-child session orchestration with automatic completion callbacks
   - Run `bun test` — all existing tests must pass
   **Acceptance**: Clean build, all tests green.
 
-- [ ] 11. **Manual integration test**
+- [x] 11. **Manual integration test**
   **What**: End-to-end verification of the callback flow.
   **Files**: None (manual testing)
   **Details**:
@@ -734,20 +734,20 @@ Enable conductor-child session orchestration with automatic completion callbacks
   **Acceptance**: Callback prompt appears in the conductor session. No errors in the Fleet console.
 
 ## Verification
-- [ ] `bun run build` succeeds with zero type errors
-- [ ] `bun test` — all existing tests pass (no regressions)
-- [ ] Creating a session without `onComplete` has zero side effects (feature is inert)
-- [ ] Creating a session with `onComplete` inserts a callback row and sets `parent_session_id`
-- [ ] Child busy→idle transition fires callback prompt to conductor
-- [ ] Child error fires error callback prompt to conductor
-- [ ] Deleting a session cleans up its callback registrations
-- [ ] Callback failure never breaks the SSE stream
-- [ ] Skill file has valid frontmatter and is loadable by Weave
-- [ ] `GET /api/sessions` response includes `parentSessionId` and `dbId` for each session
-- [ ] Fleet page: parent sessions show a "conductor" badge
-- [ ] Fleet page: child sessions appear nested under their parent in all group modes
-- [ ] Sidebar: child sessions appear indented under their parent with "↳" indicator
-- [ ] Sessions without parent-child relationships render exactly as before
+- [x] `bun run build` succeeds with zero type errors
+- [x] `bun test` — all existing tests pass (no regressions)
+- [x] Creating a session without `onComplete` has zero side effects (feature is inert)
+- [x] Creating a session with `onComplete` inserts a callback row and sets `parent_session_id`
+- [x] Child busy→idle transition fires callback prompt to conductor
+- [x] Child error fires error callback prompt to conductor
+- [x] Deleting a session cleans up its callback registrations
+- [x] Callback failure never breaks the SSE stream
+- [x] Skill file has valid frontmatter and is loadable by Weave
+- [x] `GET /api/sessions` response includes `parentSessionId` and `dbId` for each session
+- [x] Fleet page: parent sessions show a "conductor" badge
+- [x] Fleet page: child sessions appear nested under their parent in all group modes
+- [x] Sidebar: child sessions appear indented under their parent with "↳" indicator
+- [x] Sessions without parent-child relationships render exactly as before
 
 ## Implementation Order & Dependencies
 ```

@@ -41,6 +41,7 @@ export interface DbSession {
   directory: string;
   created_at: string;
   stopped_at: string | null;
+  parent_session_id: string | null;
 }
 
 // ─── Insert input types (id + timestamps are required on insert) ──────────────
@@ -65,7 +66,7 @@ export type InsertSession = Pick<
   | "opencode_session_id"
   | "directory"
 > &
-  Partial<Pick<DbSession, "title">>;
+  Partial<Pick<DbSession, "title" | "parent_session_id">>;
 
 // ─── Workspaces ───────────────────────────────────────────────────────────────
 
@@ -173,8 +174,8 @@ export function getRunningInstances(): DbInstance[] {
 export function insertSession(sess: InsertSession): void {
   getDb()
     .prepare(
-      `INSERT INTO sessions (id, workspace_id, instance_id, opencode_session_id, title, status, directory)
-       VALUES (@id, @workspace_id, @instance_id, @opencode_session_id, @title, 'active', @directory)`
+      `INSERT INTO sessions (id, workspace_id, instance_id, opencode_session_id, title, status, directory, parent_session_id)
+       VALUES (@id, @workspace_id, @instance_id, @opencode_session_id, @title, 'active', @directory, @parent_session_id)`
     )
     .run({
       id: sess.id,
@@ -183,6 +184,7 @@ export function insertSession(sess: InsertSession): void {
       opencode_session_id: sess.opencode_session_id,
       title: sess.title ?? "Untitled",
       directory: sess.directory,
+      parent_session_id: sess.parent_session_id ?? null,
     });
 }
 
@@ -326,5 +328,55 @@ export function deleteNotificationsForSession(sessionId: string): number {
   const result = getDb()
     .prepare("DELETE FROM notifications WHERE session_id = ?")
     .run(sessionId);
+  return result.changes;
+}
+
+// ─── Session Callbacks ────────────────────────────────────────────────────────
+
+export interface DbSessionCallback {
+  id: string;
+  source_session_id: string;
+  target_session_id: string;
+  target_instance_id: string;
+  status: "pending" | "fired";
+  created_at: string;
+  fired_at: string | null;
+}
+
+export type InsertSessionCallback = Pick<
+  DbSessionCallback,
+  "id" | "source_session_id" | "target_session_id" | "target_instance_id"
+>;
+
+export function insertSessionCallback(cb: InsertSessionCallback): void {
+  getDb()
+    .prepare(
+      `INSERT INTO session_callbacks (id, source_session_id, target_session_id, target_instance_id)
+       VALUES (@id, @source_session_id, @target_session_id, @target_instance_id)`
+    )
+    .run({
+      id: cb.id,
+      source_session_id: cb.source_session_id,
+      target_session_id: cb.target_session_id,
+      target_instance_id: cb.target_instance_id,
+    });
+}
+
+export function getPendingCallbacksForSession(sourceSessionId: string): DbSessionCallback[] {
+  return getDb()
+    .prepare("SELECT * FROM session_callbacks WHERE source_session_id = ? AND status = 'pending'")
+    .all(sourceSessionId) as DbSessionCallback[];
+}
+
+export function markCallbackFired(id: string): void {
+  getDb()
+    .prepare("UPDATE session_callbacks SET status = 'fired', fired_at = datetime('now') WHERE id = ?")
+    .run(id);
+}
+
+export function deleteCallbacksForSession(sessionId: string): number {
+  const result = getDb()
+    .prepare("DELETE FROM session_callbacks WHERE source_session_id = ? OR target_session_id = ?")
+    .run(sessionId, sessionId);
   return result.changes;
 }

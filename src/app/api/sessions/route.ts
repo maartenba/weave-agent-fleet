@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
-import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus } from "@/lib/server/db-repository";
+import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback } from "@/lib/server/db-repository";
 import { randomUUID } from "crypto";
 import type {
   CreateSessionRequest,
@@ -64,6 +64,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Step 4: Persist session to DB
     const sessionDbId = randomUUID();
+
+    // Resolve parent session ID if onComplete is provided
+    let parentDbSessionId: string | null = null;
+    if (body.onComplete?.notifySessionId && body.onComplete?.notifyInstanceId) {
+      try {
+        const targetDbSession = getSessionByOpencodeId(body.onComplete.notifySessionId);
+        if (targetDbSession) {
+          parentDbSessionId = targetDbSession.id;
+        } else {
+          console.warn('[POST /api/sessions] Callback target session not found:', body.onComplete.notifySessionId);
+        }
+      } catch {
+        console.warn('[POST /api/sessions] Failed to resolve parent session');
+      }
+    }
+
     try {
       insertSession({
         id: sessionDbId,
@@ -72,10 +88,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         opencode_session_id: session.id,
         title: session.title ?? title ?? "New Session",
         directory: workspace.directory,
+        parent_session_id: parentDbSessionId,
       });
     } catch {
       // DB write failure is non-fatal — session still works in-memory
       console.warn(`[POST /api/sessions] Failed to persist session to DB`);
+    }
+
+    // Step 5: Register completion callback if requested
+    if (parentDbSessionId && body.onComplete?.notifyInstanceId) {
+      try {
+        insertSessionCallback({
+          id: randomUUID(),
+          source_session_id: sessionDbId,
+          target_session_id: parentDbSessionId,
+          target_instance_id: body.onComplete.notifyInstanceId,
+        });
+      } catch {
+        console.warn('[POST /api/sessions] Failed to register callback');
+      }
     }
 
     const response: CreateSessionResponse = {
@@ -254,6 +285,8 @@ export async function GET(): Promise<NextResponse> {
             sessionStatus,
             session: result.data,
             instanceStatus,
+            dbId: dbSession.id,
+            parentSessionId: dbSession.parent_session_id,
           });
           continue;
         }
@@ -282,6 +315,8 @@ export async function GET(): Promise<NextResponse> {
         },
       } as Parameters<typeof items.push>[0]["session"],
       instanceStatus,
+      dbId: dbSession.id,
+      parentSessionId: dbSession.parent_session_id,
     });
   }
 

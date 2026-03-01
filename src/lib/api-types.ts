@@ -15,6 +15,12 @@ export interface CreateSessionRequest {
   title?: string;
   isolationStrategy?: "existing" | "worktree" | "clone";
   branch?: string;
+  onComplete?: {
+    /** OpenCode session ID of the conductor session to notify on completion */
+    notifySessionId: string;
+    /** Instance ID of the conductor (needed to get the SDK client) */
+    notifyInstanceId: string;
+  };
 }
 
 export interface CreateSessionResponse {
@@ -46,6 +52,10 @@ export interface SessionListItem {
   session: Session;
   /** "running" means the OpenCode process is healthy */
   instanceStatus: "running" | "dead";
+  /** Internal Fleet DB session ID — used for parent-child matching */
+  dbId?: string;
+  /** Fleet DB session ID of the parent (conductor) session, if this is a child */
+  parentSessionId?: string | null;
 }
 
 // ─── Streamed Event Model ──────────────────────────────────────────────────

@@ -88,11 +88,28 @@ export function getDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS session_callbacks (
+      id TEXT PRIMARY KEY,
+      source_session_id TEXT NOT NULL,
+      target_session_id TEXT NOT NULL,
+      target_instance_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      fired_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_callbacks_source ON session_callbacks(source_session_id, status);
   `);
 
   // Migrations — wrapped in try/catch since columns may already exist
   try {
     db.exec(`ALTER TABLE workspaces ADD COLUMN display_name TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN parent_session_id TEXT`);
   } catch {
     // Column already exists — ignore
   }

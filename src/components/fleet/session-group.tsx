@@ -23,6 +23,7 @@ import { useSessionsContext } from "@/contexts/sessions-context";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import type { WorkspaceGroup } from "@/hooks/use-workspaces";
+import { nestSessions } from "@/lib/session-utils";
 import { cn } from "@/lib/utils";
 
 const COLLAPSED_KEY = "weave:fleet:collapsed";
@@ -161,16 +162,33 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
             No sessions in this workspace.
           </div>
         ) : (
-          <div className="mt-2 ml-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {group.sessions.map((item) => (
-              <LiveSessionCard
-                key={`${item.instanceId}-${item.session.id}`}
-                item={item}
-                onTerminate={onTerminate}
-                onResume={onResume}
-                onDelete={onDelete}
-                isResuming={resumingSessionId === item.session.id}
-              />
+          <div className="mt-2 ml-6 space-y-4">
+            {nestSessions(group.sessions).map(({ item, children }) => (
+              <div key={`${item.instanceId}-${item.session.id}`}>
+                <LiveSessionCard
+                  item={item}
+                  isParent={children.length > 0}
+                  onTerminate={onTerminate}
+                  onResume={onResume}
+                  onDelete={onDelete}
+                  isResuming={resumingSessionId === item.session.id}
+                />
+                {children.length > 0 && (
+                  <div className="ml-4 mt-1 space-y-2 border-l-2 border-muted-foreground/20 pl-3">
+                    {children.map((child) => (
+                      <LiveSessionCard
+                        key={`${child.instanceId}-${child.session.id}`}
+                        item={child}
+                        isChild
+                        onTerminate={onTerminate}
+                        onResume={onResume}
+                        onDelete={onDelete}
+                        isResuming={resumingSessionId === child.session.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}

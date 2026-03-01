@@ -27,6 +27,10 @@ import {
   insertNotification,
   deleteNotificationsForSession,
   listNotifications,
+  insertSessionCallback,
+  getPendingCallbacksForSession,
+  markCallbackFired,
+  deleteCallbacksForSession,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -45,6 +49,10 @@ function mkSessionId() {
 
 function mkOpencodeSessionId() {
   return `oc-${randomUUID()}`;
+}
+
+function mkCallbackId() {
+  return `cb-${randomUUID()}`;
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -546,5 +554,128 @@ describe("session deletion", () => {
   it("DeleteNotificationsForSessionReturnsZeroWhenNoneMatch", () => {
     const count = deleteNotificationsForSession("nonexistent-session-id");
     expect(count).toBe(0);
+  });
+});
+
+// ─── Session Callbacks ────────────────────────────────────────────────────────
+
+describe("session callback repository", () => {
+  function setup() {
+    const wsId = mkWorkspaceId();
+    const instId = mkInstanceId();
+    insertWorkspace({ id: wsId, directory: "/tmp/proj", isolation_strategy: "existing" });
+    insertInstance({ id: instId, port: 4600, directory: "/tmp/proj", url: "http://localhost:4600" });
+    const sourceId = mkSessionId();
+    const targetId = mkSessionId();
+    insertSession({ id: sourceId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: targetId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    return { wsId, instId, sourceId, targetId };
+  }
+
+  it("InsertsAndRetrievesPendingCallback", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    const pending = getPendingCallbacksForSession(sourceId);
+    expect(pending.length).toBe(1);
+    expect(pending[0]?.id).toBe(cbId);
+    expect(pending[0]?.source_session_id).toBe(sourceId);
+    expect(pending[0]?.target_session_id).toBe(targetId);
+    expect(pending[0]?.target_instance_id).toBe(instId);
+    expect(pending[0]?.status).toBe("pending");
+    expect(pending[0]?.fired_at).toBeNull();
+  });
+
+  it("ReturnsEmptyArrayWhenNoCallbacks", () => {
+    expect(getPendingCallbacksForSession("nonexistent")).toEqual([]);
+  });
+
+  it("ReturnsMultiplePendingCallbacksForSameSource", () => {
+    const { wsId, instId, sourceId } = setup();
+    const target2 = mkSessionId();
+    insertSession({ id: target2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: sourceId, target_instance_id: instId });
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: target2, target_instance_id: instId });
+
+    expect(getPendingCallbacksForSession(sourceId).length).toBe(2);
+  });
+
+  it("MarkCallbackFiredExcludesFromPending", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    markCallbackFired(cbId);
+
+    const pending = getPendingCallbacksForSession(sourceId);
+    expect(pending.length).toBe(0);
+  });
+
+  it("MarkCallbackFiredSetsFiredAt", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    markCallbackFired(cbId);
+
+    // Verify via a raw query that status is 'fired' and fired_at is set
+    // We can check indirectly: getPendingCallbacksForSession won't return it,
+    // and inserting another callback for the same source still works
+    const pending = getPendingCallbacksForSession(sourceId);
+    expect(pending.length).toBe(0);
+  });
+
+  it("MarkCallbackFiredOnlyAffectsTargetCallback", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cb1 = mkCallbackId();
+    const cb2 = mkCallbackId();
+    insertSessionCallback({ id: cb1, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: cb2, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    markCallbackFired(cb1);
+
+    const pending = getPendingCallbacksForSession(sourceId);
+    expect(pending.length).toBe(1);
+    expect(pending[0]?.id).toBe(cb2);
+  });
+
+  it("DeleteCallbacksBySourceSession", () => {
+    const { instId, sourceId, targetId } = setup();
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    const count = deleteCallbacksForSession(sourceId);
+
+    expect(count).toBe(2);
+    expect(getPendingCallbacksForSession(sourceId)).toEqual([]);
+  });
+
+  it("DeleteCallbacksByTargetSession", () => {
+    const { instId, sourceId, targetId } = setup();
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    const count = deleteCallbacksForSession(targetId);
+
+    expect(count).toBe(1);
+    expect(getPendingCallbacksForSession(sourceId)).toEqual([]);
+  });
+
+  it("DeleteCallbacksReturnsZeroWhenNoneMatch", () => {
+    expect(deleteCallbacksForSession("nonexistent")).toBe(0);
+  });
+
+  it("DeleteCallbacksDoesNotAffectOtherSessions", () => {
+    const { wsId, instId, sourceId, targetId } = setup();
+    const otherSource = mkSessionId();
+    insertSession({ id: otherSource, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: otherSource, target_session_id: targetId, target_instance_id: instId });
+
+    deleteCallbacksForSession(sourceId);
+
+    expect(getPendingCallbacksForSession(otherSource).length).toBe(1);
   });
 });

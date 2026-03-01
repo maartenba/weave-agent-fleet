@@ -7,6 +7,10 @@ import {
   createSessionCompletedNotification,
   createSessionErrorNotification,
 } from "@/lib/server/notification-service";
+import {
+  fireSessionCallbacks,
+  fireSessionErrorCallbacks,
+} from "@/lib/server/callback-service";
 import type { SSEEvent } from "@/lib/api-types";
 
 interface RouteContext {
@@ -128,6 +132,7 @@ export async function GET(
                     instanceId,
                     dbSession.title
                   );
+                  void fireSessionCallbacks(dbSession.opencode_session_id, instanceId);
                 }
               }
             } else if (type === "session.idle" && lastSessionStatus === "busy") {
@@ -140,6 +145,7 @@ export async function GET(
                   instanceId,
                   dbSession.title
                 );
+                void fireSessionCallbacks(dbSession.opencode_session_id, instanceId);
               }
             } else if (type === "error") {
               const dbSession = getSessionByOpencodeId(sessionId);
@@ -149,6 +155,7 @@ export async function GET(
                   instanceId,
                   dbSession.title
                 );
+                void fireSessionErrorCallbacks(dbSession.opencode_session_id, instanceId);
               }
             }
           } catch {
