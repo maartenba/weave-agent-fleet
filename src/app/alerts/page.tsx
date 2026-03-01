@@ -14,7 +14,7 @@ import {
   Bell,
   WifiOff,
 } from "lucide-react";
-import { useNotificationsWithBrowser } from "@/hooks/use-notifications-with-browser";
+import { useNotifications } from "@/contexts/notifications-context";
 
 function getNotificationIcon(type: string) {
   switch (type) {
@@ -68,7 +68,7 @@ export default function AlertsPage() {
     markAsRead,
     markAllAsRead,
     clearAll,
-  } = useNotificationsWithBrowser();
+  } = useNotifications();
 
   useEffect(() => {
     fetchNotifications(50);
