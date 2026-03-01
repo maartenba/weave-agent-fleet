@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
 import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback } from "@/lib/server/db-repository";
+import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
 import type {
   CreateSessionRequest,
@@ -106,6 +107,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
       } catch {
         console.warn('[POST /api/sessions] Failed to register callback');
+      }
+
+      // Start server-side monitoring so callback fires without browser SSE
+      try {
+        startMonitoring(sessionDbId, session.id, instance.id);
+      } catch {
+        console.warn('[POST /api/sessions] Failed to start callback monitoring');
       }
     }
 

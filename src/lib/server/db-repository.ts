@@ -374,6 +374,30 @@ export function markCallbackFired(id: string): void {
     .run(id);
 }
 
+/**
+ * Atomically claim a pending callback — sets status to 'fired' only if it is
+ * currently 'pending'. Returns true if the row was updated (i.e. this caller
+ * won the claim), false if another caller already claimed it.
+ */
+export function claimPendingCallback(id: string): boolean {
+  const result = getDb()
+    .prepare(
+      "UPDATE session_callbacks SET status = 'fired', fired_at = datetime('now') WHERE id = ? AND status = 'pending'"
+    )
+    .run(id);
+  return result.changes > 0;
+}
+
+/**
+ * Get all pending callbacks across all sessions.
+ * Used by the polling safety net to catch missed transitions.
+ */
+export function getAllPendingCallbacks(): DbSessionCallback[] {
+  return getDb()
+    .prepare("SELECT * FROM session_callbacks WHERE status = 'pending'")
+    .all() as DbSessionCallback[];
+}
+
 export function deleteCallbacksForSession(sessionId: string): number {
   const result = getDb()
     .prepare("DELETE FROM session_callbacks WHERE source_session_id = ? OR target_session_id = ?")

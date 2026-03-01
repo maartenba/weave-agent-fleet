@@ -28,21 +28,21 @@ Child sessions complete their work but never fire callbacks to the conductor ses
 Ensure child session completion callbacks fire deterministically without depending on a browser SSE connection, while preventing duplicate delivery.
 
 ### Deliverables
-- [ ] New `src/lib/server/callback-monitor.ts` — server-side event subscription manager
-- [ ] Atomic `claimPendingCallback()` in `db-repository.ts`
-- [ ] `getAllPendingCallbacks()` in `db-repository.ts` for the polling fallback
-- [ ] Updated `callback-service.ts` using atomic claim instead of read-then-mark
-- [ ] Updated `POST /api/sessions` route to start monitoring after callback registration
-- [ ] Updated `DELETE /api/sessions/[id]` route to stop monitoring on deletion
-- [ ] Error logging in `deliverCallbacks()` for visibility
-- [ ] Tests for new db-repository functions and callback-monitor logic
+- [x] New `src/lib/server/callback-monitor.ts` — server-side event subscription manager
+- [x] Atomic `claimPendingCallback()` in `db-repository.ts`
+- [x] `getAllPendingCallbacks()` in `db-repository.ts` for the polling fallback
+- [x] Updated `callback-service.ts` using atomic claim instead of read-then-mark
+- [x] Updated `POST /api/sessions` route to start monitoring after callback registration
+- [x] Updated `DELETE /api/sessions/[id]` route to stop monitoring on deletion
+- [x] Error logging in `deliverCallbacks()` for visibility
+- [x] Tests for new db-repository functions and callback-monitor logic
 
 ### Definition of Done
-- [ ] `npm run build` succeeds with no type errors
-- [ ] `npm test` passes (existing + new tests)
-- [ ] Callback fires when child session completes, even with no browser tab open
-- [ ] Duplicate callbacks are impossible (atomic claim prevents it)
-- [ ] Subscriptions are cleaned up when callbacks fire or sessions are deleted
+- [x] `npm run build` succeeds with no type errors
+- [x] `npm test` passes (existing + new tests)
+- [x] Callback fires when child session completes, even with no browser tab open
+- [x] Duplicate callbacks are impossible (atomic claim prevents it)
+- [x] Subscriptions are cleaned up when callbacks fire or sessions are deleted
 
 ### Guardrails (Must NOT)
 - Must NOT break existing SSE-based callback firing (it provides faster delivery when browser is connected)
@@ -53,7 +53,7 @@ Ensure child session completion callbacks fire deterministically without dependi
 
 ## TODOs
 
-- [ ] 1. Add `claimPendingCallback()` to `db-repository.ts`
+- [x] 1. Add `claimPendingCallback()` to `db-repository.ts`
   **What**: Add an atomic claim function that updates a callback row from `pending` to `fired` in a single statement, returning `true` only if the row was actually updated (preventing duplicates). Also add `getAllPendingCallbacks()` for the polling fallback.
   **Files**: `src/lib/server/db-repository.ts`
   **Details**:
@@ -79,7 +79,7 @@ Ensure child session completion callbacks fire deterministically without dependi
   - Export both functions
   **Acceptance**: Unit tests pass for `claimPendingCallback` (returns true on first call, false on second) and `getAllPendingCallbacks`
 
-- [ ] 2. Add unit tests for new db-repository functions
+- [x] 2. Add unit tests for new db-repository functions
   **What**: Add test cases for `claimPendingCallback` and `getAllPendingCallbacks` to the existing test file.
   **Files**: `src/lib/server/__tests__/db-repository.test.ts`
   **Details**:
@@ -94,7 +94,7 @@ Ensure child session completion callbacks fire deterministically without dependi
     - `"getAllPendingCallbacks returns empty when none pending"` — verify empty array
   **Acceptance**: `npm test -- --testPathPattern=db-repository` passes with new tests
 
-- [ ] 3. Update `callback-service.ts` to use atomic claim
+- [x] 3. Update `callback-service.ts` to use atomic claim
   **What**: Replace `markCallbackFired()` with `claimPendingCallback()` in `deliverCallbacks()` to eliminate the race condition. Add `console.error` logging to the currently-silent catch blocks.
   **Files**: `src/lib/server/callback-service.ts`
   **Details**:
@@ -146,7 +146,7 @@ Ensure child session completion callbacks fire deterministically without dependi
   - Note: `markCallbackFired` can remain exported from db-repository for backward compatibility, but `deliverCallbacks` no longer uses it directly
   **Acceptance**: Build succeeds, existing callback tests still pass, `deliverCallbacks` now uses atomic claim
 
-- [ ] 4. Create `src/lib/server/callback-monitor.ts` — server-side event subscription manager
+- [x] 4. Create `src/lib/server/callback-monitor.ts` — server-side event subscription manager
   **What**: Create the core monitoring module that subscribes to instance event streams server-side and fires callbacks when child sessions transition from busy→idle.
   **Files**: `src/lib/server/callback-monitor.ts` (new file)
   **Details**:
@@ -226,7 +226,7 @@ Ensure child session completion callbacks fire deterministically without dependi
     - `_resetForTests(): void` (clears all state)
   **Acceptance**: File compiles, exports are correct, follows globalThis singleton pattern
 
-- [ ] 5. Add polling-based safety net to `callback-monitor.ts`
+- [x] 5. Add polling-based safety net to `callback-monitor.ts`
   **What**: Add a fallback polling loop that runs every 10 seconds, checking all pending callbacks and firing any whose sessions have gone idle. This catches cases where the event subscription misses a transition (e.g., subscription started after the session already completed, instance reconnected, etc.).
   **Files**: `src/lib/server/callback-monitor.ts` (continued from task 4)
   **Details**:
@@ -332,7 +332,7 @@ Ensure child session completion callbacks fire deterministically without dependi
     Where `_recoveryComplete` is imported from `./process-manager`.
   **Acceptance**: Polling loop starts after recovery, catches idle sessions that event subscription missed
 
-- [ ] 6. Update `POST /api/sessions` to start monitoring after callback registration
+- [x] 6. Update `POST /api/sessions` to start monitoring after callback registration
   **What**: After inserting the session callback row, call `startMonitoring()` to begin server-side event subscription monitoring for the child session.
   **Files**: `src/app/api/sessions/route.ts`
   **Details**:
@@ -349,7 +349,7 @@ Ensure child session completion callbacks fire deterministically without dependi
   - The call goes after the `insertSessionCallback` try/catch block but inside the `if` guard, so monitoring only starts when a callback is actually registered
   **Acceptance**: Build succeeds, `startMonitoring` is called when `onComplete` is provided
 
-- [ ] 7. Update `DELETE /api/sessions/[id]` to stop monitoring on deletion
+- [x] 7. Update `DELETE /api/sessions/[id]` to stop monitoring on deletion
   **What**: When permanently deleting a session, call `stopMonitoring()` to clean up any active server-side subscriptions for that session.
   **Files**: `src/app/api/sessions/[id]/route.ts`
   **Details**:
@@ -377,7 +377,7 @@ Ensure child session completion callbacks fire deterministically without dependi
     ```
   **Acceptance**: Build succeeds, monitoring is cleaned up on both terminate and permanent delete
 
-- [ ] 8. Ensure callback-monitor module is loaded on server startup
+- [x] 8. Ensure callback-monitor module is loaded on server startup
   **What**: The callback-monitor module must be imported somewhere that runs on server startup so its polling loop initializes. Since it uses the globalThis + init guard pattern, it just needs to be imported once.
   **Files**: `src/lib/server/callback-monitor.ts`, possibly `src/app/api/sessions/route.ts`
   **Details**:
@@ -399,7 +399,7 @@ Ensure child session completion callbacks fire deterministically without dependi
     This is the better approach — it ensures the polling loop starts alongside the health check loop.
   **Acceptance**: Callback polling loop starts after instance recovery completes
 
-- [ ] 9. Add tests for callback-monitor
+- [x] 9. Add tests for callback-monitor
   **What**: Add unit tests for the callback monitor's core logic. Focus on the testable parts: session tracking, subscription management, and cleanup.
   **Files**: `src/lib/server/__tests__/callback-monitor.test.ts` (new file)
   **Details**:
@@ -414,7 +414,7 @@ Ensure child session completion callbacks fire deterministically without dependi
   - Mock `getInstance` and `getClientForInstance` to return test doubles where needed
   **Acceptance**: `npm test -- --testPathPattern=callback-monitor` passes
 
-- [ ] 10. Verify build and all tests pass
+- [x] 10. Verify build and all tests pass
   **What**: Run the full build and test suite to confirm no regressions.
   **Files**: None (verification only)
   **Details**:
@@ -424,13 +424,13 @@ Ensure child session completion callbacks fire deterministically without dependi
   **Acceptance**: `npm run build` exits 0, `npm test` exits 0
 
 ## Verification
-- [ ] `npm run build` succeeds with no type errors
-- [ ] `npm test` passes (all existing + new tests)
-- [ ] No regressions in existing SSE-based callback firing
-- [ ] `claimPendingCallback` returns false on second call (duplicate prevention verified)
-- [ ] `getAllPendingCallbacks` returns correct results
-- [ ] Callback monitor starts polling after recovery completes
-- [ ] Monitor cleans up subscriptions when sessions are deleted or callbacks fire
+- [x] `npm run build` succeeds with no type errors
+- [x] `npm test` passes (all existing + new tests)
+- [x] No regressions in existing SSE-based callback firing
+- [x] `claimPendingCallback` returns false on second call (duplicate prevention verified)
+- [x] `getAllPendingCallbacks` returns correct results
+- [x] Callback monitor starts polling after recovery completes
+- [x] Monitor cleans up subscriptions when sessions are deleted or callbacks fire
 
 ## Architecture Notes
 

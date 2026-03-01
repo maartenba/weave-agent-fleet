@@ -12,6 +12,7 @@ import {
   deleteCallbacksForSession,
   getSessionsForWorkspace,
 } from "@/lib/server/db-repository";
+import { stopMonitoring } from "@/lib/server/callback-monitor";
 import { cleanupWorkspace } from "@/lib/server/workspace-manager";
 
 interface RouteContext {
@@ -181,6 +182,13 @@ export async function DELETE(
   // If session was idle (finished its task), mark as "completed".
   // If session was active (still processing), mark as "stopped" (user-interrupted).
   if (resolvedDbId && !permanent) {
+    // Stop monitoring — terminated session shouldn't fire callbacks
+    try {
+      stopMonitoring(resolvedDbId);
+    } catch {
+      // Non-fatal
+    }
+
     try {
       const now = new Date().toISOString();
       const currentSession = getSession(resolvedDbId);
@@ -213,6 +221,13 @@ export async function DELETE(
   // ── Permanent delete ─────────────────────────────────────────────────────────
   // Step 5: Delete related notifications
   if (resolvedDbId) {
+    // Stop server-side callback monitoring before deleting callback rows
+    try {
+      stopMonitoring(resolvedDbId);
+    } catch {
+      // Non-fatal
+    }
+
     try {
       deleteNotificationsForSession(resolvedDbId);
     } catch (err) {

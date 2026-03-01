@@ -31,6 +31,8 @@ import {
   getPendingCallbacksForSession,
   markCallbackFired,
   deleteCallbacksForSession,
+  claimPendingCallback,
+  getAllPendingCallbacks,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -677,5 +679,84 @@ describe("session callback repository", () => {
     deleteCallbacksForSession(sourceId);
 
     expect(getPendingCallbacksForSession(otherSource).length).toBe(1);
+  });
+
+  // ─── claimPendingCallback ─────────────────────────────────────────────────
+
+  it("ClaimPendingCallbackReturnsTrueOnFirstClaim", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    const result = claimPendingCallback(cbId);
+
+    expect(result).toBe(true);
+  });
+
+  it("ClaimPendingCallbackReturnsFalseOnSecondClaim", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    claimPendingCallback(cbId);
+    const result = claimPendingCallback(cbId);
+
+    expect(result).toBe(false);
+  });
+
+  it("ClaimPendingCallbackExcludesFromPendingList", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cbId = mkCallbackId();
+    insertSessionCallback({ id: cbId, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    claimPendingCallback(cbId);
+
+    expect(getPendingCallbacksForSession(sourceId)).toEqual([]);
+  });
+
+  it("ClaimPendingCallbackDoesNotAffectOtherCallbacks", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cb1 = mkCallbackId();
+    const cb2 = mkCallbackId();
+    insertSessionCallback({ id: cb1, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: cb2, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    claimPendingCallback(cb1);
+
+    const pending = getPendingCallbacksForSession(sourceId);
+    expect(pending.length).toBe(1);
+    expect(pending[0]?.id).toBe(cb2);
+  });
+
+  // ─── getAllPendingCallbacks ────────────────────────────────────────────────
+
+  it("GetAllPendingCallbacksReturnsAllPendingAcrossSessions", () => {
+    const { wsId, instId, sourceId, targetId } = setup();
+    const otherSource = mkSessionId();
+    insertSession({ id: otherSource, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: mkCallbackId(), source_session_id: otherSource, target_session_id: targetId, target_instance_id: instId });
+
+    const all = getAllPendingCallbacks();
+    expect(all.length).toBe(2);
+  });
+
+  it("GetAllPendingCallbacksExcludesFiredCallbacks", () => {
+    const { instId, sourceId, targetId } = setup();
+    const cb1 = mkCallbackId();
+    const cb2 = mkCallbackId();
+    insertSessionCallback({ id: cb1, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+    insertSessionCallback({ id: cb2, source_session_id: sourceId, target_session_id: targetId, target_instance_id: instId });
+
+    markCallbackFired(cb1);
+
+    const all = getAllPendingCallbacks();
+    expect(all.length).toBe(1);
+    expect(all[0]?.id).toBe(cb2);
+  });
+
+  it("GetAllPendingCallbacksReturnsEmptyWhenNonePending", () => {
+    expect(getAllPendingCallbacks()).toEqual([]);
   });
 });

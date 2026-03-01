@@ -7,7 +7,7 @@
 
 import {
   getPendingCallbacksForSession,
-  markCallbackFired,
+  claimPendingCallback,
   getSession,
   getSessionByOpencodeId,
   type DbSession,
@@ -40,39 +40,33 @@ async function deliverCallbacks(
     // 3. Fire each callback
     for (const callback of callbacks) {
       try {
+        // Atomically claim this callback — prevents duplicate delivery
+        if (!claimPendingCallback(callback.id)) continue;
+
         // a. Get target instance (conductor)
         const targetInstance = getInstance(callback.target_instance_id);
-        if (!targetInstance || targetInstance.status === "dead") {
-          // Avoid infinite retries — mark fired even if target is gone
-          markCallbackFired(callback.id);
-          continue;
-        }
+        if (!targetInstance || targetInstance.status === "dead") continue;
 
         // b. Get target session DB record (for opencode_session_id)
         const targetDbSession = getSession(callback.target_session_id);
-        if (!targetDbSession) {
-          markCallbackFired(callback.id);
-          continue;
-        }
+        if (!targetDbSession) continue;
 
         // c. Build the message (may be async for diff lookups)
         const callbackMessage = await buildMessage(dbSession, callback);
 
-        // d. Mark fired BEFORE sending — prevents duplicate prompts if DB write
-        //    succeeds but the subsequent prompt delivery fails
-        markCallbackFired(callback.id);
-
-        // e. Send prompt to conductor
+        // d. Send prompt to conductor
         await targetInstance.client.session.promptAsync({
           sessionID: targetDbSession.opencode_session_id,
           parts: [{ type: "text", text: callbackMessage }],
         });
-      } catch {
+      } catch (err) {
         // Individual callback failure — continue with remaining callbacks
+        console.error(`[callback-service] Failed to deliver callback ${callback.id}:`, err);
       }
     }
-  } catch {
+  } catch (err) {
     // Top-level guard — never throws
+    console.error("[callback-service] deliverCallbacks failed:", err);
   }
 }
 

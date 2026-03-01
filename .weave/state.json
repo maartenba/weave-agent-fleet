@@ -1,10 +1,8 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/fleet-orchestration-callbacks.md",
-  "started_at": "2026-03-01T00:51:00.864Z",
-  "session_ids": [
-    "ses_35966bec5ffecxTsZFFL6fwOB4"
-  ],
-  "plan_name": "fleet-orchestration-callbacks",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/deterministic-callbacks.md",
+  "started_at": "2026-03-01T10:00:00.000Z",
+  "session_ids": [],
+  "plan_name": "deterministic-callbacks",
   "agent": "tapestry",
-  "start_sha": "76c198907ac8d4f785bd676abb2a292228d8a618"
+  "start_sha": "8d29718810b71879a3b51739fcfe757c3d263505"
 }

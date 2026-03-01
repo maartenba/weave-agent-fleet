@@ -569,6 +569,8 @@ export function startHealthCheckLoop(): void {
 // Start health checks after recovery completes (guarded by startHealthCheckLoop's idempotency)
 _recoveryComplete.then(() => {
   startHealthCheckLoop();
+  // Ensure callback monitor is loaded — its self-initializing code starts the polling loop
+  import("./callback-monitor").catch(() => {/* non-fatal */});
 }).catch(() => {/* non-fatal */});
 
 // Clean up all instances when the Node.js process exits.
