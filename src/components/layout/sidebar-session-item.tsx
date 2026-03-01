@@ -42,7 +42,7 @@ export function SidebarSessionItem({ item, isActive, isChild = false }: SidebarS
     >
       {isChild && <span className="text-muted-foreground/50 text-[10px] shrink-0">↳</span>}
       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
-      <span className="truncate max-w-[120px]">{title}</span>
+      <span className="truncate">{title}</span>
     </Link>
   );
 }

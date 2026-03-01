@@ -30,7 +30,13 @@ import { useNotifications } from "@/contexts/notifications-context";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
-import { useSidebar } from "@/contexts/sidebar-context";
+import {
+  useSidebar,
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+} from "@/contexts/sidebar-context";
+import { useSidebarResize } from "@/hooks/use-sidebar-resize";
 import { SidebarWorkspaceItem } from "@/components/layout/sidebar-workspace-item";
 
 const FLEET_EXPANDED_KEY = "weave:sidebar:fleet-expanded";
@@ -40,13 +46,49 @@ export function Sidebar() {
   const { unreadCount } = useNotifications();
   const { sessions, error } = useSessionsContext();
   const workspaces = useWorkspaces(sessions);
-  const { collapsed, toggleSidebar } = useSidebar();
+  const {
+    collapsed,
+    toggleSidebar,
+    width,
+    setWidth,
+    isResizing,
+    setIsResizing,
+  } = useSidebar();
   const [fleetExpanded, setFleetExpanded] = usePersistedState<boolean>(
     FLEET_EXPANDED_KEY,
     true
   );
 
   const treeRef = useRef<HTMLDivElement>(null);
+
+  const handleResizeStart = useCallback(() => {
+    setIsResizing(true);
+  }, [setIsResizing]);
+
+  const handleResize = useCallback(
+    (newWidth: number) => {
+      setWidth(newWidth);
+    },
+    [setWidth]
+  );
+
+  const handleResizeEnd = useCallback(
+    (finalWidth: number) => {
+      setWidth(finalWidth);
+      setIsResizing(false);
+    },
+    [setWidth, setIsResizing]
+  );
+
+  const { handlePointerDown, handlePointerMove, handlePointerUp } =
+    useSidebarResize({
+      minWidth: SIDEBAR_MIN_WIDTH,
+      maxWidth: SIDEBAR_MAX_WIDTH,
+      onResize: handleResize,
+      onResizeEnd: handleResizeEnd,
+      onResizeStart: handleResizeStart,
+      disabled: collapsed,
+    });
 
   // Keyboard navigation handler for the tree
   const handleTreeKeyDown = useCallback(
@@ -136,12 +178,15 @@ export function Sidebar() {
 
   const isFleetActive = pathname === "/" || pathname.startsWith("/?");
 
+  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : width;
+
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r border-sidebar-border bg-sidebar overflow-hidden transition-all duration-200 ease-in-out",
-        collapsed ? "w-16" : "w-56"
+        "relative flex h-screen flex-col border-r border-sidebar-border bg-sidebar overflow-hidden",
+        !isResizing && "transition-all duration-200 ease-in-out"
       )}
+      style={{ width: sidebarWidth }}
     >
       {/* Weave branding */}
       <Link
@@ -417,6 +462,30 @@ export function Sidebar() {
           </Tooltip>
         )}
       </div>
+
+      {/* Resize handle */}
+      {!collapsed && (
+        <div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onDoubleClick={toggleSidebar}
+          className="group absolute top-0 right-0 h-full w-1.5 cursor-col-resize z-10"
+          aria-label="Resize sidebar"
+          role="separator"
+          aria-orientation="vertical"
+        >
+          {/* Visual indicator line */}
+          <div
+            className={cn(
+              "absolute top-0 right-0 h-full w-0.5 transition-opacity duration-150",
+              isResizing
+                ? "bg-primary opacity-100"
+                : "bg-primary/40 opacity-0 group-hover:opacity-100"
+            )}
+          />
+        </div>
+      )}
     </aside>
   );
 }
