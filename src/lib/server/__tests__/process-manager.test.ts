@@ -4,9 +4,9 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { resolve } from "path";
-import { allocatePort, releasePort, _resetForTests, validateDirectory } from "@/lib/server/process-manager";
+import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots } from "@/lib/server/process-manager";
 import { _resetDbForTests } from "@/lib/server/database";
-import { getInstance as getDbInstance, getRunningInstances } from "@/lib/server/db-repository";
+import { getInstance as getDbInstance, getRunningInstances, insertWorkspaceRoot } from "@/lib/server/db-repository";
 
 // Use an isolated temp DB for all process-manager tests
 beforeAll(() => {
@@ -232,5 +232,66 @@ describe("DB integration — repository accessible", () => {
 
   it("GetDbInstanceReturnsUndefinedForUnknownId", () => {
     expect(getDbInstance("nonexistent-id")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getEnvRoots
+// ---------------------------------------------------------------------------
+
+describe("getEnvRoots", () => {
+  afterEach(() => {
+    delete process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
+  });
+
+  it("ReturnsOnlyEnvVarRoots", () => {
+    process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp:/var";
+    const roots = getEnvRoots();
+    expect(roots).toEqual([resolve("/tmp"), resolve("/var")]);
+  });
+
+  it("ReturnsHomedirWhenEnvVarIsUnset", () => {
+    const roots = getEnvRoots();
+    expect(roots).toEqual([resolve(homedir())]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAllowedRoots — merging env + DB roots
+// ---------------------------------------------------------------------------
+
+describe("getAllowedRoots with DB roots", () => {
+  beforeEach(() => {
+    _resetDbForTests();
+    process.env.WEAVE_DB_PATH = join(tmpdir(), `pm-roots-test-${randomUUID()}.db`);
+  });
+
+  afterEach(() => {
+    delete process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
+    _resetDbForTests();
+    delete process.env.WEAVE_DB_PATH;
+  });
+
+  it("ReturnsEnvRootsWhenNoDbRootsExist", () => {
+    process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
+    const roots = getAllowedRoots();
+    expect(roots).toEqual([resolve("/tmp")]);
+  });
+
+  it("MergesEnvAndDbRoots", () => {
+    process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
+    insertWorkspaceRoot({ id: randomUUID(), path: "/var" });
+    const roots = getAllowedRoots();
+    expect(roots).toContain(resolve("/tmp"));
+    expect(roots).toContain(resolve("/var"));
+    expect(roots.length).toBe(2);
+  });
+
+  it("DeduplicatesByResolvedPath", () => {
+    process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
+    insertWorkspaceRoot({ id: randomUUID(), path: resolve("/tmp") });
+    const roots = getAllowedRoots();
+    expect(roots.length).toBe(1);
+    expect(roots[0]).toBe(resolve("/tmp"));
   });
 });

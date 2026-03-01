@@ -183,3 +183,33 @@ export interface FileDiffItem {
   deletions: number;
   status: "added" | "deleted" | "modified";
 }
+
+// ─── Workspace Roots Types ──────────────────────────────────────────────────
+
+/** A single workspace root returned by GET /api/workspace-roots */
+export interface WorkspaceRootItem {
+  /** DB id, or null for env-var roots */
+  id: string | null;
+  /** Absolute path to the workspace root */
+  path: string;
+  /** Whether this root comes from the env var ("env") or was user-added ("user") */
+  source: "env" | "user";
+  /** Whether the path currently exists on the filesystem */
+  exists: boolean;
+}
+
+/** Response shape for GET /api/workspace-roots */
+export interface WorkspaceRootsResponse {
+  roots: WorkspaceRootItem[];
+}
+
+/** Request body for POST /api/workspace-roots */
+export interface AddWorkspaceRootRequest {
+  path: string;
+}
+
+/** Response shape for POST /api/workspace-roots */
+export interface AddWorkspaceRootResponse {
+  id: string;
+  path: string;
+}

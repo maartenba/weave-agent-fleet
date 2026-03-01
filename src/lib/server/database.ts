@@ -99,6 +99,12 @@ export function getDb(): Database.Database {
       fired_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_callbacks_source ON session_callbacks(source_session_id, status);
+
+    CREATE TABLE IF NOT EXISTS workspace_roots (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrations — wrapped in try/catch since columns may already exist

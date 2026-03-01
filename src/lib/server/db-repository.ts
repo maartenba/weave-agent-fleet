@@ -404,3 +404,38 @@ export function deleteCallbacksForSession(sessionId: string): number {
     .run(sessionId, sessionId);
   return result.changes;
 }
+
+// ─── Workspace Roots ──────────────────────────────────────────────────────────
+
+export interface DbWorkspaceRoot {
+  id: string;
+  path: string;
+  created_at: string;
+}
+
+export function insertWorkspaceRoot(root: { id: string; path: string }): void {
+  getDb()
+    .prepare(
+      `INSERT INTO workspace_roots (id, path) VALUES (@id, @path)`
+    )
+    .run({ id: root.id, path: root.path });
+}
+
+export function listWorkspaceRoots(): DbWorkspaceRoot[] {
+  return getDb()
+    .prepare("SELECT * FROM workspace_roots ORDER BY created_at ASC")
+    .all() as DbWorkspaceRoot[];
+}
+
+export function deleteWorkspaceRoot(id: string): boolean {
+  const result = getDb()
+    .prepare("DELETE FROM workspace_roots WHERE id = ?")
+    .run(id);
+  return result.changes > 0;
+}
+
+export function getWorkspaceRootByPath(path: string): DbWorkspaceRoot | undefined {
+  return getDb()
+    .prepare("SELECT * FROM workspace_roots WHERE path = @path")
+    .get({ path }) as DbWorkspaceRoot | undefined;
+}

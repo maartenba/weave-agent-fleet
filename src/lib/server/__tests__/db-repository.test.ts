@@ -33,6 +33,10 @@ import {
   deleteCallbacksForSession,
   claimPendingCallback,
   getAllPendingCallbacks,
+  insertWorkspaceRoot,
+  listWorkspaceRoots,
+  deleteWorkspaceRoot,
+  getWorkspaceRootByPath,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -758,5 +762,68 @@ describe("session callback repository", () => {
 
   it("GetAllPendingCallbacksReturnsEmptyWhenNonePending", () => {
     expect(getAllPendingCallbacks()).toEqual([]);
+  });
+});
+
+// ─── Workspace Roots ──────────────────────────────────────────────────────────
+
+describe("workspace root repository", () => {
+  it("InsertAndRetrieveWorkspaceRoot", () => {
+    const id = randomUUID();
+    insertWorkspaceRoot({ id, path: "/home/user/projects" });
+    const roots = listWorkspaceRoots();
+    expect(roots.length).toBe(1);
+    expect(roots[0]?.id).toBe(id);
+    expect(roots[0]?.path).toBe("/home/user/projects");
+    expect(roots[0]?.created_at).toBeDefined();
+  });
+
+  it("ListWorkspaceRootsReturnsAllInserted", () => {
+    insertWorkspaceRoot({ id: randomUUID(), path: "/projects/a" });
+    insertWorkspaceRoot({ id: randomUUID(), path: "/projects/b" });
+    insertWorkspaceRoot({ id: randomUUID(), path: "/projects/c" });
+    const roots = listWorkspaceRoots();
+    expect(roots.length).toBe(3);
+    const paths = roots.map((r) => r.path);
+    expect(paths).toContain("/projects/a");
+    expect(paths).toContain("/projects/b");
+    expect(paths).toContain("/projects/c");
+  });
+
+  it("ListWorkspaceRootsReturnsEmptyWhenNone", () => {
+    expect(listWorkspaceRoots()).toEqual([]);
+  });
+
+  it("DeleteWorkspaceRootReturnsTrueWhenDeleted", () => {
+    const id = randomUUID();
+    insertWorkspaceRoot({ id, path: "/home/user/work" });
+    const result = deleteWorkspaceRoot(id);
+    expect(result).toBe(true);
+    expect(listWorkspaceRoots()).toEqual([]);
+  });
+
+  it("DeleteWorkspaceRootReturnsFalseForNonexistent", () => {
+    const result = deleteWorkspaceRoot("nonexistent-id");
+    expect(result).toBe(false);
+  });
+
+  it("GetWorkspaceRootByPathFindsExistingRoot", () => {
+    const id = randomUUID();
+    insertWorkspaceRoot({ id, path: "/opt/code" });
+    const root = getWorkspaceRootByPath("/opt/code");
+    expect(root).toBeDefined();
+    expect(root?.id).toBe(id);
+    expect(root?.path).toBe("/opt/code");
+  });
+
+  it("GetWorkspaceRootByPathReturnsUndefinedForMissing", () => {
+    expect(getWorkspaceRootByPath("/nonexistent")).toBeUndefined();
+  });
+
+  it("InsertDuplicatePathThrowsUniqueConstraint", () => {
+    insertWorkspaceRoot({ id: randomUUID(), path: "/unique/path" });
+    expect(() => {
+      insertWorkspaceRoot({ id: randomUUID(), path: "/unique/path" });
+    }).toThrow();
   });
 });

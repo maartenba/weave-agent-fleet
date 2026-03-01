@@ -52,6 +52,14 @@ describe("database module", () => {
     expect(result?.name).toBe("sessions");
   });
 
+  it("CreatesWorkspaceRootsTable", () => {
+    const db = getDb();
+    const result = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_roots'")
+      .get() as { name: string } | undefined;
+    expect(result?.name).toBe("workspace_roots");
+  });
+
   it("EnablesWalMode", () => {
     const db = getDb();
     const result = db.pragma("journal_mode") as { journal_mode: string }[];

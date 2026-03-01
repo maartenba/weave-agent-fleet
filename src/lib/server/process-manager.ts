@@ -24,6 +24,7 @@ import {
   getRunningInstances,
   getSessionsForInstance,
   updateSessionStatus,
+  listWorkspaceRoots,
 } from "./db-repository";
 import {
   createSessionDisconnectedNotification,
@@ -206,17 +207,44 @@ export const _recoveryComplete: Promise<void> = _g.__weaveRecoveryPromise!;
 let _cleanupRun: boolean = (_g.__weaveCleanupRun ??= false);
 
 /**
- * Allowed workspace base directories. Only directories under these roots can be
- * used to spawn OpenCode instances. Configurable via ORCHESTRATOR_WORKSPACE_ROOTS
- * env var (colon-separated). Falls back to the user's home directory.
+ * Returns workspace roots defined by the ORCHESTRATOR_WORKSPACE_ROOTS env var
+ * (or the user's home directory as default). These are "system" roots that
+ * cannot be removed via the UI.
  */
-export function getAllowedRoots(): string[] {
+export function getEnvRoots(): string[] {
   const envRoots = process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
   if (envRoots) {
     const separator = process.platform === "win32" ? ";" : ":";
     return envRoots.split(separator).map((r) => resolve(r.trim())).filter(Boolean);
   }
   return [resolve(homedir())];
+}
+
+/**
+ * Allowed workspace base directories. Returns the union of env-var roots and
+ * user-added roots (persisted in SQLite), deduplicated by resolved path.
+ * Only directories under these roots can be used to spawn OpenCode instances.
+ */
+export function getAllowedRoots(): string[] {
+  const envRoots = getEnvRoots();
+
+  let dbRoots: string[] = [];
+  try {
+    dbRoots = listWorkspaceRoots().map((r) => r.path);
+  } catch {
+    // DB not available — skip
+  }
+
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const root of [...envRoots, ...dbRoots]) {
+    const resolved = resolve(root);
+    if (!seen.has(resolved)) {
+      seen.add(resolved);
+      merged.push(resolved);
+    }
+  }
+  return merged;
 }
 
 /**
