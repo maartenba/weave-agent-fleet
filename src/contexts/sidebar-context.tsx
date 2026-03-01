@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { usePersistedState } from "@/hooks/use-persisted-state";
-import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 
 const SIDEBAR_COLLAPSED_KEY = "weave:sidebar:collapsed";
 const SIDEBAR_WIDTH_KEY = "weave:sidebar:width";
@@ -50,9 +49,6 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
   const toggleSidebar = useCallback(() => {
     setCollapsed((prev) => !prev);
   }, [setCollapsed]);
-
-  // Global keyboard shortcut: Cmd+B on macOS, Ctrl+B elsewhere
-  useKeyboardShortcut("b", toggleSidebar, { platformModifier: true });
 
   return (
     <SidebarContext.Provider

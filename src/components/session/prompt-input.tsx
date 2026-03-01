@@ -17,6 +17,7 @@ interface PromptInputProps {
   agents?: AutocompleteAgent[];
   selectedAgent?: string | null;
   onAgentChange?: (agent: string | null) => void;
+  onFocusRequest?: (focus: () => void) => void;
 }
 
 export function PromptInput({
@@ -27,6 +28,7 @@ export function PromptInput({
   agents = [],
   selectedAgent = null,
   onAgentChange,
+  onFocusRequest,
 }: PromptInputProps) {
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -41,6 +43,11 @@ export function PromptInput({
       inputRef.current?.focus();
     }
   }, [isDisabled]);
+
+  // Expose a focus callback via onFocusRequest
+  useEffect(() => {
+    onFocusRequest?.(() => inputRef.current?.focus());
+  }, [onFocusRequest]);
 
   const autocomplete = useAutocomplete({
     value,
