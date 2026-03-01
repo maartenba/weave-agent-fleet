@@ -331,6 +331,20 @@ export function deleteNotificationsForSession(sessionId: string): number {
   return result.changes;
 }
 
+export function deleteAllNotifications(): number {
+  const result = getDb()
+    .prepare("DELETE FROM notifications")
+    .run();
+  return result.changes;
+}
+
+export function deleteOldNotifications(olderThan: string): number {
+  const result = getDb()
+    .prepare("DELETE FROM notifications WHERE created_at < ?")
+    .run(olderThan);
+  return result.changes;
+}
+
 // ─── Session Callbacks ────────────────────────────────────────────────────────
 
 export interface DbSessionCallback {

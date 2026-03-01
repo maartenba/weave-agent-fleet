@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotificationsWithBrowser } from "@/hooks/use-notifications-with-browser";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
@@ -37,7 +37,7 @@ const FLEET_EXPANDED_KEY = "weave:sidebar:fleet-expanded";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { unreadCount } = useNotifications();
+  const { unreadCount } = useNotificationsWithBrowser();
   const { sessions, error } = useSessionsContext();
   const workspaces = useWorkspaces(sessions);
   const { collapsed, toggleSidebar } = useSidebar();

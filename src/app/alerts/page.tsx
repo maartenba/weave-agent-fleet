@@ -14,7 +14,7 @@ import {
   Bell,
   WifiOff,
 } from "lucide-react";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotificationsWithBrowser } from "@/hooks/use-notifications-with-browser";
 
 function getNotificationIcon(type: string) {
   switch (type) {
@@ -67,7 +67,8 @@ export default function AlertsPage() {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
-  } = useNotifications();
+    clearAll,
+  } = useNotificationsWithBrowser();
 
   useEffect(() => {
     fetchNotifications(50);
@@ -90,6 +91,11 @@ export default function AlertsPage() {
     await fetchNotifications(50);
   }, [markAllAsRead, fetchNotifications]);
 
+  const handleClearAll = useCallback(async () => {
+    await clearAll();
+    await fetchNotifications(50);
+  }, [clearAll, fetchNotifications]);
+
   const unread = notifications.filter((n) => n.read === 0);
   const read = notifications.filter((n) => n.read !== 0);
 
@@ -99,10 +105,19 @@ export default function AlertsPage() {
         title="Alerts"
         subtitle={`${unread.length} unread notifications`}
         actions={
-          unread.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
-              Mark all as read
-            </Button>
+          (unread.length > 0 || notifications.length > 0) ? (
+            <div className="flex items-center gap-2">
+              {unread.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+                  Mark all as read
+                </Button>
+              )}
+              {notifications.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleClearAll}>
+                  Clear all
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       />

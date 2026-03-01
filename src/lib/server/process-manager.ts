@@ -599,6 +599,8 @@ _recoveryComplete.then(() => {
   startHealthCheckLoop();
   // Ensure callback monitor is loaded — its self-initializing code starts the polling loop
   import("./callback-monitor").catch(() => {/* non-fatal */});
+  // Start notification cleanup (TTL-based auto-deletion)
+  import("./notification-cleanup").then((m) => m.startNotificationCleanup()).catch(() => {/* non-fatal */});
 }).catch(() => {/* non-fatal */});
 
 // Clean up all instances when the Node.js process exits.

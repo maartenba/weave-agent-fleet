@@ -6,6 +6,7 @@ import { getSessionByOpencodeId, updateSessionStatus } from "@/lib/server/db-rep
 import {
   createSessionCompletedNotification,
   createSessionErrorNotification,
+  createInputRequiredNotification,
 } from "@/lib/server/notification-service";
 import {
   fireSessionCallbacks,
@@ -156,6 +157,15 @@ export async function GET(
                   dbSession.title
                 );
                 void fireSessionErrorCallbacks(dbSession.opencode_session_id, instanceId);
+              }
+            } else if (type.startsWith("permission.")) {
+              const dbSession = getSessionByOpencodeId(sessionId);
+              if (dbSession) {
+                createInputRequiredNotification(
+                  dbSession.opencode_session_id,
+                  instanceId,
+                  dbSession.title
+                );
               }
             }
           } catch {

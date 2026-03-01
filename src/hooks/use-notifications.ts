@@ -12,9 +12,11 @@ export interface UseNotificationsResult {
   fetchNotifications: (limit?: number) => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  clearAll: () => Promise<void>;
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
+const SSE_RECONNECT_DELAY_MS = 5_000;
 
 export function useNotifications(
   pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS
@@ -23,15 +25,15 @@ export function useNotifications(
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const isMounted = useRef(true);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUnreadCount = useCallback(async () => {
     try {
       const response = await fetch("/api/notifications/unread-count");
       if (!response.ok) return;
       const data = (await response.json()) as { count: number };
-      if (isMounted.current) {
-        setUnreadCount(data.count);
-      }
+      if (isMounted.current) setUnreadCount(data.count);
     } catch {
       // Non-fatal — badge stays at last known value
     }
@@ -89,15 +91,83 @@ export function useNotifications(
     }
   }, []);
 
+  const clearAll = useCallback(async () => {
+    try {
+      await fetch("/api/notifications", { method: "DELETE" });
+      if (isMounted.current) {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
+    } catch {
+      // Non-fatal
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(fetchUnreadCount, pollIntervalMs);
+  }, [fetchUnreadCount, pollIntervalMs]);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  const connectSSE = useCallback(() => {
+    if (eventSourceRef.current) return;
+    const es = new EventSource("/api/notifications/stream");
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      stopPolling(); // SSE connected — stop polling
+    };
+
+    es.onmessage = (e: MessageEvent<string>) => {
+      if (!isMounted.current) return;
+      try {
+        const data = JSON.parse(e.data) as {
+          type: string;
+          notification: DbNotification;
+        };
+        if (data.type === "notification" && data.notification) {
+          setUnreadCount((prev) => prev + 1);
+          setNotifications((prev) =>
+            [data.notification, ...prev].slice(0, 50)
+          );
+        }
+      } catch {
+        /* ignore parse errors */
+      }
+    };
+
+    es.onerror = () => {
+      if (!isMounted.current) return;
+      es.close();
+      eventSourceRef.current = null;
+      // Fallback to polling
+      fetchUnreadCount();
+      startPolling();
+      // Attempt SSE reconnect after delay
+      setTimeout(() => {
+        if (isMounted.current && !eventSourceRef.current) connectSSE();
+      }, SSE_RECONNECT_DELAY_MS);
+    };
+  }, [stopPolling, startPolling, fetchUnreadCount]);
+
   useEffect(() => {
     isMounted.current = true;
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, pollIntervalMs);
+    fetchUnreadCount(); // Initial fetch
+    connectSSE(); // Try SSE first
+    startPolling(); // Start polling as initial fallback (SSE onopen will stop it)
     return () => {
       isMounted.current = false;
-      clearInterval(interval);
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      stopPolling();
     };
-  }, [fetchUnreadCount, pollIntervalMs]);
+  }, [fetchUnreadCount, connectSSE, startPolling, stopPolling]);
 
   return {
     unreadCount,
@@ -106,5 +176,6 @@ export function useNotifications(
     fetchNotifications,
     markAsRead,
     markAllAsRead,
+    clearAll,
   };
 }

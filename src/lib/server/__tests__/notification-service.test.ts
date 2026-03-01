@@ -7,6 +7,7 @@ import {
   createSessionCompletedNotification,
   createSessionErrorNotification,
   createSessionDisconnectedNotification,
+  createInputRequiredNotification,
 } from "@/lib/server/notification-service";
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -84,5 +85,26 @@ describe("notification service", () => {
     createSessionCompletedNotification(sessionId, instanceId, "My Session");
     createSessionErrorNotification(sessionId, instanceId, "My Session");
     expect(countUnreadNotifications()).toBe(2);
+  });
+
+  it("CreateInputRequiredNotificationInsertsCorrectRecord", () => {
+    const sessionId = `sess-${randomUUID()}`;
+    const instanceId = `inst-${randomUUID()}`;
+    createInputRequiredNotification(sessionId, instanceId, "Waiting Session");
+    const notifications = listNotifications();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].type).toBe("input_required");
+    expect(notifications[0].message).toBe("Waiting Session is waiting for input");
+    expect(notifications[0].session_id).toBe(sessionId);
+    expect(notifications[0].instance_id).toBe(instanceId);
+    expect(notifications[0].read).toBe(0);
+  });
+
+  it("InputRequiredDeduplicationWithin60s", () => {
+    const sessionId = `sess-${randomUUID()}`;
+    const instanceId = `inst-${randomUUID()}`;
+    createInputRequiredNotification(sessionId, instanceId, "Waiting Session");
+    createInputRequiredNotification(sessionId, instanceId, "Waiting Session");
+    expect(countUnreadNotifications()).toBe(1);
   });
 });

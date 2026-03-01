@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotificationsWithBrowser } from "@/hooks/use-notifications-with-browser";
 import type { DbNotification } from "@/lib/server/db-repository";
 
 function getNotificationIcon(type: string) {
@@ -46,7 +46,7 @@ function timeSince(dateString: string): string {
 export function NotificationBell() {
   const router = useRouter();
   const { unreadCount, notifications, fetchNotifications, markAsRead, markAllAsRead } =
-    useNotifications();
+    useNotificationsWithBrowser();
 
   function handleOpenChange(open: boolean) {
     if (open) {

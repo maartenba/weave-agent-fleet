@@ -10,6 +10,7 @@
 
 import { randomUUID } from "crypto";
 import { insertNotification, listNotifications } from "./db-repository";
+import { emitNotification } from "./notification-emitter";
 
 const DEDUP_WINDOW_SECONDS = 60;
 
@@ -38,12 +39,24 @@ export function createSessionCompletedNotification(
 ): void {
   try {
     if (isDuplicate("session_completed", sessionId)) return;
+    const id = randomUUID();
+    const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
     insertNotification({
-      id: randomUUID(),
+      id,
       type: "session_completed",
       session_id: sessionId,
       instance_id: instanceId,
       message: `${sessionTitle} finished`,
+    });
+    emitNotification({
+      id,
+      type: "session_completed",
+      session_id: sessionId,
+      instance_id: instanceId,
+      pipeline_id: null,
+      message: `${sessionTitle} finished`,
+      read: 0,
+      created_at: now,
     });
   } catch {
     // Best-effort — never throw
@@ -57,12 +70,24 @@ export function createSessionErrorNotification(
 ): void {
   try {
     if (isDuplicate("session_error", sessionId)) return;
+    const id = randomUUID();
+    const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
     insertNotification({
-      id: randomUUID(),
+      id,
       type: "session_error",
       session_id: sessionId,
       instance_id: instanceId,
       message: `${sessionTitle} encountered an error`,
+    });
+    emitNotification({
+      id,
+      type: "session_error",
+      session_id: sessionId,
+      instance_id: instanceId,
+      pipeline_id: null,
+      message: `${sessionTitle} encountered an error`,
+      read: 0,
+      created_at: now,
     });
   } catch {
     // Best-effort — never throw
@@ -76,12 +101,55 @@ export function createSessionDisconnectedNotification(
 ): void {
   try {
     if (isDuplicate("session_disconnected", sessionId)) return;
+    const id = randomUUID();
+    const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
     insertNotification({
-      id: randomUUID(),
+      id,
       type: "session_disconnected",
       session_id: sessionId,
       instance_id: instanceId,
       message: `${sessionTitle} lost connection`,
+    });
+    emitNotification({
+      id,
+      type: "session_disconnected",
+      session_id: sessionId,
+      instance_id: instanceId,
+      pipeline_id: null,
+      message: `${sessionTitle} lost connection`,
+      read: 0,
+      created_at: now,
+    });
+  } catch {
+    // Best-effort — never throw
+  }
+}
+
+export function createInputRequiredNotification(
+  sessionId: string,
+  instanceId: string,
+  sessionTitle: string
+): void {
+  try {
+    if (isDuplicate("input_required", sessionId)) return;
+    const id = randomUUID();
+    const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+    insertNotification({
+      id,
+      type: "input_required",
+      session_id: sessionId,
+      instance_id: instanceId,
+      message: `${sessionTitle} is waiting for input`,
+    });
+    emitNotification({
+      id,
+      type: "input_required",
+      session_id: sessionId,
+      instance_id: instanceId,
+      pipeline_id: null,
+      message: `${sessionTitle} is waiting for input`,
+      read: 0,
+      created_at: now,
     });
   } catch {
     // Best-effort — never throw
