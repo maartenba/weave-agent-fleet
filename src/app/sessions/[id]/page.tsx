@@ -9,12 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { useSendPrompt } from "@/hooks/use-send-prompt";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
 import { useDeleteSession } from "@/hooks/use-delete-session";
@@ -23,6 +23,8 @@ import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-se
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
+import { useCommandRegistry } from "@/contexts/command-registry-context";
+import { useKeybindings } from "@/contexts/keybindings-context";
 
 interface SessionMetadata {
   workspaceId: string | null;
@@ -58,6 +60,28 @@ export default function SessionDetailPage() {
   const [stopConfirm, setStopConfirm] = useState(false);
   const [isResumable, setIsResumable] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const promptFocusRef = useRef<(() => void) | null>(null);
+  const { registerCommand, unregisterCommand } = useCommandRegistry();
+  const { bindings } = useKeybindings();
+
+  // Register "Focus Prompt Input" command for this session page
+  useEffect(() => {
+    registerCommand({
+      id: "focus-prompt",
+      label: "Focus Prompt Input",
+      icon: MessageSquare,
+      category: "Session",
+      paletteHotkey: bindings["focus-prompt"]?.paletteHotkey ?? undefined,
+      keywords: ["message", "chat", "type", "input"],
+      action: () => {
+        promptFocusRef.current?.();
+      },
+    });
+    return () => {
+      unregisterCommand("focus-prompt");
+    };
+  }, [registerCommand, unregisterCommand, bindings]);
 
   const [metadata, setMetadata] = useState<SessionMetadata>({
     workspaceId: null,
@@ -317,6 +341,9 @@ export default function SessionDetailPage() {
                 agents={agents}
                 selectedAgent={selectedAgent}
                 onAgentChange={setSelectedAgent}
+                onFocusRequest={(focus) => {
+                  promptFocusRef.current = focus;
+                }}
               />
             </TabsContent>
             <TabsContent value="changes" className="flex-1 overflow-hidden">

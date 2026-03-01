@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useCreateSession } from "@/hooks/use-create-session";
+import type { ReactNode } from "react";
 
 type IsolationStrategy = "existing" | "worktree" | "clone";
 
@@ -42,17 +43,25 @@ const STRATEGY_DESCRIPTIONS: Record<IsolationStrategy, string> = {
 };
 
 interface NewSessionDialogProps {
-  trigger: React.ReactNode;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
+export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange }: NewSessionDialogProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [directory, setDirectory] = useState("");
   const [title, setTitle] = useState("");
   const [isolationStrategy, setIsolationStrategy] = useState<IsolationStrategy>("existing");
   const [branch, setBranch] = useState("");
   const { createSession, isLoading, error } = useCreateSession();
+
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +88,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      {trigger && <SheetTrigger asChild>{trigger}</SheetTrigger>}
       <SheetContent side="right" className="w-full max-w-sm">
         <SheetHeader>
           <SheetTitle>New Session</SheetTitle>
