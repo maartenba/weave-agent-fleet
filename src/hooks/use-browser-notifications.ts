@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useState } from "react";
 import { usePersistedState } from "./use-persisted-state";
 import type { DbNotification } from "@/lib/server/db-repository";
 
@@ -29,26 +29,27 @@ function getNotificationTitle(type: string): string {
   }
 }
 
+function getInitialPermission(): NotificationPermissionState {
+  if (typeof window !== "undefined" && "Notification" in window) {
+    return Notification.permission as NotificationPermissionState;
+  }
+  return "default";
+}
+
 export function useBrowserNotifications(): UseBrowserNotificationsResult {
   const [isEnabled, setEnabled] = usePersistedState(
     "weave:notifications:browser-enabled",
     false
   );
-  const permissionRef = useRef<NotificationPermissionState>("default");
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      permissionRef.current =
-        Notification.permission as NotificationPermissionState;
-    }
-  }, []);
+  const [permission, setPermission] =
+    useState<NotificationPermissionState>(getInitialPermission);
 
   const requestPermission =
     useCallback(async (): Promise<NotificationPermissionState> => {
       if (typeof window === "undefined" || !("Notification" in window))
         return "denied";
       const result = await Notification.requestPermission();
-      permissionRef.current = result as NotificationPermissionState;
+      setPermission(result as NotificationPermissionState);
       if (result === "granted") setEnabled(true);
       return result as NotificationPermissionState;
     }, [setEnabled]);
@@ -74,7 +75,7 @@ export function useBrowserNotifications(): UseBrowserNotificationsResult {
   );
 
   return {
-    permission: permissionRef.current,
+    permission,
     isEnabled,
     setEnabled,
     requestPermission,
