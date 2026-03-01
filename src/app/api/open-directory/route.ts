@@ -75,22 +75,40 @@ function spawnTool(tool: OpenTool, directory: string): void {
 
   let command: string;
   let args: string[];
-  const options: { detached: boolean; stdio: "ignore"; cwd?: string; shell?: boolean } = {
+  const options: { detached: boolean; stdio: "ignore"; cwd?: string; shell?: boolean; windowsHide?: boolean } = {
     detached: true,
     stdio: "ignore",
   };
 
   switch (tool) {
     case "vscode":
-      command = isWindows ? "cmd" : "code";
-      args = isWindows ? ["/c", "code", directory] : [directory];
-      if (isWindows) options.shell = true;
+      if (isMac) {
+        command = "open";
+        args = ["-a", "Visual Studio Code", directory];
+      } else if (isWindows) {
+        command = "code";
+        args = [directory];
+        options.shell = true;
+        options.windowsHide = true;
+      } else {
+        command = "code";
+        args = [directory];
+      }
       break;
 
     case "cursor":
-      command = isWindows ? "cmd" : "cursor";
-      args = isWindows ? ["/c", "cursor", directory] : [directory];
-      if (isWindows) options.shell = true;
+      if (isMac) {
+        command = "open";
+        args = ["-a", "Cursor", directory];
+      } else if (isWindows) {
+        command = "cursor";
+        args = [directory];
+        options.shell = true;
+        options.windowsHide = true;
+      } else {
+        command = "cursor";
+        args = [directory];
+      }
       break;
 
     case "terminal":
