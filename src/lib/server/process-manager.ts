@@ -497,7 +497,8 @@ export function destroyInstance(id: string): void {
       createSessionDisconnectedNotification(
         session.opencode_session_id,
         id,
-        session.title
+        session.title,
+        { reason: "instance destroyed", directory: instance.directory }
       );
     }
   } catch {
@@ -579,7 +580,8 @@ export function startHealthCheckLoop(): void {
               createSessionDisconnectedNotification(
                 session.opencode_session_id,
                 id,
-                session.title
+                session.title,
+                { reason: `health check failed ${fails} times`, directory: instance.directory }
               );
             }
           } catch {
@@ -599,6 +601,8 @@ _recoveryComplete.then(() => {
   startHealthCheckLoop();
   // Ensure callback monitor is loaded — its self-initializing code starts the polling loop
   import("./callback-monitor").catch(() => {/* non-fatal */});
+  // Start notification cleanup (TTL-based auto-deletion)
+  import("./notification-cleanup").then((m) => m.startNotificationCleanup()).catch(() => {/* non-fatal */});
 }).catch(() => {/* non-fatal */});
 
 // Clean up all instances when the Node.js process exits.

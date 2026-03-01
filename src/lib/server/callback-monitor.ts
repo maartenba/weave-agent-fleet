@@ -29,6 +29,7 @@ import {
 } from "./callback-service";
 import {
   createSessionCompletedNotification,
+  type NotificationContext,
 } from "./notification-service";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -120,10 +121,13 @@ async function processEventStream(
               ) {
                 try {
                   updateSessionStatus(dbSessionId, "idle");
+                  const sessionTitle = getSession(dbSessionId)?.title ?? "Child session";
+                  const ctx: NotificationContext = { directory: sub.directory };
                   createSessionCompletedNotification(
                     eventSessionId,
                     instanceId,
-                    getSession(dbSessionId)?.title ?? "Child session"
+                    sessionTitle,
+                    ctx
                   );
                   void fireSessionCallbacks(eventSessionId, instanceId);
                 } catch (err) {
@@ -154,10 +158,13 @@ async function processEventStream(
             ) {
               try {
                 updateSessionStatus(dbSessionId, "idle");
+                const sessionTitle = getSession(dbSessionId)?.title ?? "Child session";
+                const ctx: NotificationContext = { directory: sub.directory };
                 createSessionCompletedNotification(
                   eventSessionId,
                   instanceId,
-                  getSession(dbSessionId)?.title ?? "Child session"
+                  sessionTitle,
+                  ctx
                 );
                 void fireSessionCallbacks(eventSessionId, instanceId);
               } catch (err) {
@@ -337,7 +344,8 @@ export function startMonitoring(
           createSessionCompletedNotification(
             opencodeSessionId,
             instanceId,
-            dbSession.title
+            dbSession.title,
+            { directory: instance.directory }
           );
           void fireSessionCallbacks(opencodeSessionId, instanceId);
         }
@@ -442,7 +450,8 @@ export function startCallbackPollingLoop(): void {
               createSessionCompletedNotification(
                 sourceSession.opencode_session_id,
                 instanceId,
-                sourceSession.title
+                sourceSession.title,
+                { directory: instance.directory }
               );
               // Stop monitoring if we were monitoring
               stopMonitoringSession(sourceSession.id);

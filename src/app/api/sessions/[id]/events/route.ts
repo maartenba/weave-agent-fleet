@@ -6,6 +6,7 @@ import { getSessionByOpencodeId, updateSessionStatus } from "@/lib/server/db-rep
 import {
   createSessionCompletedNotification,
   createSessionErrorNotification,
+  createInputRequiredNotification,
 } from "@/lib/server/notification-service";
 import {
   fireSessionCallbacks,
@@ -150,12 +151,25 @@ export async function GET(
             } else if (type === "error") {
               const dbSession = getSessionByOpencodeId(sessionId);
               if (dbSession) {
+                const errorMsg: string =
+                  properties?.message ?? properties?.error ?? "";
                 createSessionErrorNotification(
                   dbSession.opencode_session_id,
                   instanceId,
-                  dbSession.title
+                  dbSession.title,
+                  errorMsg ? { error: errorMsg } : undefined
                 );
                 void fireSessionErrorCallbacks(dbSession.opencode_session_id, instanceId);
+              }
+            } else if (type.startsWith("permission.")) {
+              const dbSession = getSessionByOpencodeId(sessionId);
+              if (dbSession) {
+                createInputRequiredNotification(
+                  dbSession.opencode_session_id,
+                  instanceId,
+                  dbSession.title,
+                  { permissionType: type }
+                );
               }
             }
           } catch {

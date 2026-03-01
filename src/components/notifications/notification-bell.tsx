@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotifications } from "@/contexts/notifications-context";
 import type { DbNotification } from "@/lib/server/db-repository";
 
 function getNotificationIcon(type: string) {

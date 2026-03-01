@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
-import { listNotifications } from "@/lib/server/db-repository";
+import { listNotifications, deleteAllNotifications } from "@/lib/server/db-repository";
 
 // GET /api/notifications — list notifications
 // Query params:
@@ -21,6 +21,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.error("[GET /api/notifications] Error:", err);
     return NextResponse.json(
       { error: "Failed to fetch notifications" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/notifications — delete all notifications (bulk clear)
+export async function DELETE(): Promise<NextResponse> {
+  await _recoveryComplete;
+
+  try {
+    const deleted = deleteAllNotifications();
+    return NextResponse.json({ deleted }, { status: 200 });
+  } catch (err) {
+    console.error("[DELETE /api/notifications] Error:", err);
+    return NextResponse.json(
+      { error: "Failed to delete notifications" },
       { status: 500 }
     );
   }

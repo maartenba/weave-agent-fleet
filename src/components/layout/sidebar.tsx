@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotifications } from "@/contexts/notifications-context";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { usePersistedState } from "@/hooks/use-persisted-state";
