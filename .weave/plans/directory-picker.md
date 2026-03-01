@@ -28,21 +28,21 @@ Issue #22 — When creating a new session, users currently type directory paths 
 Allow users to browse and select directories from allowed workspace roots when creating a new session, while maintaining security constraints and the manual-input fallback.
 
 ### Deliverables
-- [ ] `GET /api/directories` API route with security-scoped directory listing
-- [ ] `useDirectoryBrowser` hook for client-side data fetching and state
-- [ ] `DirectoryPicker` component with browsable directory list + text input
-- [ ] Integration into `NewSessionDialog` replacing the plain `<Input>`
-- [ ] API route tests for `GET /api/directories`
-- [ ] API type definitions for the new endpoint
+- [x] `GET /api/directories` API route with security-scoped directory listing
+- [x] `useDirectoryBrowser` hook for client-side data fetching and state
+- [x] `DirectoryPicker` component with browsable directory list + text input
+- [x] Integration into `NewSessionDialog` replacing the plain `<Input>`
+- [x] API route tests for `GET /api/directories`
+- [x] API type definitions for the new endpoint
 
 ### Definition of Done
-- [ ] `npm run build` succeeds with no type errors
-- [ ] `npm run test` passes — all existing + new tests green
-- [ ] `npm run lint` passes
-- [ ] User can browse directories in the New Session dialog
-- [ ] User can still type a path manually
-- [ ] Paths outside `ORCHESTRATOR_WORKSPACE_ROOTS` cannot be listed
-- [ ] Directory picker works correctly with all three isolation strategies (existing, worktree, clone)
+- [x] `npm run build` succeeds with no type errors
+- [x] `npm run test` passes — all existing + new tests green
+- [x] `npm run lint` passes
+- [x] User can browse directories in the New Session dialog
+- [x] User can still type a path manually
+- [x] Paths outside `ORCHESTRATOR_WORKSPACE_ROOTS` cannot be listed
+- [x] Directory picker works correctly with all three isolation strategies (existing, worktree, clone)
 
 ### Guardrails (Must NOT)
 - Must NOT expose directories outside `ORCHESTRATOR_WORKSPACE_ROOTS`
@@ -55,12 +55,12 @@ Allow users to browse and select directories from allowed workspace roots when c
 
 ### Phase 1: Backend — API Route
 
-- [ ] 1. Export `getAllowedRoots` from `process-manager.ts`
+- [x] 1. Export `getAllowedRoots` from `process-manager.ts`
   **What**: Change `function getAllowedRoots()` to `export function getAllowedRoots()` so the new API route can reuse it for security validation.
   **Files**: `src/lib/server/process-manager.ts` (line 213)
   **Acceptance**: `getAllowedRoots` appears in the module's exports; existing `validateDirectory` still works; `npm run build` passes.
 
-- [ ] 2. Add API types for the directories endpoint
+- [x] 2. Add API types for the directories endpoint
   **What**: Add `DirectoryEntry` and `DirectoryListResponse` types to `api-types.ts`.
   ```
   DirectoryEntry {
@@ -78,7 +78,7 @@ Allow users to browse and select directories from allowed workspace roots when c
   **Files**: `src/lib/api-types.ts`
   **Acceptance**: Types compile; no downstream breakage.
 
-- [ ] 3. Create `GET /api/directories` route
+- [x] 3. Create `GET /api/directories` route
   **What**: New API route that lists subdirectories under allowed workspace roots.
   - Query params:
     - `path` (optional) — absolute directory path to list. If omitted, returns the allowed roots themselves as entries.
@@ -104,7 +104,7 @@ Allow users to browse and select directories from allowed workspace roots when c
   **Files**: `src/app/api/directories/route.ts` (new file)
   **Acceptance**: `curl 'http://localhost:3000/api/directories'` returns roots; `curl 'http://localhost:3000/api/directories?path=/home/user'` returns subdirectories; paths outside allowed roots return 400.
 
-- [ ] 4. Write tests for `GET /api/directories`
+- [x] 4. Write tests for `GET /api/directories`
   **What**: Vitest tests following the existing route test pattern (mock `process-manager` exports, construct `NextRequest` objects, assert on responses).
   Test cases:
     - Returns allowed roots when no `path` param is provided
@@ -123,7 +123,7 @@ Allow users to browse and select directories from allowed workspace roots when c
 
 ### Phase 2: Frontend — Hook
 
-- [ ] 5. Create `useDirectoryBrowser` hook
+- [x] 5. Create `useDirectoryBrowser` hook
   **What**: Client-side hook that manages directory browsing state and data fetching.
   - State:
     - `currentPath: string | null` — the path currently being browsed (null = show roots)
@@ -144,7 +144,7 @@ Allow users to browse and select directories from allowed workspace roots when c
 
 ### Phase 3: Frontend — Component
 
-- [ ] 6. Create `DirectoryPicker` component
+- [x] 6. Create `DirectoryPicker` component
   **What**: A composite component that combines a text input with a browsable directory popup. Designed to be a drop-in replacement for the `<Input>` in the New Session dialog.
 
   **Props**:
@@ -181,7 +181,7 @@ Allow users to browse and select directories from allowed workspace roots when c
 
 ### Phase 4: Integration
 
-- [ ] 7. Integrate `DirectoryPicker` into `NewSessionDialog`
+- [x] 7. Integrate `DirectoryPicker` into `NewSessionDialog`
   **What**: Replace the plain `<Input id="directory" ...>` (lines 116-123 of `new-session-dialog.tsx`) with the new `<DirectoryPicker>` component.
   - Pass `value={directory}`, `onChange={setDirectory}`, `placeholder={DIRECTORY_PLACEHOLDERS[isolationStrategy]}`, `disabled={isLoading}`, `id="directory"`.
   - The existing `<label>` should still work via the `id` prop.
@@ -192,7 +192,7 @@ Allow users to browse and select directories from allowed workspace roots when c
 
 ### Phase 5: Polish
 
-- [ ] 8. Handle edge cases and UX refinements
+- [x] 8. Handle edge cases and UX refinements
   **What**: Address edge cases discovered during integration.
   - **Popover width**: Match the width of the input field (use `PopoverContent` with `className="w-[var(--radix-popover-trigger-width)]"` or explicit width matching).
   - **Popover height**: Cap at 300px with `ScrollArea` to prevent overflow in the Sheet panel.
@@ -230,9 +230,9 @@ Tasks 1 and 2 are independent and can be done in parallel. Task 3 depends on bot
 
 ## Verification
 
-- [ ] `npm run build` succeeds (type-checks + builds)
-- [ ] `npm run test` passes (all existing + new tests)
-- [ ] `npm run lint` passes
+- [x] `npm run build` succeeds (type-checks + builds)
+- [x] `npm run test` passes (all existing + new tests)
+- [x] `npm run lint` passes
 - [ ] Manual verification: open New Session dialog, click folder icon, browse directories, select one, create session
 - [ ] Manual verification: type a path manually in the input (bypass picker), create session
 - [ ] Manual verification: try browsing outside allowed roots via devtools network manipulation → 400 error
