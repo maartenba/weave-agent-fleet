@@ -55,7 +55,16 @@ if [ ! -f "$SQLITE_ADDON" ]; then
   fi
 fi
 
-# 4. Write VERSION file from package.json
+# 4. Copy CLI script
+CLI_JS="$PROJECT_ROOT/cli.js"
+if [ -f "$CLI_JS" ]; then
+  echo "Copying cli.js ..."
+  cp "$CLI_JS" "$STANDALONE_DIR/cli.js"
+else
+  echo "Warning: cli.js not found. Run 'npm run build:cli' first if you want CLI commands." >&2
+fi
+
+# 5. Write VERSION file from package.json
 VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0")
 echo "$VERSION" > "$STANDALONE_DIR/VERSION"
 

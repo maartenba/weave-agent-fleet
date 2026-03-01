@@ -17,13 +17,7 @@ if [ ! -x "$NODE_BIN" ]; then
   exit 1
 fi
 
-# Ensure server.js exists
-if [ ! -f "$SERVER_JS" ]; then
-  echo "Error: server.js not found at $SERVER_JS" >&2
-  echo "Your installation may be corrupt. Re-install with:" >&2
-  echo "  curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh" >&2
-  exit 1
-fi
+CLI_JS="$INSTALL_DIR/app/cli.js"
 
 # Parse subcommands
 case "${1:-}" in
@@ -53,6 +47,16 @@ case "${1:-}" in
     echo "  Remove: export PATH=\"\$HOME/.weave/fleet/bin:\$PATH\""
     exit 0
     ;;
+  init|skill)
+    # Delegate CLI commands to the standalone cli.js script (no server required)
+    if [ ! -f "$CLI_JS" ]; then
+      echo "Error: cli.js not found at $CLI_JS" >&2
+      echo "Your installation may be corrupt. Re-install with:" >&2
+      echo "  curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh" >&2
+      exit 1
+    fi
+    exec "$NODE_BIN" "$CLI_JS" "$@"
+    ;;
   help|--help|-h)
     VERSION="unknown"
     [ -f "$VERSION_FILE" ] && VERSION="$(cat "$VERSION_FILE")"
@@ -62,6 +66,8 @@ case "${1:-}" in
     echo ""
     echo "Commands:"
     echo "  (none)       Start the Weave Fleet server"
+    echo "  init <dir>   Initialize a project with skill configuration"
+    echo "  skill        Manage skills (list, install, remove)"
     echo "  version      Print the installed version"
     echo "  update       Update to the latest version"
     echo "  uninstall    Remove Weave Fleet"
@@ -75,6 +81,14 @@ case "${1:-}" in
     exit 0
     ;;
 esac
+
+# Ensure server.js exists (only needed for the start_server path)
+if [ ! -f "$SERVER_JS" ]; then
+  echo "Error: server.js not found at $SERVER_JS" >&2
+  echo "Your installation may be corrupt. Re-install with:" >&2
+  echo "  curl -fsSL https://get.tryweave.io/agent-fleet.sh | sh" >&2
+  exit 1
+fi
 
 # Check that opencode CLI is available
 # OPENCODE_BIN allows specifying the full path to the opencode binary.

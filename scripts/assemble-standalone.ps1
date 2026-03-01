@@ -71,7 +71,17 @@ if (-not (Test-Path $sqliteAddon)) {
     }
 }
 
-# 4. Write VERSION file from package.json
+# 4. Copy CLI script
+$cliJs = Join-Path $ProjectRoot "cli.js"
+if (Test-Path $cliJs) {
+    Write-Host "Copying cli.js ..."
+    Copy-Item -Path $cliJs -Destination (Join-Path $StandaloneDir "cli.js") -Force
+}
+else {
+    Write-Host "Warning: cli.js not found. Run 'npm run build:cli' first if you want CLI commands."
+}
+
+# 5. Write VERSION file from package.json
 $packageJsonPath = Join-Path $ProjectRoot "package.json"
 try {
     $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
