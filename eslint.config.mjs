@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Weave internal files (plans, spikes, state):
     ".weave/**",
+    // Build artifacts:
+    "cli.js",
   ]),
 ]);
 

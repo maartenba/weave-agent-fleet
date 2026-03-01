@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:standalone": "next build && bash scripts/assemble-standalone.sh"
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --target=node20 --outfile=cli.js --format=cjs",
+    "build:standalone": "next build && npm run build:cli && bash scripts/assemble-standalone.sh"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.2.15",
@@ -36,6 +37,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.27.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "shadcn": "^3.8.5",

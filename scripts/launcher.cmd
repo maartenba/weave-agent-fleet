@@ -13,19 +13,12 @@ for %%I in ("%SCRIPT_DIR%\..") do set "INSTALL_DIR=%%~fI"
 
 set "NODE_BIN=%INSTALL_DIR%\bin\node.exe"
 set "SERVER_JS=%INSTALL_DIR%\app\server.js"
+set "CLI_JS=%INSTALL_DIR%\app\cli.js"
 set "VERSION_FILE=%INSTALL_DIR%\VERSION"
 
 rem Ensure bundled Node.js binary exists
 if not exist "%NODE_BIN%" (
     echo Error: bundled Node.js binary not found at %NODE_BIN% >&2
-    echo Your installation may be corrupt. Re-install with: >&2
-    echo   irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 ^| iex >&2
-    exit /b 1
-)
-
-rem Ensure server.js exists
-if not exist "%SERVER_JS%" (
-    echo Error: server.js not found at %SERVER_JS% >&2
     echo Your installation may be corrupt. Re-install with: >&2
     echo   irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 ^| iex >&2
     exit /b 1
@@ -38,6 +31,8 @@ if /i "%~1"=="--version" goto :show_version
 if /i "%~1"=="-v" goto :show_version
 if /i "%~1"=="update" goto :do_update
 if /i "%~1"=="uninstall" goto :do_uninstall
+if /i "%~1"=="init" goto :do_cli
+if /i "%~1"=="skill" goto :do_cli
 if /i "%~1"=="help" goto :show_help
 if /i "%~1"=="--help" goto :show_help
 if /i "%~1"=="-h" goto :show_help
@@ -45,6 +40,17 @@ if /i "%~1"=="-h" goto :show_help
 echo Unknown command: %~1
 echo Run "weave-fleet help" for usage.
 exit /b 1
+
+:do_cli
+rem Delegate CLI commands to the standalone cli.js script (no server required)
+if not exist "%CLI_JS%" (
+    echo Error: cli.js not found at %CLI_JS% >&2
+    echo Your installation may be corrupt. Re-install with: >&2
+    echo   irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 ^| iex >&2
+    exit /b 1
+)
+"%NODE_BIN%" "%CLI_JS%" %*
+exit /b %ERRORLEVEL%
 
 :show_version
 if exist "%VERSION_FILE%" (
@@ -91,6 +97,8 @@ echo Usage: weave-fleet [command]
 echo.
 echo Commands:
 echo   (none)       Start the Weave Fleet server
+echo   init ^<dir^>   Initialize a project with skill configuration
+echo   skill        Manage skills (list, install, remove)
 echo   version      Print the installed version
 echo   update       Update to the latest version
 echo   uninstall    Remove Weave Fleet
@@ -104,6 +112,14 @@ echo   OPENCODE_BIN     Full path to opencode binary (if not on PATH)
 exit /b 0
 
 :start_server
+
+rem Ensure server.js exists (only needed for start_server path)
+if not exist "%SERVER_JS%" (
+    echo Error: server.js not found at %SERVER_JS% >&2
+    echo Your installation may be corrupt. Re-install with: >&2
+    echo   irm https://github.com/pgermishuys/weave-agent-fleet/releases/latest/download/install.ps1 ^| iex >&2
+    exit /b 1
+)
 
 rem Check that opencode CLI is available
 rem OPENCODE_BIN allows specifying the full path to the opencode binary,
