@@ -497,7 +497,8 @@ export function destroyInstance(id: string): void {
       createSessionDisconnectedNotification(
         session.opencode_session_id,
         id,
-        session.title
+        session.title,
+        { reason: "instance destroyed", directory: instance.directory }
       );
     }
   } catch {
@@ -579,7 +580,8 @@ export function startHealthCheckLoop(): void {
               createSessionDisconnectedNotification(
                 session.opencode_session_id,
                 id,
-                session.title
+                session.title,
+                { reason: `health check failed ${fails} times`, directory: instance.directory }
               );
             }
           } catch {

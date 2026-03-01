@@ -151,10 +151,13 @@ export async function GET(
             } else if (type === "error") {
               const dbSession = getSessionByOpencodeId(sessionId);
               if (dbSession) {
+                const errorMsg: string =
+                  properties?.message ?? properties?.error ?? "";
                 createSessionErrorNotification(
                   dbSession.opencode_session_id,
                   instanceId,
-                  dbSession.title
+                  dbSession.title,
+                  errorMsg ? { error: errorMsg } : undefined
                 );
                 void fireSessionErrorCallbacks(dbSession.opencode_session_id, instanceId);
               }
@@ -164,7 +167,8 @@ export async function GET(
                 createInputRequiredNotification(
                   dbSession.opencode_session_id,
                   instanceId,
-                  dbSession.title
+                  dbSession.title,
+                  { permissionType: type }
                 );
               }
             }
