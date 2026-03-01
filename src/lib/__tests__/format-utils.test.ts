@@ -2,6 +2,7 @@ import {
   formatTokens,
   formatCost,
   formatDuration,
+  formatTimestamp,
   getStatusColor,
   getStatusDot,
 } from "@/lib/format-utils";
@@ -207,5 +208,42 @@ describe("getStatusDot", () => {
 
   it("returns 'bg-zinc-500' for an empty string", () => {
     expect(getStatusDot("")).toBe("bg-zinc-500");
+  });
+});
+
+// ─── formatTimestamp ─────────────────────────────────────────────────────────
+
+describe("formatTimestamp", () => {
+  it("returns time-only string for a timestamp from today", () => {
+    // Create a timestamp for today at 14:34 local time
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 34, 0);
+    const result = formatTimestamp(today.getTime());
+    // Should produce time-only like "2:34 PM"
+    expect(result).toBe("2:34 PM");
+  });
+
+  it("returns date+time string for a timestamp from a different day", () => {
+    // Jan 15, 2024 at 09:05 local time
+    const past = new Date(2024, 0, 15, 9, 5, 0);
+    const result = formatTimestamp(past.getTime());
+    // Should include month + day + time like "Jan 15, 9:05 AM"
+    expect(result).toMatch(/Jan 15.+9:05 AM/);
+  });
+
+  it("returns empty string for undefined", () => {
+    expect(formatTimestamp(undefined)).toBe("");
+  });
+
+  it("returns empty string for NaN", () => {
+    expect(formatTimestamp(NaN)).toBe("");
+  });
+
+  it("returns empty string for 0", () => {
+    expect(formatTimestamp(0)).toBe("");
+  });
+
+  it("returns empty string for null", () => {
+    expect(formatTimestamp(null)).toBe("");
   });
 });

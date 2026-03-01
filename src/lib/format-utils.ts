@@ -19,6 +19,40 @@ export function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
+const timeOnlyFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+/**
+ * Format a unix-ms timestamp for message display.
+ * - Same calendar day as now → "2:34 PM" (time only)
+ * - Different day → "Mar 1, 2:34 PM" (short month + day + time)
+ * - Falsy / NaN → "" (graceful fallback)
+ */
+export function formatTimestamp(timestamp: number | undefined | null): string {
+  if (!timestamp || isNaN(timestamp)) return "";
+
+  const date = new Date(timestamp);
+  const now = new Date();
+
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  return sameDay ? timeOnlyFormatter.format(date) : dateTimeFormatter.format(date);
+}
+
 export function getStatusColor(status: string): string {
   switch (status) {
     case "active":

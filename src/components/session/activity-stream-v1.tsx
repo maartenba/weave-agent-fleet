@@ -9,6 +9,7 @@ import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
 import { resolveAgentColor } from "@/lib/agent-colors";
+import { formatTimestamp } from "@/lib/format-utils";
 import { TodoListInline } from "./todo-list-inline";
 import { MarkdownRenderer } from "./markdown-renderer";
 
@@ -195,6 +196,11 @@ function MessageItem({ message, agents, allMessages }: MessageItemProps) {
               ${message.cost.toFixed(4)}
             </span>
           )}
+          {message.createdAt ? (
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {formatTimestamp(message.createdAt)}
+            </span>
+          ) : null}
         </div>
 
         {/* Tool calls */}
