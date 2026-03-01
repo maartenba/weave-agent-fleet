@@ -148,6 +148,30 @@ export function getTaskToolSessionId(part: AccumulatedToolPart): string | null {
 
 // File search returns Array<string> (file paths) — no wrapper type needed
 
+// ─── Directory Browser Types ────────────────────────────────────────────────
+
+/** A single directory entry returned by GET /api/directories */
+export interface DirectoryEntry {
+  /** Directory name, e.g. "my-project" */
+  name: string;
+  /** Absolute path, e.g. "/home/user/my-project" */
+  path: string;
+  /** True if the directory contains a .git subdirectory */
+  isGitRepo: boolean;
+}
+
+/** Response shape for GET /api/directories */
+export interface DirectoryListResponse {
+  /** Subdirectories in the listed path */
+  entries: DirectoryEntry[];
+  /** The resolved absolute path being listed */
+  currentPath: string;
+  /** Parent directory path, or null if at an allowed root */
+  parentPath: string | null;
+  /** The allowed workspace roots (for root-level navigation) */
+  roots: string[];
+}
+
 // ─── Diff Types ─────────────────────────────────────────────────────────────
 
 /** Mirrors the SDK's FileDiff shape for frontend consumption (decouples frontend from SDK types) */

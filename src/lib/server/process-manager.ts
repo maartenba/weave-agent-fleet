@@ -210,7 +210,7 @@ let _cleanupRun: boolean = (_g.__weaveCleanupRun ??= false);
  * used to spawn OpenCode instances. Configurable via ORCHESTRATOR_WORKSPACE_ROOTS
  * env var (colon-separated). Falls back to the user's home directory.
  */
-function getAllowedRoots(): string[] {
+export function getAllowedRoots(): string[] {
   const envRoots = process.env.ORCHESTRATOR_WORKSPACE_ROOTS;
   if (envRoots) {
     const separator = process.platform === "win32" ? ";" : ":";

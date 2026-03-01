@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DirectoryPicker } from "@/components/session/directory-picker";
 import {
   Sheet,
   SheetContent,
@@ -113,13 +114,12 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
             <label className="text-sm font-medium" htmlFor="directory">
               {DIRECTORY_LABELS[isolationStrategy]}
             </label>
-            <Input
+            <DirectoryPicker
               id="directory"
               value={directory}
-              onChange={(e) => setDirectory(e.target.value)}
+              onChange={setDirectory}
               placeholder={DIRECTORY_PLACEHOLDERS[isolationStrategy]}
               disabled={isLoading}
-              required
             />
           </div>
 
