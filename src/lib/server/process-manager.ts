@@ -16,6 +16,7 @@ import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
 import { spawn } from "child_process";
 import { existsSync, statSync } from "fs";
 import { homedir } from "os";
+import { createServer } from "net";
 import { dirname, resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import {
@@ -61,7 +62,7 @@ interface SpawnServerOptions {
 
 async function spawnOpencodeServer(
   options: SpawnServerOptions
-): Promise<{ url: string; close: () => void }> {
+): Promise<{ url: string; pid: number | undefined; close: () => void }> {
   const hostname = options.hostname ?? "127.0.0.1";
   const port = options.port ?? 4096;
   const timeout = options.timeout ?? 5000;
@@ -144,6 +145,7 @@ async function spawnOpencodeServer(
 
   return {
     url,
+    pid: proc.pid,
     close() {
       proc.kill();
     },
@@ -169,6 +171,22 @@ export interface ManagedInstance {
 const PORT_START = 4097;
 const PORT_END = 4200;
 const SPAWN_TIMEOUT_MS = 30_000;
+const MAX_PORT_RETRIES = 5;
+
+/**
+ * Check if a port is actually available on the OS by attempting to bind it.
+ * Returns true if the port is free, false if it's already in use.
+ */
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
 
 // ─── globalThis-based singletons ──────────────────────────────────────────────
 // Next.js dev mode with Turbopack may load this module multiple times in
@@ -343,6 +361,7 @@ export async function recoverInstances(): Promise<void> {
         directory: dbInst.directory,
       });
 
+      const recoveredPid = dbInst.pid;
       const instance: ManagedInstance = {
         id: dbInst.id,
         port: dbInst.port,
@@ -350,9 +369,14 @@ export async function recoverInstances(): Promise<void> {
         directory: dbInst.directory,
         client,
         close: () => {
-          // For recovered instances, we don't have the original close() fn.
-          // Best effort: mark as dead. The process will be cleaned up
-          // by the OS when the Next.js server exits.
+          // For recovered instances, kill the process by PID if available.
+          if (recoveredPid) {
+            try {
+              process.kill(recoveredPid);
+            } catch {
+              // Process may have already exited — ignore
+            }
+          }
         },
         status: "running",
         createdAt: new Date(dbInst.created_at),
@@ -400,6 +424,9 @@ async function checkPortAlive(url: string): Promise<boolean> {
 /**
  * Spawn a new OpenCode server instance for the given directory.
  * Reuses an existing running instance if one already exists for that directory.
+ *
+ * Includes retry logic: if a port is held by a zombie/external process,
+ * it releases the port and tries the next available one (up to MAX_PORT_RETRIES).
  */
 export async function spawnInstance(directory: string): Promise<ManagedInstance> {
   // Reuse existing running instance for the same directory
@@ -418,21 +445,51 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
   }
 
   const instanceId = randomUUID();
-  const port = allocatePort();
 
-  let server: { url: string; close: () => void };
-  try {
-    server = await spawnOpencodeServer({
-      port,
-      timeout: SPAWN_TIMEOUT_MS,
-      config: {
-        plugin: [],
-        permission: { edit: "allow", bash: "allow", external_directory: "allow" },
-      },
-    });
-  } catch (err) {
-    releasePort(port);
-    throw err;
+  // Retry loop: allocate a port, verify it's available on the OS, then spawn.
+  // If the port is held by a zombie process, release it and try the next one.
+  let server: { url: string; pid: number | undefined; close: () => void };
+  let port: number | undefined;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_PORT_RETRIES; attempt++) {
+    port = allocatePort();
+
+    // Pre-check: is the OS port actually free?
+    const available = await isPortAvailable(port);
+    if (!available) {
+      console.warn(
+        `[process-manager] Port ${port} allocated but OS reports it in use (zombie process?) — skipping`
+      );
+      // Don't release: keep it marked as used so we don't retry it.
+      // The health check loop or a restart will eventually clear it.
+      continue;
+    }
+
+    try {
+      server = await spawnOpencodeServer({
+        port,
+        timeout: SPAWN_TIMEOUT_MS,
+        config: {
+          plugin: [],
+          permission: { edit: "allow", bash: "allow", external_directory: "allow" },
+        },
+      });
+      // Success — break out of retry loop
+      break;
+    } catch (err) {
+      lastError = err;
+      // Release the port so it can be reclaimed later if the issue was transient
+      releasePort(port);
+      console.warn(
+        `[process-manager] Failed to spawn on port ${port} (attempt ${attempt + 1}/${MAX_PORT_RETRIES}):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  if (!server! || port === undefined) {
+    throw lastError ?? new Error("Failed to spawn OpenCode server: all port attempts exhausted");
   }
 
   // Persist to DB for recovery across restarts
@@ -442,8 +499,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
       port,
       directory,
       url: server.url,
-      // PID not exposed by the SDK — using port-based recovery instead
-      pid: null,
+      pid: server.pid ?? null,
     });
   } catch {
     // DB write failure is non-fatal — instance still works in-memory
