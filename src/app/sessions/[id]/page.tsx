@@ -14,8 +14,9 @@ import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
+import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
 import { useDeleteSession } from "@/hooks/use-delete-session";
 import { useOpenDirectory, usePreferredOpenTool } from "@/hooks/use-open-directory";
@@ -50,6 +51,7 @@ export default function SessionDetailPage() {
     setSelectedAgent
   );
   const { terminateSession, isTerminating } = useTerminateSession();
+  const { abortSession, isAborting } = useAbortSession();
   const { resumeSession, isResuming } = useResumeSession();
   const { deleteSession: permanentDelete, isDeleting } = useDeleteSession();
   const { openDirectory } = useOpenDirectory();
@@ -58,6 +60,7 @@ export default function SessionDetailPage() {
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
+  const [abortConfirm, setAbortConfirm] = useState(false);
   const [isResumable, setIsResumable] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -82,6 +85,28 @@ export default function SessionDetailPage() {
       unregisterCommand("focus-prompt");
     };
   }, [registerCommand, unregisterCommand, bindings]);
+
+  // Register "Interrupt Session" command (Escape key by default)
+  useEffect(() => {
+    registerCommand({
+      id: "interrupt-session",
+      label: "Interrupt Session",
+      icon: OctagonX,
+      category: "Session",
+      paletteHotkey: bindings["interrupt-session"]?.paletteHotkey ?? undefined,
+      globalShortcut: bindings["interrupt-session"]?.globalShortcut ?? undefined,
+      keywords: ["abort", "cancel", "stop", "interrupt"],
+      disabled: isStopped || sessionStatus !== "busy",
+      action: () => {
+        abortSession(sessionId, instanceId).catch(() => {
+          // error surfaced via useAbortSession
+        });
+      },
+    });
+    return () => {
+      unregisterCommand("interrupt-session");
+    };
+  }, [registerCommand, unregisterCommand, bindings, sessionStatus, isStopped, abortSession, sessionId, instanceId]);
 
   const [metadata, setMetadata] = useState<SessionMetadata>({
     workspaceId: null,
@@ -187,6 +212,27 @@ export default function SessionDetailPage() {
     }
   }, [stopConfirm, terminateSession, sessionId, instanceId]);
 
+  const handleAbort = useCallback(async () => {
+    if (!abortConfirm) {
+      setAbortConfirm(true);
+      return;
+    }
+    try {
+      await abortSession(sessionId, instanceId);
+    } catch {
+      // error surfaced via useAbortSession
+    } finally {
+      setAbortConfirm(false);
+    }
+  }, [abortConfirm, abortSession, sessionId, instanceId]);
+
+  // Reset abort confirmation when session leaves busy state
+  useEffect(() => {
+    if (sessionStatus !== "busy") {
+      setAbortConfirm(false);
+    }
+  }, [sessionStatus]);
+
   const handleResume = useCallback(async () => {
     try {
       const result = await resumeSession(sessionId);
@@ -246,6 +292,29 @@ export default function SessionDetailPage() {
                 />
                 {activeAgentName.charAt(0).toUpperCase() + activeAgentName.slice(1)}
               </Badge>
+            )}
+            {!isStopped && sessionStatus === "busy" && (
+              <Button
+                variant={abortConfirm ? "destructive" : "outline"}
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={handleAbort}
+                disabled={isAborting}
+              >
+                <OctagonX className="h-3 w-3" />
+                {abortConfirm ? "Confirm interrupt?" : "Interrupt"}
+              </Button>
+            )}
+            {abortConfirm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setAbortConfirm(false)}
+                disabled={isAborting}
+              >
+                Cancel
+              </Button>
             )}
             {!isStopped && (
               <Button
