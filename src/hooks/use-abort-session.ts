@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 export interface UseAbortSessionResult {
   abortSession: (
@@ -15,7 +15,7 @@ export function useAbortSession(): UseAbortSessionResult {
   const [isAborting, setIsAborting] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  const abortSession = async (
+  const abortSession = useCallback(async (
     sessionId: string,
     instanceId: string
   ): Promise<void> => {
@@ -43,7 +43,7 @@ export function useAbortSession(): UseAbortSessionResult {
     } finally {
       setIsAborting(false);
     }
-  };
+  }, []);
 
   return { abortSession, isAborting, error };
 }
