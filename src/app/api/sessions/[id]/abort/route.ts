@@ -34,7 +34,6 @@ export async function POST(
   try {
     await client.session.abort({ sessionID: sessionId });
 
-    // Update DB status to idle for backend consistency (best-effort)
     try {
       const dbSession = getSessionByOpencodeId(sessionId);
       if (dbSession) {

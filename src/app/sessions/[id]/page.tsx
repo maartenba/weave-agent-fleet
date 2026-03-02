@@ -219,7 +219,7 @@ export default function SessionDetailPage() {
     }
     try {
       await abortSession(sessionId, instanceId);
-      forceIdle(); // Optimistically transition UI to idle — fixes #35
+      forceIdle();
     } catch {
       // error surfaced via useAbortSession
     } finally {
