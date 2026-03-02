@@ -10,6 +10,7 @@ import { SessionGroup } from "@/components/fleet/session-group";
 import { LiveSessionCard } from "@/components/fleet/live-session-card";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
+import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
 import { useDeleteSession } from "@/hooks/use-delete-session";
 import { useOpenDirectory, usePreferredOpenTool } from "@/hooks/use-open-directory";
@@ -26,6 +27,7 @@ import { Loader2 } from "lucide-react";
 function FleetPageInner() {
   const { sessions, isLoading, error, refetch, summary: liveSummary } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
+  const { abortSession } = useAbortSession();
   const { resumeSession, resumingSessionId } = useResumeSession();
   const { deleteSession, isDeleting } = useDeleteSession();
   const { openDirectory } = useOpenDirectory();
@@ -62,6 +64,14 @@ function FleetPageInner() {
       refetch();
     } catch {
       // error surfaced inside useTerminateSession
+    }
+  };
+
+  const handleAbort = async (sessionId: string, instanceId: string) => {
+    try {
+      await abortSession(sessionId, instanceId);
+    } catch {
+      // error surfaced inside useAbortSession
     }
   };
 
@@ -198,6 +208,7 @@ function FleetPageInner() {
                        onResume={handleResume}
                        onDelete={handleDeleteRequest}
                        onOpen={(dir) => handleOpen(dir)}
+                       onAbort={handleAbort}
                        isResuming={resumingSessionId === item.session.id}
                      />
                      {children.map((child) => (
@@ -209,6 +220,7 @@ function FleetPageInner() {
                          onResume={handleResume}
                          onDelete={handleDeleteRequest}
                          onOpen={(dir) => handleOpen(dir)}
+                         onAbort={handleAbort}
                          isResuming={resumingSessionId === child.session.id}
                        />
                      ))}
@@ -256,6 +268,7 @@ function FleetPageInner() {
                        onResume={handleResume}
                        onDelete={handleDeleteRequest}
                        onOpen={(dir) => handleOpen(dir)}
+                       onAbort={handleAbort}
                        isResuming={resumingSessionId === item.session.id}
                      />
                      {children.map((child) => (
@@ -267,6 +280,7 @@ function FleetPageInner() {
                          onResume={handleResume}
                          onDelete={handleDeleteRequest}
                          onOpen={(dir) => handleOpen(dir)}
+                         onAbort={handleAbort}
                          isResuming={resumingSessionId === child.session.id}
                        />
                      ))}
@@ -312,6 +326,7 @@ function FleetPageInner() {
                 onResume={handleResume}
                 onDelete={handleDeleteRequest}
                 onOpen={(dir) => handleOpen(dir)}
+                onAbort={handleAbort}
                 isResuming={resumingSessionId === item.session.id}
               />
               {children.map((child) => (
@@ -323,6 +338,7 @@ function FleetPageInner() {
                   onResume={handleResume}
                   onDelete={handleDeleteRequest}
                   onOpen={(dir) => handleOpen(dir)}
+                  onAbort={handleAbort}
                   isResuming={resumingSessionId === child.session.id}
                 />
               ))}
@@ -350,6 +366,7 @@ function FleetPageInner() {
               onTerminate={handleTerminate}
               onResume={handleResume}
               onDelete={handleDeleteRequest}
+              onAbort={handleAbort}
               onOpen={handleOpen}
               resumingSessionId={resumingSessionId}
             />

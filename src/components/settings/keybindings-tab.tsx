@@ -10,6 +10,7 @@ import {
   Plus,
   RefreshCw,
   MessageSquare,
+  OctagonX,
   RotateCcw,
   type LucideIcon,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const COMMANDS: CommandMeta[] = [
   { id: "new-session",      label: "New Session",       icon: Plus,          category: "Session" },
   { id: "refresh-sessions", label: "Refresh Sessions",  icon: RefreshCw,     category: "Session" },
   { id: "focus-prompt",     label: "Focus Prompt Input",icon: MessageSquare, category: "Session" },
+  { id: "interrupt-session", label: "Interrupt Session", icon: OctagonX,      category: "Session" },
   { id: "nav-fleet",        label: "Go to Fleet",       icon: LayoutGrid,    category: "Navigation" },
   { id: "nav-settings",     label: "Go to Settings",    icon: Settings,      category: "Navigation" },
   { id: "nav-alerts",       label: "Go to Alerts",      icon: Bell,          category: "Navigation" },
@@ -57,17 +59,20 @@ function KeyRecorder({ type, onCapture, onCancel }: KeyRecorderProps) {
       e.preventDefault();
       e.stopPropagation();
 
-      if (e.key === "Escape") {
-        onCancel();
-        return;
-      }
-
       if (type === "palette") {
+        if (e.key === "Escape") {
+          onCancel();
+          return;
+        }
         if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
           onCapture(e.key.toLowerCase());
         }
       } else {
-        if ((e.metaKey || e.ctrlKey) && e.key.length === 1) {
+        // Global shortcuts: accept modifier+key OR special keys without modifiers
+        if (e.key === "Escape" && !e.metaKey && !e.ctrlKey) {
+          // Bare Escape: capture it as a global shortcut (not cancel)
+          onCapture(e.key, { key: e.key });
+        } else if ((e.metaKey || e.ctrlKey) && e.key.length === 1) {
           const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
           onCapture(e.key.toLowerCase(), {
             key: e.key.toLowerCase(),

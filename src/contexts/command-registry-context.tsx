@@ -61,6 +61,19 @@ export function CommandRegistryProvider({ children }: CommandRegistryProviderPro
         return;
       }
 
+      // Escape should work even inside text inputs (e.g. to interrupt a session)
+      if (e.key === "Escape") {
+        for (const command of commandsMapRef.current.values()) {
+          const gs = command.globalShortcut;
+          if (!gs || gs.key !== "Escape") continue;
+          if (!command.disabled) {
+            e.preventDefault();
+            command.action();
+          }
+          return;
+        }
+      }
+
       // Skip global shortcuts when focus is inside text fields
       if (isTextInput) return;
 

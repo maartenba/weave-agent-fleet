@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, ExternalLink, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowRight, Clock, ExternalLink, Loader2, OctagonX, RotateCcw, Trash2 } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
 
 export function timeSince(timestamp: number): string {
@@ -22,6 +22,7 @@ export function LiveSessionCard({
   onResume,
   onDelete,
   onOpen,
+  onAbort,
   isResuming = false,
   isParent = false,
   isChild = false,
@@ -31,6 +32,7 @@ export function LiveSessionCard({
   onResume?: (sessionId: string) => void;
   onDelete?: (sessionId: string, instanceId: string) => void;
   onOpen?: (directory: string) => void;
+  onAbort?: (sessionId: string, instanceId: string) => void;
   isResuming?: boolean;
   isParent?: boolean;
   isChild?: boolean;
@@ -72,6 +74,7 @@ export function LiveSessionCard({
 
   const canTerminate = !isStopped && !isCompleted;
   const canDelete = (isStopped || isCompleted || isDisconnected) && !!onDelete;
+  const canAbort = sessionStatus === "active" && !!onAbort;
 
   return (
     <div className={`relative group ${isInactive ? "opacity-60" : ""}`}>
@@ -137,6 +140,21 @@ export function LiveSessionCard({
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
+      {canAbort && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-10 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onAbort!(session.id, instanceId);
+          }}
+          title="Interrupt session"
+        >
+          <OctagonX className="h-3.5 w-3.5" />
+        </Button>
+      )}
       {canDelete && (
         <Button
           variant="ghost"
@@ -181,7 +199,7 @@ export function LiveSessionCard({
           variant="ghost"
           size="icon"
           className={`absolute top-2 ${
-            isInactive && onResume ? "right-[4.5rem]" : "right-10"
+            isInactive && onResume ? "right-[4.5rem]" : canAbort ? "right-[4.5rem]" : "right-10"
           } h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10`}
           onClick={(e) => {
             e.preventDefault();

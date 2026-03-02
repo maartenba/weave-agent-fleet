@@ -36,11 +36,12 @@ interface SessionGroupProps {
   onNewSession?: (workspaceDirectory: string) => void;
   onResume?: (sessionId: string) => void;
   onDelete?: (sessionId: string, instanceId: string) => void;
+  onAbort?: (sessionId: string, instanceId: string) => void;
   onOpen?: (directory: string, tool: OpenTool) => void;
   resumingSessionId?: string | null;
 }
 
-export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDelete, onOpen, resumingSessionId }: SessionGroupProps) {
+export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDelete, onAbort, onOpen, resumingSessionId }: SessionGroupProps) {
   const { refetch } = useSessionsContext();
   const { renameWorkspace } = useRenameWorkspace();
   const { terminateSession } = useTerminateSession();
@@ -183,6 +184,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
                   onTerminate={onTerminate}
                   onResume={onResume}
                   onDelete={onDelete}
+                  onAbort={onAbort}
                   onOpen={onOpen ? (dir) => onOpen(dir, "vscode") : undefined}
                   isResuming={resumingSessionId === item.session.id}
                 />
@@ -196,6 +198,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
                         onTerminate={onTerminate}
                         onResume={onResume}
                         onDelete={onDelete}
+                        onAbort={onAbort}
                         onOpen={onOpen ? (dir) => onOpen(dir, "vscode") : undefined}
                         isResuming={resumingSessionId === child.session.id}
                       />
