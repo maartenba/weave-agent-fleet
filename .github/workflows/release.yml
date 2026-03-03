@@ -66,6 +66,8 @@ jobs:
 
       - name: Build standalone
         run: bun run build
+        env:
+          APP_VERSION: ${{ github.ref_name }}
 
       # --- Cross-compile native addons when host arch != target arch ---
       - name: Rebuild native addons for target architecture (Unix)

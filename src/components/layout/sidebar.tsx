@@ -461,6 +461,24 @@ export function Sidebar() {
             <TooltipContent side="right">Collapse sidebar (⌘B)</TooltipContent>
           </Tooltip>
         )}
+
+        {/* Version info */}
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="text-center text-[10px] text-muted-foreground/50 select-none py-1">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              v{process.env.NEXT_PUBLIC_APP_VERSION} · {process.env.NEXT_PUBLIC_COMMIT_SHA}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <p className="px-3 text-[10px] text-muted-foreground/50 select-none py-1">
+            v{process.env.NEXT_PUBLIC_APP_VERSION} · {process.env.NEXT_PUBLIC_COMMIT_SHA}
+          </p>
+        )}
       </div>
 
       {/* Resize handle */}
