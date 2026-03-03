@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useCreateSession } from "@/hooks/use-create-session";
+import { usePersistedState } from "@/hooks/use-persisted-state";
 import type { ReactNode } from "react";
 
 type IsolationStrategy = "existing" | "worktree" | "clone";
@@ -51,7 +52,7 @@ interface NewSessionDialogProps {
 export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange }: NewSessionDialogProps) {
   const router = useRouter();
   const [internalOpen, setInternalOpen] = useState(false);
-  const [directory, setDirectory] = useState("");
+  const [directory, setDirectory] = usePersistedState("weave:new-session:lastDirectory", "");
   const [title, setTitle] = useState("");
   const [isolationStrategy, setIsolationStrategy] = useState<IsolationStrategy>("existing");
   const [branch, setBranch] = useState("");
@@ -74,7 +75,6 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange }
         branch: isolationStrategy === "worktree" && branch.trim() ? branch.trim() : undefined,
       });
       setOpen(false);
-      setDirectory("");
       setTitle("");
       setIsolationStrategy("existing");
       setBranch("");
