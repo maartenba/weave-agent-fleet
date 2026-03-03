@@ -120,6 +120,9 @@ export function getDb(): Database.Database {
     // Column already exists — ignore
   }
 
+  // Add index on sessions.status for efficient status-based queries
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+
   _db = db;
   return db;
 }

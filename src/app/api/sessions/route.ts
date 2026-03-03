@@ -4,6 +4,7 @@ import { createWorkspace } from "@/lib/server/workspace-manager";
 import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
+import { log } from "@/lib/server/logger";
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
@@ -18,7 +19,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let body: CreateSessionRequest;
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    log.warn("sessions-route", "Invalid JSON body in POST request", { err });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -74,10 +76,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         if (targetDbSession) {
           parentDbSessionId = targetDbSession.id;
         } else {
-          console.warn('[POST /api/sessions] Callback target session not found:', body.onComplete.notifySessionId);
+          log.warn("sessions-route", "Callback target session not found", { notifySessionId: body.onComplete.notifySessionId });
         }
-      } catch {
-        console.warn('[POST /api/sessions] Failed to resolve parent session');
+      } catch (err) {
+        log.warn("sessions-route", "Failed to resolve parent session for callback", { notifySessionId: body.onComplete?.notifySessionId, err });
       }
     }
 
@@ -91,9 +93,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         directory: workspace.directory,
         parent_session_id: parentDbSessionId,
       });
-    } catch {
-      // DB write failure is non-fatal — session still works in-memory
-      console.warn(`[POST /api/sessions] Failed to persist session to DB`);
+    } catch (err) {
+      log.warn("sessions-route", "Failed to persist session to DB — running in-memory only", { sessionId: sessionDbId, err });
     }
 
     // Step 5: Register completion callback if requested
@@ -105,15 +106,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           target_session_id: parentDbSessionId,
           target_instance_id: body.onComplete.notifyInstanceId,
         });
-      } catch {
-        console.warn('[POST /api/sessions] Failed to register callback');
+      } catch (err) {
+        log.warn("sessions-route", "Failed to register session completion callback", { sessionId: sessionDbId, err });
       }
 
       // Start server-side monitoring so callback fires without browser SSE
       try {
         startMonitoring(sessionDbId, session.id, instance.id);
-      } catch {
-        console.warn('[POST /api/sessions] Failed to start callback monitoring');
+      } catch (err) {
+        log.warn("sessions-route", "Failed to start callback monitoring for child session", { sessionId: sessionDbId, err });
       }
     }
 
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
     return NextResponse.json(response, { status: 200 });
   } catch (err) {
-    console.error("[POST /api/sessions] Failed to create session:", err);
+    log.error("sessions-route", "Failed to create session", { err });
     return NextResponse.json(
       { error: "Failed to create session" },
       { status: 500 }
@@ -144,8 +145,8 @@ export async function GET(): Promise<NextResponse> {
   let dbSessions: ReturnType<typeof listSessions>;
   try {
     dbSessions = listSessions();
-  } catch {
-    // If DB is unavailable, fall back to live-only listing (V1 behavior)
+  } catch (err) {
+    log.warn("sessions-route", "DB unavailable — falling back to live-only session listing", { err });
     const items: SessionListItem[] = [];
     await Promise.allSettled(
       liveInstances.map(async (instance) => {
@@ -164,8 +165,8 @@ export async function GET(): Promise<NextResponse> {
               instanceStatus: instance.status,
             });
           }
-        } catch {
-          // skip
+        } catch (err) {
+          log.warn("sessions-route", "Failed to list sessions from live instance during DB-unavailable fallback", { instanceId: instance.id, err });
         }
       })
     );
@@ -190,8 +191,8 @@ export async function GET(): Promise<NextResponse> {
           if (result.data) {
             instanceStatusMaps.set(instance.id, result.data as SessionStatusMap);
           }
-        } catch {
-          // session.status() failure is non-fatal — fall through to DB-only behavior
+        } catch (err) {
+          log.warn("sessions-route", "Failed to fetch session statuses from live instance", { instanceId: instance.id, err });
         }
       })
   );
@@ -214,16 +215,16 @@ export async function GET(): Promise<NextResponse> {
           // Session went idle without SSE observer — persist correction
           try {
             updateSessionStatus(dbSession.id, "idle");
-          } catch {
-            // Non-fatal
+          } catch (err) {
+            log.warn("sessions-route", "Failed to persist idle status correction in DB", { sessionId: dbSession.id, err });
           }
           sessionStatus = "idle";
         } else if (liveStatus?.type === "busy" && dbSession.status === "idle") {
           // Session became busy again — correct stale idle state
           try {
             updateSessionStatus(dbSession.id, "active");
-          } catch {
-            // Non-fatal
+          } catch (err) {
+            log.warn("sessions-route", "Failed to correct stale idle status to active in DB", { sessionId: dbSession.id, err });
           }
           sessionStatus = "active";
         } else {
@@ -238,7 +239,8 @@ export async function GET(): Promise<NextResponse> {
       let dbInst: ReturnType<typeof getInstance>;
       try {
         dbInst = getInstance(dbSession.instance_id);
-      } catch {
+      } catch (err) {
+        log.warn("sessions-route", "Failed to look up DB instance for session", { instanceId: dbSession.instance_id, err });
         dbInst = undefined;
       }
       if (dbInst?.status === "running") {
@@ -273,8 +275,8 @@ export async function GET(): Promise<NextResponse> {
         isolationStrategy = ws.isolation_strategy;
         workspaceDisplayName = ws.display_name;
       }
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      log.warn("sessions-route", "Failed to fetch workspace info from DB", { workspaceId: dbSession.workspace_id, err });
     }
 
     // Fetch the OpenCode session details from the live instance if available
@@ -298,8 +300,8 @@ export async function GET(): Promise<NextResponse> {
           });
           continue;
         }
-      } catch {
-        // Fall through to stub
+      } catch (err) {
+        log.warn("sessions-route", "Failed to fetch live session details from SDK — using stub", { sessionId: dbSession.opencode_session_id, err });
       }
     }
 

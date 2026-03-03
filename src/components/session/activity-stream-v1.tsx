@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, Wrench, Loader2, AlertCircle } from "lucide-react";
+import { Bot, User, Wrench, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AutocompleteAgent } from "@/lib/api-types";
 import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
@@ -19,6 +19,10 @@ interface ActivityStreamV1Props {
   sessionStatus: "idle" | "busy";
   error?: string;
   agents?: AutocompleteAgent[];
+  /** Callback to trigger immediate SSE reconnection. */
+  onReconnect?: () => void;
+  /** Current reconnection attempt count (0 when connected). */
+  reconnectAttempt?: number;
 }
 
 function toTitleCase(s: string): string {
@@ -124,10 +128,10 @@ function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
 interface MessageItemProps {
   message: AccumulatedMessage;
   agents?: AutocompleteAgent[];
-  allMessages?: AccumulatedMessage[];
+  parentCreatedAt?: number;
 }
 
-function MessageItem({ message, agents, allMessages }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({ message, agents, parentCreatedAt }: MessageItemProps) {
   const isUser = message.role === "user";
   const textParts = message.parts.filter((p) => p.type === "text");
   const toolParts = message.parts.filter(
@@ -144,11 +148,8 @@ function MessageItem({ message, agents, allMessages }: MessageItemProps) {
 
   // Compute duration for assistant messages
   let durationStr: string | null = null;
-  if (!isUser && message.completedAt && message.parentID && allMessages) {
-    const parent = allMessages.find((m) => m.messageId === message.parentID);
-    if (parent?.createdAt) {
-      durationStr = formatDuration(message.completedAt - parent.createdAt);
-    }
+  if (!isUser && message.completedAt && parentCreatedAt) {
+    durationStr = formatDuration(message.completedAt - parentCreatedAt);
   }
 
   return (
@@ -229,7 +230,7 @@ function MessageItem({ message, agents, allMessages }: MessageItemProps) {
       </div>
     </div>
   );
-}
+});
 
 // ─── Activity Stream ────────────────────────────────────────────────────────
 
@@ -239,12 +240,36 @@ export function ActivityStreamV1({
   sessionStatus,
   error,
   agents,
+  onReconnect,
+  reconnectAttempt,
 }: ActivityStreamV1Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevMessageCountRef = useRef(0);
 
-  // Auto-scroll to bottom when new content arrives
+  // Auto-scroll to bottom when new content arrives (debounced)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const messageCount = messages.length;
+    const isNewMessage = messageCount !== prevMessageCountRef.current;
+    prevMessageCountRef.current = messageCount;
+
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+
+    scrollTimerRef.current = setTimeout(() => {
+      bottomRef.current?.scrollIntoView({
+        behavior: isNewMessage ? "smooth" : "auto",
+      });
+      scrollTimerRef.current = null;
+    }, 150);
+
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+    };
   }, [messages]);
 
   // Derive active agent from the latest user message when busy
@@ -254,13 +279,34 @@ export function ActivityStreamV1({
   const activeAgentMeta = activeAgentName ? agents?.find((a) => a.name === activeAgentName) : undefined;
   const activeAgentColor = activeAgentName ? resolveAgentColor(activeAgentName, activeAgentMeta?.color) : undefined;
 
+  const createdAtByMessageId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const msg of messages) {
+      if (msg.createdAt != null) map.set(msg.messageId, msg.createdAt);
+    }
+    return map;
+  }, [messages]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Connection status banner */}
       {status === "disconnected" && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-500 flex items-center gap-2">
-          <AlertCircle className="h-3.5 w-3.5" />
-          Connection lost — reconnecting…
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">
+            Connection lost — reconnecting
+            {reconnectAttempt != null && reconnectAttempt > 0
+              ? ` (attempt ${reconnectAttempt})` : ""}…
+          </span>
+          {onReconnect && (
+            <button
+              onClick={onReconnect}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Reconnect Now
+            </button>
+          )}
         </div>
       )}
       {status === "error" && error && (
@@ -290,7 +336,7 @@ export function ActivityStreamV1({
               key={message.messageId}
               message={message}
               agents={agents}
-              allMessages={messages}
+              parentCreatedAt={message.parentID ? createdAtByMessageId.get(message.parentID) : undefined}
             />
           ))}
 

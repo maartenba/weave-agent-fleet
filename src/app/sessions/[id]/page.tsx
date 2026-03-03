@@ -14,7 +14,7 @@ import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
@@ -45,7 +45,7 @@ export default function SessionDetailPage() {
   const { agents } = useAgents(instanceId);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
-  const { messages, status, sessionStatus, error, forceIdle } = useSessionEvents(
+  const { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt } = useSessionEvents(
     sessionId,
     instanceId,
     setSelectedAgent
@@ -401,6 +401,8 @@ export default function SessionDetailPage() {
                   sessionStatus={sessionStatus}
                   error={error}
                   agents={agents}
+                  onReconnect={reconnect}
+                  reconnectAttempt={reconnectAttempt}
                 />
               </div>
               <PromptInput
@@ -561,14 +563,43 @@ export default function SessionDetailPage() {
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Connection</p>
                 <div className="flex items-center gap-1.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    status === "connected" ? "bg-green-500" :
-                    status === "connecting" ? "bg-amber-500 animate-pulse" :
-                    status === "disconnected" ? "bg-amber-400" :
-                    "bg-red-500"
-                  }`} />
-                  <p className="text-xs capitalize">{status}</p>
+                  {status === "error" ? (
+                    <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                  ) : status === "disconnected" ? (
+                    <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+                  ) : (
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                      status === "connected" ? "bg-green-500" :
+                      status === "connecting" ? "bg-amber-500 animate-pulse" :
+                      status === "recovering" ? "bg-blue-500 animate-pulse" :
+                      "bg-red-500"
+                    }`} />
+                  )}
+                  <p className={`text-xs ${
+                    status === "error" ? "text-red-500 font-medium" :
+                    status === "disconnected" ? "text-amber-400" :
+                    ""
+                  }`}>
+                    {status === "error" ? "Error" :
+                     status === "disconnected"
+                       ? `Disconnected${reconnectAttempt > 0 ? ` (retry ${reconnectAttempt})` : ""}`
+                       : status === "recovering" ? "Recovering…"
+                       : status === "connecting" ? "Connecting…"
+                       : "Connected"}
+                  </p>
                 </div>
+                {status === "disconnected" && (
+                  <button
+                    onClick={reconnect}
+                    className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"
+                  >
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    Reconnect
+                  </button>
+                )}
+                {status === "error" && error && (
+                  <p className="text-[10px] text-red-400/70 break-words mt-0.5">{error}</p>
+                )}
               </div>
 
               {/* Todos — shown when agent has used todowrite */}

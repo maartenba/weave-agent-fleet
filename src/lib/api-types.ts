@@ -48,7 +48,7 @@ export interface SessionListItem {
   workspaceDirectory: string;
   workspaceDisplayName: string | null;
   isolationStrategy: string;
-  sessionStatus: "active" | "idle" | "stopped" | "completed" | "disconnected";
+  sessionStatus: "active" | "idle" | "stopped" | "completed" | "disconnected" | "error" | "waiting_input";
   session: Session;
   /** "running" means the OpenCode process is healthy */
   instanceStatus: "running" | "dead";

@@ -37,7 +37,7 @@ export interface DbSession {
   instance_id: string;
   opencode_session_id: string;
   title: string;
-  status: "active" | "idle" | "stopped" | "completed" | "disconnected";
+  status: "active" | "idle" | "stopped" | "completed" | "disconnected" | "error" | "waiting_input";
   directory: string;
   created_at: string;
   stopped_at: string | null;
@@ -214,7 +214,7 @@ export function listActiveSessions(): DbSession[] {
 
 export function updateSessionStatus(
   id: string,
-  status: "active" | "idle" | "stopped" | "completed" | "disconnected",
+  status: "active" | "idle" | "stopped" | "completed" | "disconnected" | "error" | "waiting_input",
   stoppedAt?: string
 ): void {
   getDb()

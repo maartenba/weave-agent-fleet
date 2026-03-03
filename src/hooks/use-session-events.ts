@@ -27,6 +27,10 @@ export interface UseSessionEventsResult {
   error?: string;
   /** Imperatively transition sessionStatus to "idle" (e.g. after a successful abort). */
   forceIdle: () => void;
+  /** Close the current EventSource, reset reconnect delay, and reconnect immediately. */
+  reconnect: () => void;
+  /** Number of reconnection attempts since last successful connection. */
+  reconnectAttempt: number;
 }
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -41,6 +45,7 @@ export function useSessionEvents(
   const [status, setStatus] = useState<SessionConnectionStatus>("connecting");
   const [sessionStatus, setSessionStatus] = useState<"idle" | "busy">("idle");
   const [error, setError] = useState<string | undefined>();
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const reconnectDelay = useRef(BASE_RECONNECT_DELAY_MS);
   const isMounted = useRef(false);
@@ -127,6 +132,7 @@ export function useSessionEvents(
     es.onopen = () => {
       if (!isMounted.current) return;
       reconnectDelay.current = BASE_RECONNECT_DELAY_MS;
+      setReconnectAttempt(0);
 
       if (hasConnectedOnce.current) {
         // Reconnect after a drop — recover state to fill gaps
@@ -162,6 +168,7 @@ export function useSessionEvents(
       es.close();
       eventSourceRef.current = null;
       setStatus("disconnected");
+      setReconnectAttempt((prev) => prev + 1);
 
       const delay = reconnectDelay.current;
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
@@ -192,7 +199,23 @@ export function useSessionEvents(
 
   const forceIdle = useCallback(() => setSessionStatus("idle"), []);
 
-  return { messages, status, sessionStatus, error, forceIdle };
+  const reconnect = useCallback(() => {
+    // Close existing connection
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    // Clear any pending reconnect timer
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    // Reset delay and attempt counter so manual reconnect starts fresh
+    reconnectDelay.current = BASE_RECONNECT_DELAY_MS;
+    setReconnectAttempt(0);
+    // Immediately reconnect
+    connectRef.current?.();
+  }, []);
+
+  return { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt };
 }
 
 // ─── Event handler (pure — receives setters to avoid stale closures) ──────
