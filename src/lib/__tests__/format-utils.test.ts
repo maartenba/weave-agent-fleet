@@ -3,6 +3,7 @@ import {
   formatCost,
   formatDuration,
   formatTimestamp,
+  formatRelativeTime,
   getStatusColor,
   getStatusDot,
 } from "@/lib/format-utils";
@@ -208,6 +209,82 @@ describe("getStatusDot", () => {
 
   it("returns 'bg-zinc-500' for an empty string", () => {
     expect(getStatusDot("")).toBe("bg-zinc-500");
+  });
+});
+
+// ─── formatRelativeTime ───────────────────────────────────────────────────────
+
+describe("formatRelativeTime", () => {
+  const BASE = 1_700_000_000_000; // fixed reference point (ms)
+
+  it("returns 'just now' for timestamps less than 30 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 10_000, BASE)).toBe("just now");
+  });
+
+  it("returns 'just now' for a timestamp equal to now (0 seconds ago)", () => {
+    expect(formatRelativeTime(BASE, BASE)).toBe("just now");
+  });
+
+  it("returns 'just now' for exactly 29 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 29_000, BASE)).toBe("just now");
+  });
+
+  it("returns 'Xs ago' for exactly 30 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 30_000, BASE)).toBe("30s ago");
+  });
+
+  it("returns '45s ago' for 45 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 45_000, BASE)).toBe("45s ago");
+  });
+
+  it("returns '59s ago' for 59 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 59_000, BASE)).toBe("59s ago");
+  });
+
+  it("returns '1m ago' for exactly 60 seconds ago", () => {
+    expect(formatRelativeTime(BASE - 60_000, BASE)).toBe("1m ago");
+  });
+
+  it("returns '5m ago' for 5 minutes ago", () => {
+    expect(formatRelativeTime(BASE - 5 * 60_000, BASE)).toBe("5m ago");
+  });
+
+  it("returns '59m ago' for 59 minutes ago", () => {
+    expect(formatRelativeTime(BASE - 59 * 60_000, BASE)).toBe("59m ago");
+  });
+
+  it("returns '1h ago' for exactly 60 minutes ago", () => {
+    expect(formatRelativeTime(BASE - 60 * 60_000, BASE)).toBe("1h ago");
+  });
+
+  it("returns '2h ago' for 2 hours ago", () => {
+    expect(formatRelativeTime(BASE - 2 * 3_600_000, BASE)).toBe("2h ago");
+  });
+
+  it("returns '23h ago' for 23 hours ago", () => {
+    expect(formatRelativeTime(BASE - 23 * 3_600_000, BASE)).toBe("23h ago");
+  });
+
+  it("falls back to formatTimestamp for exactly 24 hours ago", () => {
+    const ts = BASE - 24 * 3_600_000;
+    const result = formatRelativeTime(ts, BASE);
+    // formatTimestamp returns a date+time string (different day), not a relative string
+    expect(result).not.toMatch(/ago/);
+    expect(result).not.toBe("just now");
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to formatTimestamp for timestamps > 24h ago", () => {
+    const ts = BASE - 48 * 3_600_000;
+    const result = formatRelativeTime(ts, BASE);
+    expect(result).not.toMatch(/ago/);
+    expect(result).not.toBe("just now");
+  });
+
+  it("handles 0 timestamp gracefully (returns '' from formatTimestamp fallback)", () => {
+    // 0 is more than 24h before any real 'now', so it falls through to formatTimestamp(0) → ""
+    const result = formatRelativeTime(0, BASE);
+    expect(result).toBe("");
   });
 });
 

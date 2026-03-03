@@ -1,17 +1,23 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef } from "react";
+import { Fragment, memo, useMemo, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, Wrench, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Bot, User, Wrench, Loader2, AlertCircle, RefreshCw, ChevronDown } from "lucide-react";
+import { useScrollAnchor } from "@/hooks/use-scroll-anchor";
+import { useActivityFilter } from "@/hooks/use-activity-filter";
+import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AutocompleteAgent } from "@/lib/api-types";
 import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
 import { resolveAgentColor } from "@/lib/agent-colors";
-import { formatTimestamp } from "@/lib/format-utils";
 import { TodoListInline } from "./todo-list-inline";
+import { CollapsibleToolCall } from "./collapsible-tool-call";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { RelativeTimestamp } from "./relative-timestamp";
+import { ActivityStreamToolbar } from "./activity-stream-toolbar";
 
 interface ActivityStreamV1Props {
   messages: AccumulatedMessage[];
@@ -81,8 +87,6 @@ function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const state = part.state as any;
   const isRunning = state?.status === "running" || !state?.status;
-  const isCompleted = state?.status === "completed";
-  const isError = state?.status === "error";
 
   // Special rendering for todowrite tool calls
   if (isTodoWriteTool(part.tool)) {
@@ -104,23 +108,7 @@ function ToolCallItem({ part }: { part: AccumulatedPart & { type: "tool" } }) {
     }
   }
 
-  return (
-    <div className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground">
-      <Wrench className="h-3 w-3 shrink-0 text-amber-500" />
-      <span className="font-mono text-amber-500/90">{part.tool}</span>
-      {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
-      {isCompleted && (
-        <span className="text-green-500/80">
-          {state?.output ? String(state.output).slice(0, 60) : "done"}
-        </span>
-      )}
-      {isError && (
-        <span className="text-red-500/80">
-          {state?.error ? String(state.error).slice(0, 60) : "error"}
-        </span>
-      )}
-    </div>
-  );
+  return <CollapsibleToolCall part={part} />;
 }
 
 // ─── Message Item ───────────────────────────────────────────────────────────
@@ -129,9 +117,16 @@ interface MessageItemProps {
   message: AccumulatedMessage;
   agents?: AutocompleteAgent[];
   parentCreatedAt?: number;
+  highlightQuery?: string;
+  isMatchingMessage?: boolean;
 }
 
-const MessageItem = memo(function MessageItem({ message, agents, parentCreatedAt }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({
+  message,
+  agents,
+  parentCreatedAt,
+  isMatchingMessage,
+}: MessageItemProps) {
   const isUser = message.role === "user";
   const textParts = message.parts.filter((p) => p.type === "text");
   const toolParts = message.parts.filter(
@@ -154,7 +149,7 @@ const MessageItem = memo(function MessageItem({ message, agents, parentCreatedAt
 
   return (
     <div
-      className="flex gap-3 px-4 py-3 hover:bg-accent/20 border-b border-border/40 border-l-2"
+      className={`flex gap-3 px-4 py-3 hover:bg-accent/20 border-b border-border/40 border-l-2${isMatchingMessage ? " bg-yellow-500/5" : ""}`}
       style={{ borderLeftColor: agentColor ?? "transparent" }}
     >
       <div className="mt-0.5 shrink-0">
@@ -198,9 +193,7 @@ const MessageItem = memo(function MessageItem({ message, agents, parentCreatedAt
             </span>
           )}
           {message.createdAt ? (
-            <span className="text-[10px] text-muted-foreground ml-auto">
-              {formatTimestamp(message.createdAt)}
-            </span>
+            <RelativeTimestamp timestamp={message.createdAt} />
           ) : null}
         </div>
 
@@ -234,6 +227,18 @@ const MessageItem = memo(function MessageItem({ message, agents, parentCreatedAt
 
 // ─── Activity Stream ────────────────────────────────────────────────────────
 
+function DurationSeparator({ durationMs }: { durationMs: number }) {
+  return (
+    <div className="flex items-center gap-2 px-4 py-1">
+      <div className="flex-1 border-t border-border/30" />
+      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+        {formatDuration(durationMs)}
+      </span>
+      <div className="flex-1 border-t border-border/30" />
+    </div>
+  );
+}
+
 export function ActivityStreamV1({
   messages,
   status,
@@ -243,34 +248,26 @@ export function ActivityStreamV1({
   onReconnect,
   reconnectAttempt,
 }: ActivityStreamV1Props) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevMessageCountRef = useRef(0);
+  const { scrollRef, isAtBottom, newMessageCount, scrollToBottom } =
+    useScrollAnchor({ messageCount: messages.length });
 
-  // Auto-scroll to bottom when new content arrives (debounced)
-  useEffect(() => {
-    const messageCount = messages.length;
-    const isNewMessage = messageCount !== prevMessageCountRef.current;
-    prevMessageCountRef.current = messageCount;
+  const {
+    searchQuery,
+    setSearchQuery,
+    messageTypeFilter,
+    toggleMessageType,
+    agentFilter,
+    setAgentFilter,
+    filteredMessages,
+    matchingPartIds,
+    isFiltering,
+    clearFilters,
+    isOpen: toolbarOpen,
+    setIsOpen: setToolbarOpen,
+  } = useActivityFilter(messages);
 
-    if (scrollTimerRef.current) {
-      clearTimeout(scrollTimerRef.current);
-    }
-
-    scrollTimerRef.current = setTimeout(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: isNewMessage ? "smooth" : "auto",
-      });
-      scrollTimerRef.current = null;
-    }, 150);
-
-    return () => {
-      if (scrollTimerRef.current) {
-        clearTimeout(scrollTimerRef.current);
-        scrollTimerRef.current = null;
-      }
-    };
-  }, [messages]);
+  const handleOpenToolbar = useCallback(() => setToolbarOpen(true), [setToolbarOpen]);
+  useKeyboardShortcut("f", handleOpenToolbar, { platformModifier: true });
 
   // Derive active agent from the latest user message when busy
   const activeAgentName = sessionStatus === "busy"
@@ -316,50 +313,101 @@ export function ActivityStreamV1({
         </div>
       )}
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div>
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
-              {status === "connecting" ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Connecting…</span>
-                </>
-              ) : (
-                <span>No messages yet. Send a prompt to get started.</span>
-              )}
-            </div>
-          )}
+      {/* Search/filter toolbar */}
+      {toolbarOpen && (
+        <ActivityStreamToolbar
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          messageTypeFilter={messageTypeFilter}
+          toggleMessageType={toggleMessageType}
+          agentFilter={agentFilter}
+          setAgentFilter={setAgentFilter}
+          isFiltering={isFiltering}
+          clearFilters={clearFilters}
+          filteredCount={filteredMessages.length}
+          totalCount={messages.length}
+          agents={agents}
+          onClose={() => { setToolbarOpen(false); clearFilters(); }}
+        />
+      )}
 
-          {messages.map((message) => (
-            <MessageItem
-              key={message.messageId}
-              message={message}
-              agents={agents}
-              parentCreatedAt={message.parentID ? createdAtByMessageId.get(message.parentID) : undefined}
-            />
-          ))}
-
-          {/* "Thinking" indicator when agent is busy but no new message yet */}
-          {sessionStatus === "busy" &&
-            messages.length > 0 &&
-            messages[messages.length - 1].role === "user" && (
-              <div className="flex gap-3 px-4 py-3 border-b border-border/40">
-                <Bot className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>
-                    {activeAgentName
-                      ? `${toTitleCase(activeAgentName)} thinking…`
-                      : "Thinking…"}
-                  </span>
-                </div>
+      <div className="relative flex-1 min-h-0" ref={scrollRef}>
+        <ScrollArea className="h-full">
+          <div>
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
+                {status === "connecting" ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Connecting…</span>
+                  </>
+                ) : (
+                  <span>No messages yet. Send a prompt to get started.</span>
+                )}
               </div>
             )}
 
-          <div ref={bottomRef} />
-        </div>
-      </ScrollArea>
+            {filteredMessages.map((message, index) => {
+              const prevMessage = index > 0 ? filteredMessages[index - 1] : null;
+              const gap = prevMessage && message.createdAt && (prevMessage.completedAt ?? prevMessage.createdAt)
+                ? message.createdAt - (prevMessage.completedAt ?? prevMessage.createdAt!)
+                : 0;
+
+              // A message is highlighted if filtering is active and any of its parts matched
+              const isMatchingMessage = isFiltering &&
+                message.parts.some((p) => matchingPartIds.has(p.partId));
+
+              return (
+                <Fragment key={message.messageId}>
+                  {gap > 30_000 && <DurationSeparator durationMs={gap} />}
+                  <MessageItem
+                    message={message}
+                    agents={agents}
+                    parentCreatedAt={message.parentID ? createdAtByMessageId.get(message.parentID) : undefined}
+                    highlightQuery={isFiltering ? searchQuery : undefined}
+                    isMatchingMessage={isMatchingMessage}
+                  />
+                </Fragment>
+              );
+            })}
+
+            {/* "Thinking" indicator when agent is busy but no new message yet */}
+            {sessionStatus === "busy" &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === "user" && (
+                <div className="flex gap-3 px-4 py-3 border-b border-border/40">
+                  <Bot className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>
+                      {activeAgentName
+                        ? `${toTitleCase(activeAgentName)} thinking…`
+                        : "Thinking…"}
+                    </span>
+                  </div>
+                </div>
+              )}
+          </div>
+        </ScrollArea>
+
+        {/* Jump-to-bottom floating button */}
+        {!isAtBottom && (
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="absolute bottom-4 right-4 z-10 rounded-full shadow-md"
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
+          >
+            <ChevronDown className="h-4 w-4" />
+            {newMessageCount > 0 && (
+              <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                {newMessageCount > 99 ? "99+" : newMessageCount}
+              </span>
+            )}
+          </Button>
+        )}
+      </div>
 
       {/* Status bar */}
       <div className="px-4 py-1.5 border-t border-border/40 flex items-center gap-2">
@@ -372,9 +420,6 @@ export function ActivityStreamV1({
                 : status === "connected"
                 ? "var(--color-zinc-500)"
                 : "var(--color-amber-500)",
-            ...(sessionStatus === "busy" || status !== "connected"
-              ? {}
-              : {}),
           }}
         />
         <span className="text-[10px] text-muted-foreground">
@@ -393,7 +438,9 @@ export function ActivityStreamV1({
             variant="outline"
             className="ml-auto text-[10px] px-1.5 py-0"
           >
-            {messages.length} message{messages.length !== 1 ? "s" : ""}
+            {isFiltering
+              ? `${filteredMessages.length} of ${messages.length} message${messages.length !== 1 ? "s" : ""}`
+              : `${messages.length} message${messages.length !== 1 ? "s" : ""}`}
           </Badge>
         )}
       </div>
