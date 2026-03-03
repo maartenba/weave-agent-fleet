@@ -20,7 +20,9 @@ export type SessionStatus =
   | "idle"
   | "waiting_input"
   | "completed"
-  | "error";
+  | "error"
+  | "stopped"
+  | "disconnected";
 
 export type SessionSourceType =
   | "manual"

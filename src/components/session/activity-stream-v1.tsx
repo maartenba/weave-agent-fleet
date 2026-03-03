@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, Wrench, Loader2, AlertCircle } from "lucide-react";
+import { Bot, User, Wrench, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AutocompleteAgent } from "@/lib/api-types";
 import { isTaskToolCall, getTaskToolInput } from "@/lib/api-types";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
@@ -19,6 +19,10 @@ interface ActivityStreamV1Props {
   sessionStatus: "idle" | "busy";
   error?: string;
   agents?: AutocompleteAgent[];
+  /** Callback to trigger immediate SSE reconnection. */
+  onReconnect?: () => void;
+  /** Current reconnection attempt count (0 when connected). */
+  reconnectAttempt?: number;
 }
 
 function toTitleCase(s: string): string {
@@ -236,6 +240,8 @@ export function ActivityStreamV1({
   sessionStatus,
   error,
   agents,
+  onReconnect,
+  reconnectAttempt,
 }: ActivityStreamV1Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -286,8 +292,21 @@ export function ActivityStreamV1({
       {/* Connection status banner */}
       {status === "disconnected" && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-500 flex items-center gap-2">
-          <AlertCircle className="h-3.5 w-3.5" />
-          Connection lost — reconnecting…
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">
+            Connection lost — reconnecting
+            {reconnectAttempt != null && reconnectAttempt > 0
+              ? ` (attempt ${reconnectAttempt})` : ""}…
+          </span>
+          {onReconnect && (
+            <button
+              onClick={onReconnect}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Reconnect Now
+            </button>
+          )}
         </div>
       )}
       {status === "error" && error && (

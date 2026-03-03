@@ -30,6 +30,7 @@ import {
 import {
   createSessionDisconnectedNotification,
 } from "./notification-service";
+import { log } from "./logger";
 
 // ─── OPENCODE_BIN support ─────────────────────────────────────────────────────
 // If OPENCODE_BIN is set to the full path of the opencode binary, prepend its
@@ -42,7 +43,7 @@ if (process.env.OPENCODE_BIN) {
     const sep = process.platform === "win32" ? ";" : ":";
     process.env.PATH = `${binDir}${sep}${process.env.PATH ?? ""}`;
   } else {
-    console.warn(`[process-manager] OPENCODE_BIN set to "${process.env.OPENCODE_BIN}" but file does not exist`);
+    log.warn("process-manager", `OPENCODE_BIN set to "${process.env.OPENCODE_BIN}" but file does not exist`);
   }
 }
 
@@ -249,8 +250,8 @@ export function getAllowedRoots(): string[] {
   let dbRoots: string[] = [];
   try {
     dbRoots = listWorkspaceRoots().map((r) => r.path);
-  } catch {
-    // DB not available — skip
+  } catch (err) {
+    log.warn("process-manager", "Failed to read workspace roots from DB", { err });
   }
 
   const seen = new Set<string>();
@@ -337,8 +338,8 @@ export async function recoverInstances(): Promise<void> {
   let runningDbInstances: ReturnType<typeof getRunningInstances>;
   try {
     runningDbInstances = getRunningInstances();
-  } catch {
-    // DB not available — skip recovery
+  } catch (err) {
+    log.warn("process-manager", "DB not available — skipping instance recovery", { err });
     _recoveryCompleteResolve?.();
     _recoveryCompleteResolve = null;
     _g.__weaveRecoveryResolve = null;
@@ -373,8 +374,8 @@ export async function recoverInstances(): Promise<void> {
           if (recoveredPid) {
             try {
               process.kill(recoveredPid);
-            } catch {
-              // Process may have already exited — ignore
+            } catch (err) {
+              log.warn("process-manager", "Failed to kill recovered process — may have already exited", { pid: recoveredPid, err });
             }
           }
         },
@@ -389,8 +390,8 @@ export async function recoverInstances(): Promise<void> {
       // Mark as stopped in DB
       try {
         updateInstanceStatus(dbInst.id, "stopped", new Date().toISOString());
-      } catch {
-        // Best effort
+      } catch (err) {
+        log.warn("process-manager", "Failed to mark unreachable instance as stopped in DB", { instanceId: dbInst.id, err });
       }
     }
   }
@@ -416,7 +417,8 @@ async function checkPortAlive(url: string): Promise<boolean> {
     } finally {
       clearTimeout(timeout);
     }
-  } catch {
+  } catch (err) {
+    log.warn("process-manager", "Port health check failed — treating as unreachable", { url, err });
     return false;
   }
 }
@@ -458,9 +460,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
     // Pre-check: is the OS port actually free?
     const available = await isPortAvailable(port);
     if (!available) {
-      console.warn(
-        `[process-manager] Port ${port} allocated but OS reports it in use (zombie process?) — skipping`
-      );
+      log.warn("process-manager", `Port ${port} allocated but OS reports it in use — skipping`, { port });
       // Don't release: keep it marked as used so we don't retry it.
       // The health check loop or a restart will eventually clear it.
       continue;
@@ -481,10 +481,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
       lastError = err;
       // Release the port so it can be reclaimed later if the issue was transient
       releasePort(port);
-      console.warn(
-        `[process-manager] Failed to spawn on port ${port} (attempt ${attempt + 1}/${MAX_PORT_RETRIES}):`,
-        err instanceof Error ? err.message : err
-      );
+      log.warn("process-manager", `Failed to spawn on port ${port} (attempt ${attempt + 1}/${MAX_PORT_RETRIES})`, { port, attempt: attempt + 1, err });
     }
   }
 
@@ -501,9 +498,8 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
       url: server.url,
       pid: server.pid ?? null,
     });
-  } catch {
-    // DB write failure is non-fatal — instance still works in-memory
-    console.warn(`[process-manager] Failed to persist instance ${instanceId} to DB`);
+  } catch (err) {
+    log.warn("process-manager", "Failed to persist instance to DB — running in-memory only", { instanceId, err });
   }
 
   const client = createOpencodeClient({ baseUrl: server.url, directory });
@@ -541,8 +537,8 @@ export function destroyInstance(id: string): void {
   // Update DB first so even if kill fails, the DB reflects intent
   try {
     updateInstanceStatus(id, "stopped", new Date().toISOString());
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    log.warn("process-manager", "Failed to update instance status to stopped in DB", { instanceId: id, err });
   }
 
   // Cascade: mark all active sessions on this instance as disconnected
@@ -557,14 +553,14 @@ export function destroyInstance(id: string): void {
         { reason: "instance destroyed", directory: instance.directory }
       );
     }
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    log.warn("process-manager", "Failed to cascade session disconnections on instance destroy", { instanceId: id, err });
   }
 
   try {
     instance.close();
-  } catch {
-    // ignore errors on close
+  } catch (err) {
+    log.warn("process-manager", "Error while closing instance process", { instanceId: id, err });
   }
   instance.status = "dead";
   instances.delete(id);
@@ -589,7 +585,7 @@ if (!_g.__weaveInitDone) {
 
   // This is intentionally fire-and-forget — callers await `_recoveryComplete` if they need to.
   recoverInstances().catch((err) => {
-    console.error("[process-manager] Recovery failed:", err);
+    log.error("process-manager", "Recovery failed", { err });
   });
 }
 
@@ -619,13 +615,13 @@ export function startHealthCheckLoop(): void {
         const fails = (_healthFailCounts.get(id) ?? 0) + 1;
         _healthFailCounts.set(id, fails);
         if (fails >= HEALTH_CHECK_FAIL_THRESHOLD) {
-          console.warn(`[process-manager] Instance ${id} failed health check ${fails} times — marking dead`);
+          log.warn("process-manager", `Instance ${id} failed health check ${fails} times — marking dead`, { instanceId: id, fails });
           instance.status = "dead";
           _healthFailCounts.delete(id);
           try {
             updateInstanceStatus(id, "stopped", new Date().toISOString());
-          } catch {
-            // Non-fatal
+          } catch (err) {
+            log.warn("process-manager", "Failed to mark dead instance as stopped in DB", { instanceId: id, err });
           }
           // Create disconnected notifications for all active sessions on this instance
           // and mark them as disconnected in the DB
@@ -640,8 +636,8 @@ export function startHealthCheckLoop(): void {
                 { reason: `health check failed ${fails} times`, directory: instance.directory }
               );
             }
-          } catch {
-            // Non-fatal
+          } catch (err) {
+            log.warn("process-manager", "Failed to cascade session disconnections after health check failure", { instanceId: id, err });
           }
           directoryToInstanceId.delete(instance.directory);
           releasePort(instance.port);
@@ -656,10 +652,10 @@ export function startHealthCheckLoop(): void {
 _recoveryComplete.then(() => {
   startHealthCheckLoop();
   // Ensure callback monitor is loaded — its self-initializing code starts the polling loop
-  import("./callback-monitor").catch(() => {/* non-fatal */});
+  import("./callback-monitor").catch((err) => { log.warn("process-manager", "Failed to load callback monitor", { err }); });
   // Start notification cleanup (TTL-based auto-deletion)
-  import("./notification-cleanup").then((m) => m.startNotificationCleanup()).catch(() => {/* non-fatal */});
-}).catch(() => {/* non-fatal */});
+  import("./notification-cleanup").then((m) => m.startNotificationCleanup()).catch((err) => { log.warn("process-manager", "Failed to start notification cleanup", { err }); });
+}).catch((err) => { log.warn("process-manager", "Post-recovery startup tasks failed", { err }); });
 
 // Clean up all instances when the Node.js process exits.
 // Signal handlers are registered every time this module is loaded by a new Turbopack chunk,
