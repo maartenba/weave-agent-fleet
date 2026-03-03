@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useMemo, useCallback } from "react";
+import { Fragment, memo, useMemo, useCallback, useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,16 @@ interface ActivityStreamV1Props {
   onReconnect?: () => void;
   /** Current reconnection attempt count (0 when connected). */
   reconnectAttempt?: number;
+  /** Whether there are older messages that can be loaded. */
+  hasMoreMessages?: boolean;
+  /** Whether older messages are currently being fetched. */
+  isLoadingOlder?: boolean;
+  /** Callback to load older messages (scroll-up infinite scroll). */
+  onLoadOlder?: () => void;
+  /** Total number of messages in the session (null until first paginated load). */
+  totalMessageCount?: number | null;
+  /** Error from the last failed older-messages fetch (null when no error). */
+  loadOlderError?: string | null;
 }
 
 function toTitleCase(s: string): string {
@@ -247,9 +257,34 @@ export function ActivityStreamV1({
   agents,
   onReconnect,
   reconnectAttempt,
+  hasMoreMessages,
+  isLoadingOlder,
+  onLoadOlder,
+  totalMessageCount,
+  loadOlderError,
 }: ActivityStreamV1Props) {
-  const { scrollRef, isAtBottom, newMessageCount, scrollToBottom } =
+  const { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition } =
     useScrollAnchor({ messageCount: messages.length });
+
+  // Guard against double-firing onLoadOlder while isNearTop stays true
+  const hasFiredLoadOlderRef = useRef(false);
+
+  // Reset the guard when isNearTop transitions to false
+  useEffect(() => {
+    if (!isNearTop) {
+      hasFiredLoadOlderRef.current = false;
+    }
+  }, [isNearTop]);
+
+  // Trigger loading older messages when user scrolls near the top
+  useEffect(() => {
+    if (isNearTop && hasMoreMessages && !isLoadingOlder && onLoadOlder && !hasFiredLoadOlderRef.current) {
+      hasFiredLoadOlderRef.current = true;
+      preserveScrollPosition(() => {
+        onLoadOlder();
+      });
+    }
+  }, [isNearTop, hasMoreMessages, isLoadingOlder, onLoadOlder, preserveScrollPosition]);
 
   const {
     searchQuery,
@@ -334,6 +369,25 @@ export function ActivityStreamV1({
       <div className="relative flex-1 min-h-0" ref={scrollRef}>
         <ScrollArea className="h-full">
           <div>
+            {/* Loading indicator for older messages */}
+            {isLoadingOlder && (
+              <div className="flex items-center justify-center py-3 text-xs text-muted-foreground gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Loading older messages…</span>
+              </div>
+            )}
+            {hasMoreMessages && !isLoadingOlder && (
+              <div className="flex items-center justify-center py-2 text-xs text-muted-foreground">
+                <span>Scroll up for older messages</span>
+              </div>
+            )}
+            {loadOlderError && !isLoadingOlder && (
+              <div className="flex items-center justify-center py-2 text-xs text-red-400 gap-1.5">
+                <AlertCircle className="h-3 w-3" />
+                <span>{loadOlderError} — scroll up to retry</span>
+              </div>
+            )}
+
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
                 {status === "connecting" ? (
@@ -440,6 +494,8 @@ export function ActivityStreamV1({
           >
             {isFiltering
               ? `${filteredMessages.length} of ${messages.length} message${messages.length !== 1 ? "s" : ""}`
+              : totalMessageCount != null && totalMessageCount > messages.length
+              ? `${messages.length} of ${totalMessageCount} messages loaded`
               : `${messages.length} message${messages.length !== 1 ? "s" : ""}`}
           </Badge>
         )}

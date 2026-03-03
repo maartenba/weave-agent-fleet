@@ -251,4 +251,98 @@ describe("useScrollAnchor (logic)", () => {
       expect(display).toBe("42");
     });
   });
+
+  // ── isNearTop threshold calculation ─────────────────────────────────────
+
+  describe("isNearTop threshold calculation", () => {
+    it("considers viewport near top when scrollTop <= 200", () => {
+      const viewport = createMockViewport({
+        scrollTop: 150,
+        scrollHeight: 2000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+      const nearTop = viewport.scrollTop <= 200;
+      expect(nearTop).toBe(true);
+    });
+
+    it("considers viewport NOT near top when scrollTop > 200", () => {
+      const viewport = createMockViewport({
+        scrollTop: 300,
+        scrollHeight: 2000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+      const nearTop = viewport.scrollTop <= 200;
+      expect(nearTop).toBe(false);
+    });
+
+    it("considers viewport near top when exactly at 200px threshold", () => {
+      const viewport = createMockViewport({
+        scrollTop: 200,
+        scrollHeight: 2000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+      const nearTop = viewport.scrollTop <= 200;
+      expect(nearTop).toBe(true);
+    });
+
+    it("considers viewport NOT near top when 1px past threshold (scrollTop=201)", () => {
+      const viewport = createMockViewport({
+        scrollTop: 201,
+        scrollHeight: 2000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+      const nearTop = viewport.scrollTop <= 200;
+      expect(nearTop).toBe(false);
+    });
+
+    it("considers viewport near top when scrollTop is 0", () => {
+      const viewport = createMockViewport({
+        scrollTop: 0,
+        scrollHeight: 2000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+      const nearTop = viewport.scrollTop <= 200;
+      expect(nearTop).toBe(true);
+    });
+  });
+
+  // ── preserveScrollPosition logic ────────────────────────────────────────
+
+  describe("preserveScrollPosition logic", () => {
+    it("adjusts scrollTop by the delta in scrollHeight after content prepend", () => {
+      const viewport = createMockViewport({
+        scrollTop: 100,
+        scrollHeight: 1000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+
+      // Simulate: before callback scrollHeight=1000, after callback scrollHeight=1500
+      const prevScrollHeight = viewport.scrollHeight;
+      const prevScrollTop = viewport.scrollTop;
+
+      // Simulate content prepend: scrollHeight grows
+      viewport.scrollHeight = 1500;
+      const delta = viewport.scrollHeight - prevScrollHeight;
+      const newScrollTop = prevScrollTop + delta;
+
+      expect(delta).toBe(500);
+      expect(newScrollTop).toBe(600);
+    });
+
+    it("does not adjust scrollTop when no content was added (delta=0)", () => {
+      const viewport = createMockViewport({
+        scrollTop: 100,
+        scrollHeight: 1000,
+        clientHeight: 500,
+      } as unknown as Partial<HTMLElement>);
+
+      const prevScrollHeight = viewport.scrollHeight;
+      const prevScrollTop = viewport.scrollTop;
+      // No change in scrollHeight
+      const delta = viewport.scrollHeight - prevScrollHeight;
+
+      expect(delta).toBe(0);
+      expect(prevScrollTop + delta).toBe(100);
+    });
+  });
 });

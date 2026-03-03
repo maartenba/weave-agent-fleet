@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** Threshold in pixels from the bottom to consider the user "at the bottom". */
 const AT_BOTTOM_THRESHOLD = 50;
 
+/** Threshold in pixels from the top to consider the user "near the top". */
+const NEAR_TOP_THRESHOLD = 200;
+
 export interface UseScrollAnchorOptions {
   /**
    * Total number of messages — used to detect new arrivals and
@@ -18,10 +21,18 @@ export interface UseScrollAnchorReturn {
   scrollRef: (node: HTMLElement | null) => void;
   /** Whether the viewport is currently scrolled to (or near) the bottom. */
   isAtBottom: boolean;
+  /** Whether the viewport is scrolled near the top (within NEAR_TOP_THRESHOLD). */
+  isNearTop: boolean;
   /** Number of messages that arrived while the user was scrolled up. */
   newMessageCount: number;
   /** Programmatically scroll to the bottom and reset the counter. */
   scrollToBottom: () => void;
+  /**
+   * Preserve scroll position across a callback that prepends content.
+   * Captures scrollHeight before, executes the callback, then adjusts
+   * scrollTop by the delta so the visible content doesn't jump.
+   */
+  preserveScrollPosition: (callback: () => void | Promise<void>) => Promise<void>;
 }
 
 /**
@@ -41,6 +52,7 @@ export function useScrollAnchor({
   const prevMessageCountRef = useRef(messageCount);
 
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [isNearTop, setIsNearTop] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
 
   // —— Detect whether the viewport is scrolled to the bottom ——————
@@ -61,6 +73,9 @@ export function useScrollAnchor({
       const atBottom = checkIsAtBottom(el);
       isAtBottomRef.current = atBottom;
       setIsAtBottom(atBottom);
+
+      const nearTop = el.scrollTop <= NEAR_TOP_THRESHOLD;
+      setIsNearTop(nearTop);
 
       // If the user scrolled back to the bottom, clear the unseen count.
       if (atBottom) {
@@ -133,5 +148,30 @@ export function useScrollAnchor({
     };
   }, []);
 
-  return { scrollRef, isAtBottom, newMessageCount, scrollToBottom };
+  // —— Preserve scroll position across content prepend ─────────────
+  const preserveScrollPosition = useCallback(
+    async (callback: () => void | Promise<void>) => {
+      const el = viewportRef.current;
+      if (!el) {
+        await callback();
+        return;
+      }
+
+      const prevScrollHeight = el.scrollHeight;
+      const prevScrollTop = el.scrollTop;
+
+      await callback();
+
+      // Wait for the DOM to lay out the new content before adjusting
+      requestAnimationFrame(() => {
+        const delta = el.scrollHeight - prevScrollHeight;
+        if (delta > 0) {
+          el.scrollTop = prevScrollTop + delta;
+        }
+      });
+    },
+    [],
+  );
+
+  return { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition };
 }
