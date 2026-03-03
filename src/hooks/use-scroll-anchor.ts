@@ -50,6 +50,15 @@ export function useScrollAnchor({
   const isAtBottomRef = useRef(true);
   const rafIdRef = useRef<number | null>(null);
   const prevMessageCountRef = useRef(messageCount);
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
+  const mutationRafRef = useRef<number | null>(null);
+  /**
+   * Guard flag: set `true` while a programmatic scroll is in progress
+   * (auto-scroll or preserveScrollPosition). While set, the scroll
+   * handler will NOT disengage auto-scroll — only user-initiated
+   * scrolls should do that.
+   */
+  const isProgrammaticScrollRef = useRef(false);
 
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isNearTop, setIsNearTop] = useState(false);
@@ -71,6 +80,20 @@ export function useScrollAnchor({
       if (!el) return;
 
       const atBottom = checkIsAtBottom(el);
+
+      // During programmatic scrolls (auto-scroll, preserve-position)
+      // intermediate scroll events can read stale positions. Only
+      // allow re-engagement (atBottom → true) but never disengage.
+      if (isProgrammaticScrollRef.current) {
+        if (atBottom) {
+          isAtBottomRef.current = true;
+          setIsAtBottom(true);
+          setNewMessageCount(0);
+        }
+        // Skip near-top and disengage logic during programmatic scrolls.
+        return;
+      }
+
       isAtBottomRef.current = atBottom;
       setIsAtBottom(atBottom);
 
@@ -87,10 +110,14 @@ export function useScrollAnchor({
   // —— Callback-ref that discovers the viewport element ———————————
   const scrollRef = useCallback(
     (node: HTMLElement | null) => {
-      // Clean up previous listener
+      // Clean up previous listener & observer
       const prev = viewportRef.current;
       if (prev) {
         prev.removeEventListener("scroll", handleScroll);
+      }
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect();
+        mutationObserverRef.current = null;
       }
 
       if (node) {
@@ -99,6 +126,30 @@ export function useScrollAnchor({
         );
         viewportRef.current = viewport ?? null;
         viewport?.addEventListener("scroll", handleScroll, { passive: true });
+
+        // Observe DOM mutations (streaming text deltas, tool call updates)
+        // to auto-scroll when content grows without changing messageCount.
+        if (viewport) {
+          const observer = new MutationObserver(() => {
+            if (!isAtBottomRef.current || isProgrammaticScrollRef.current) return;
+            if (mutationRafRef.current !== null) return;
+
+            mutationRafRef.current = requestAnimationFrame(() => {
+              mutationRafRef.current = null;
+              const el = viewportRef.current;
+              if (!el || !isAtBottomRef.current) return;
+              isProgrammaticScrollRef.current = true;
+              el.scrollTop = el.scrollHeight;
+              isProgrammaticScrollRef.current = false;
+            });
+          });
+          observer.observe(viewport, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
+          mutationObserverRef.current = observer;
+        }
       } else {
         viewportRef.current = null;
       }
@@ -127,10 +178,17 @@ export function useScrollAnchor({
       // User is at the bottom → auto-scroll to keep them there.
       const el = viewportRef.current;
       if (el) {
+        // Guard against false disengagement during smooth scroll.
+        isProgrammaticScrollRef.current = true;
         // Use requestAnimationFrame so the DOM has a chance to lay out the
         // new content before we scroll.
         requestAnimationFrame(() => {
           el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+          // Clear the guard after the smooth scroll has had time to settle.
+          // 300ms covers the typical smooth-scroll duration.
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+          }, 300);
         });
       }
     } else {
@@ -139,11 +197,17 @@ export function useScrollAnchor({
     }
   }, [messageCount]);
 
-  // —— Cleanup rAF on unmount —————————————————————————————————————
+  // —— Cleanup on unmount ——————————————————————————————————————————
   useEffect(() => {
     return () => {
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
+      }
+      if (mutationRafRef.current !== null) {
+        cancelAnimationFrame(mutationRafRef.current);
+      }
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect();
       }
     };
   }, []);
@@ -160,6 +224,7 @@ export function useScrollAnchor({
       const prevScrollHeight = el.scrollHeight;
       const prevScrollTop = el.scrollTop;
 
+      isProgrammaticScrollRef.current = true;
       await callback();
 
       // Wait for the DOM to lay out the new content before adjusting
@@ -168,6 +233,7 @@ export function useScrollAnchor({
         if (delta > 0) {
           el.scrollTop = prevScrollTop + delta;
         }
+        isProgrammaticScrollRef.current = false;
       });
     },
     [],
