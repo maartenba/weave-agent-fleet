@@ -3,7 +3,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type {
   AccumulatedMessage,
-  AccumulatedPart,
   SSEEvent,
 } from "@/lib/api-types";
 import {
@@ -12,6 +11,9 @@ import {
   applyPartUpdate,
   applyTextDelta,
 } from "@/lib/event-state";
+import { useMessagePagination } from "@/hooks/use-message-pagination";
+import { prependMessages, convertSDKMessageToAccumulated } from "@/lib/pagination-utils";
+import type { SDKMessage } from "@/lib/pagination-utils";
 
 export type SessionConnectionStatus =
   | "connecting"
@@ -31,6 +33,16 @@ export interface UseSessionEventsResult {
   reconnect: () => void;
   /** Number of reconnection attempts since last successful connection. */
   reconnectAttempt: number;
+  /** Whether there are older messages that can be loaded. */
+  hasMoreMessages: boolean;
+  /** Whether older messages are currently being fetched. */
+  isLoadingOlder: boolean;
+  /** Load the next older batch of messages. */
+  loadOlderMessages: () => Promise<void>;
+  /** Total number of messages in the session (null until first paginated load). */
+  totalMessageCount: number | null;
+  /** Error from the last failed older-messages fetch (null when no error). */
+  loadOlderError: string | null;
 }
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -47,6 +59,14 @@ export function useSessionEvents(
   const [error, setError] = useState<string | undefined>();
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
+  const pagination = useMessagePagination();
+  // Destructure stable function references to avoid unstable object identity in deps
+  const {
+    resetPagination,
+    loadInitialMessages: paginationLoadInitial,
+    loadOlderMessages: paginationLoadOlder,
+  } = pagination;
+
   const reconnectDelay = useRef(BASE_RECONNECT_DELAY_MS);
   const isMounted = useRef(false);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -60,66 +80,43 @@ export function useSessionEvents(
 
   /**
    * Fetch existing messages from the API and convert to AccumulatedMessage[].
-   * Used on initial connect (to show history) and on reconnect (to fill gaps).
+   * Used on reconnect (to fill gaps) — fetches ALL messages for gap-free state.
    */
-  const loadMessages = useCallback(async (): Promise<void> => {
+  const loadAllMessages = useCallback(async (): Promise<void> => {
     if (!sessionId || !instanceId) return;
     try {
       const url = `/api/sessions/${encodeURIComponent(sessionId)}?instanceId=${encodeURIComponent(instanceId)}`;
       const response = await fetch(url);
       if (!response.ok) return;
       const data = await response.json() as {
-        messages?: Array<{
-          info: { id: string; sessionID: string; role: string; time?: { created?: number; completed?: number }; cost?: number; tokens?: { input: number; output: number; reasoning: number }; agent?: string; modelID?: string; parentID?: string };
-          parts: Array<{ id: string; messageID: string; sessionID: string; type: string; text?: string; tool?: string; callID?: string; state?: unknown; cost?: number; tokens?: { input: number; output: number; reasoning: number } }>;
-        }>;
+        messages?: SDKMessage[];
       };
       if (!data.messages?.length) return;
 
-      const accumulated: AccumulatedMessage[] = data.messages.map((msg) => {
-        const parts: AccumulatedPart[] = [];
-        let cost = 0;
-        let tokensInput = 0;
-        let tokensOutput = 0;
-        let tokensReasoning = 0;
-
-        for (const part of msg.parts) {
-          if (part.type === "text") {
-            parts.push({ partId: part.id, type: "text", text: part.text ?? "" });
-          } else if (part.type === "tool") {
-            parts.push({ partId: part.id, type: "tool", tool: part.tool ?? "", callId: part.callID ?? "", state: part.state });
-          } else if (part.type === "step-finish") {
-            cost += part.cost ?? 0;
-            tokensInput += part.tokens?.input ?? 0;
-            tokensOutput += part.tokens?.output ?? 0;
-            tokensReasoning += part.tokens?.reasoning ?? 0;
-          }
-        }
-
-        return {
-          messageId: msg.info.id,
-          sessionId: msg.info.sessionID,
-          role: msg.info.role === "user" ? "user" as const : "assistant" as const,
-          parts,
-          createdAt: msg.info.time?.created,
-          completedAt: msg.info.time?.completed,
-          agent: msg.info.agent,
-          modelID: msg.info.modelID,
-          parentID: msg.info.parentID,
-          cost: cost || (msg.info.cost ?? 0),
-          tokens: (tokensInput || tokensOutput || tokensReasoning)
-            ? { input: tokensInput, output: tokensOutput, reasoning: tokensReasoning }
-            : msg.info.tokens
-              ? { input: msg.info.tokens.input, output: msg.info.tokens.output, reasoning: msg.info.tokens.reasoning }
-              : undefined,
-        };
-      });
-
+      const accumulated = data.messages.map(convertSDKMessageToAccumulated);
       setMessages(accumulated);
+      // Reset pagination state since we loaded everything
+      resetPagination();
     } catch {
       // Best-effort — if loading fails, we still have the live stream
     }
-  }, [sessionId, instanceId]);
+  }, [sessionId, instanceId, resetPagination]);
+
+  /**
+   * Load the initial batch of messages (paginated — last N messages).
+   * Used on first connect for fast initial load.
+   */
+  const loadInitialMessages = useCallback(async (): Promise<void> => {
+    if (!sessionId || !instanceId) return;
+    try {
+      const accumulated = await paginationLoadInitial(sessionId, instanceId);
+      if (accumulated.length > 0) {
+        setMessages(accumulated);
+      }
+    } catch {
+      // Best-effort — if loading fails, we still have the live stream
+    }
+  }, [sessionId, instanceId, paginationLoadInitial]);
 
   const connect = useCallback(() => {
     if (!isMounted.current) return;
@@ -135,20 +132,20 @@ export function useSessionEvents(
       setReconnectAttempt(0);
 
       if (hasConnectedOnce.current) {
-        // Reconnect after a drop — recover state to fill gaps
+        // Reconnect after a drop — recover state to fill gaps (fetch ALL messages)
         setStatus("recovering");
-        loadMessages().then(() => {
+        loadAllMessages().then(() => {
           if (isMounted.current) {
             setStatus("connected");
             setError(undefined);
           }
         });
       } else {
-        // First connect — load existing message history
+        // First connect — load initial batch (paginated)
         hasConnectedOnce.current = true;
         setStatus("connected");
         setError(undefined);
-        loadMessages();
+        loadInitialMessages();
       }
     };
 
@@ -176,7 +173,7 @@ export function useSessionEvents(
         if (isMounted.current) connectRef.current?.();
       }, delay);
     };
-  }, [sessionId, instanceId, loadMessages]);
+  }, [sessionId, instanceId, loadAllMessages, loadInitialMessages]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -199,6 +196,14 @@ export function useSessionEvents(
 
   const forceIdle = useCallback(() => setSessionStatus("idle"), []);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!sessionId || !instanceId) return;
+    const older = await paginationLoadOlder(sessionId, instanceId);
+    if (older.length > 0) {
+      setMessages((prev) => prependMessages(prev, older));
+    }
+  }, [sessionId, instanceId, paginationLoadOlder]);
+
   const reconnect = useCallback(() => {
     // Close existing connection
     eventSourceRef.current?.close();
@@ -215,7 +220,20 @@ export function useSessionEvents(
     connectRef.current?.();
   }, []);
 
-  return { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt };
+  return {
+    messages,
+    status,
+    sessionStatus,
+    error,
+    forceIdle,
+    reconnect,
+    reconnectAttempt,
+    hasMoreMessages: pagination.hasMore,
+    isLoadingOlder: pagination.isLoadingOlder,
+    loadOlderMessages,
+    totalMessageCount: pagination.totalCount,
+    loadOlderError: pagination.loadError,
+  };
 }
 
 // ─── Event handler (pure — receives setters to avoid stale closures) ──────

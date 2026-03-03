@@ -53,6 +53,34 @@ export function formatTimestamp(timestamp: number | undefined | null): string {
   return sameDay ? timeOnlyFormatter.format(date) : dateTimeFormatter.format(date);
 }
 
+/**
+ * Format a unix-ms timestamp as a human-readable relative time string.
+ * - < 30s  → "just now"
+ * - < 60s  → "Xs ago"  (e.g. "45s ago")
+ * - < 60m  → "Xm ago"  (e.g. "5m ago")
+ * - < 24h  → "Xh ago"  (e.g. "2h ago")
+ * - >= 24h → falls back to formatTimestamp(timestamp)
+ *
+ * @param timestamp - unix milliseconds
+ * @param now       - reference time in unix ms (defaults to Date.now(); injectable for tests)
+ */
+export function formatRelativeTime(timestamp: number, now?: number): string {
+  const reference = now ?? Date.now();
+  const diffMs = reference - timestamp;
+  const diffS = Math.floor(diffMs / 1000);
+
+  if (diffS < 30) return "just now";
+  if (diffS < 60) return `${diffS}s ago`;
+
+  const diffM = Math.floor(diffS / 60);
+  if (diffM < 60) return `${diffM}m ago`;
+
+  const diffH = Math.floor(diffM / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+
+  return formatTimestamp(timestamp);
+}
+
 export function getStatusColor(status: string): string {
   switch (status) {
     case "active":

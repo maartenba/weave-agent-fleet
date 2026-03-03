@@ -31,24 +31,24 @@ Long-running agent sessions accumulate hundreds or thousands of messages. The cu
 Paginate message loading so the initial fetch returns only the last N messages (default: 50), with scroll-up triggering fetch of older batches, while preserving all existing functionality.
 
 ### Deliverables
-- [ ] New API endpoint `GET /api/sessions/[id]/messages` with pagination support (`limit`, `before` cursor)
-- [ ] Server-side message slicing with pagination metadata in response
-- [ ] `useMessagePagination` hook for paginated loading + scroll-triggered fetching
-- [ ] Updated `useSessionEvents` to integrate with pagination (initial load uses paginated endpoint)
-- [ ] Scroll position preservation when prepending older messages
-- [ ] Loading indicator at top of activity stream during fetch
-- [ ] Updated `useScrollAnchor` to support scroll-near-top detection
-- [ ] Tests for pagination utilities and hook logic
+- [x] New API endpoint `GET /api/sessions/[id]/messages` with pagination support (`limit`, `before` cursor)
+- [x] Server-side message slicing with pagination metadata in response
+- [x] `useMessagePagination` hook for paginated loading + scroll-triggered fetching
+- [x] Updated `useSessionEvents` to integrate with pagination (initial load uses paginated endpoint)
+- [x] Scroll position preservation when prepending older messages
+- [x] Loading indicator at top of activity stream during fetch
+- [x] Updated `useScrollAnchor` to support scroll-near-top detection
+- [x] Tests for pagination utilities and hook logic
 
 ### Definition of Done
 - [ ] `npm run build` succeeds
-- [ ] `npm run test` passes (existing + new)
-- [ ] Initial page load fetches only last 50 messages (verifiable via Network tab)
-- [ ] Scrolling up near the top loads the next older batch
-- [ ] New messages via SSE still appear at the bottom
-- [ ] Search/filter works across all loaded messages
-- [ ] No scroll position jumping when loading older messages
-- [ ] Backward compatible: `GET /api/sessions/[id]` still returns all messages when no pagination params
+- [x] `npm run test` passes (existing + new)
+- [x] Initial page load fetches only last 50 messages (verifiable via Network tab)
+- [x] Scrolling up near the top loads the next older batch
+- [x] New messages via SSE still appear at the bottom
+- [x] Search/filter works across all loaded messages
+- [x] No scroll position jumping when loading older messages
+- [x] Backward compatible: `GET /api/sessions/[id]` still returns all messages when no pagination params
 
 ### Guardrails (Must NOT)
 - Do NOT modify the SSE event system (`/events` route or SSE subscription logic)
@@ -60,7 +60,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
 
 ## TODOs
 
-- [ ] 1. **Create paginated messages API endpoint**
+- [x] 1. **Create paginated messages API endpoint**
   **What**: Add a new `GET /api/sessions/[id]/messages` route that fetches all messages from the SDK, slices them server-side, and returns a paginated response. Support query params: `instanceId` (required), `limit` (default 50), `before` (message ID cursor — return messages older than this ID). Return pagination metadata alongside the messages.
   **Files**:
     - Create `src/app/api/sessions/[id]/messages/route.ts`
@@ -83,7 +83,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Keep the existing `GET /api/sessions/[id]` route unchanged for backward compatibility — it still returns all messages (used by `loadMessages()` on reconnect recovery and metadata fetch)
   **Acceptance**: `GET /api/sessions/[id]/messages?instanceId=xxx&limit=5` returns only 5 messages with correct `pagination.hasMore` and `pagination.totalCount`. Passing `before=<messageId>` returns the 5 messages before that ID.
 
-- [ ] 2. **Create pagination utility functions**
+- [x] 2. **Create pagination utility functions**
   **What**: Extract pure pagination logic into a utility module for testability. These functions handle message slicing, cursor resolution, and merging paginated batches with existing state.
   **Files**:
     - Create `src/lib/pagination-utils.ts`
@@ -93,7 +93,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - `convertSDKMessageToAccumulated(msg)` — extract the SDK→AccumulatedMessage conversion from `useSessionEvents.loadMessages()` into a reusable function. This same logic exists on lines 79–116 of `use-session-events.ts` and will be needed in the pagination hook.
   **Acceptance**: Unit tests pass for all three functions.
 
-- [ ] 3. **Write tests for pagination utilities**
+- [x] 3. **Write tests for pagination utilities**
   **What**: Comprehensive unit tests for `pagination-utils.ts`.
   **Files**:
     - Create `src/lib/__tests__/pagination-utils.test.ts`
@@ -117,7 +117,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
       - Handles missing optional fields
   **Acceptance**: `npm run test -- src/lib/__tests__/pagination-utils.test.ts` passes.
 
-- [ ] 4. **Create `useMessagePagination` hook**
+- [x] 4. **Create `useMessagePagination` hook**
   **What**: A React hook that manages paginated message fetching, tracks pagination state (hasMore, loading, oldest cursor), and exposes a `loadOlderMessages()` function.
   **Files**:
     - Create `src/hooks/use-message-pagination.ts`
@@ -129,7 +129,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Exports a `PaginationState` type for consumers.
   **Acceptance**: Hook exports correct types. Loading functions return converted messages and update pagination metadata.
 
-- [ ] 5. **Integrate pagination into `useSessionEvents`**
+- [x] 5. **Integrate pagination into `useSessionEvents`**
   **What**: Modify `useSessionEvents` to use paginated initial load instead of fetching all messages, and expose pagination state + `loadOlderMessages` to consumers.
   **Files**:
     - Modify `src/hooks/use-session-events.ts`
@@ -150,7 +150,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - On reconnect recovery (`hasConnectedOnce === true`), continue using the full session endpoint to get complete state (no pagination) — this ensures no gaps after a disconnect
   **Acceptance**: Initial load only fetches 50 messages. `loadOlderMessages()` prepends older batch. SSE events still append new messages. Recovery still loads full state.
 
-- [ ] 6. **Add scroll-near-top detection to `useScrollAnchor`**
+- [x] 6. **Add scroll-near-top detection to `useScrollAnchor`**
   **What**: Extend `useScrollAnchor` to detect when the user scrolls near the top of the viewport, which triggers loading older messages.
   **Files**:
     - Modify `src/hooks/use-scroll-anchor.ts`
@@ -166,7 +166,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Do NOT change existing `isAtBottom`, `newMessageCount`, or `scrollToBottom` behavior
   **Acceptance**: `isNearTop` is `true` when scrolled within 200px of top. `preserveScrollPosition` prevents scroll jump on prepend.
 
-- [ ] 7. **Update tests for `useScrollAnchor`**
+- [x] 7. **Update tests for `useScrollAnchor`**
   **What**: Add tests for the new `isNearTop` detection and `preserveScrollPosition` logic.
   **Files**:
     - Modify `src/hooks/__tests__/use-scroll-anchor.test.ts`
@@ -177,7 +177,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Follow existing test pattern: test pure logic calculations, not React hook rendering
   **Acceptance**: `npm run test -- src/hooks/__tests__/use-scroll-anchor.test.ts` passes.
 
-- [ ] 8. **Wire infinite scroll in `ActivityStreamV1`**
+- [x] 8. **Wire infinite scroll in `ActivityStreamV1`**
   **What**: Connect scroll-near-top detection to `loadOlderMessages()` and show a loading indicator at the top while fetching.
   **Files**:
     - Modify `src/components/session/activity-stream-v1.tsx`
@@ -208,7 +208,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Update the status bar message count to show `totalMessageCount` when available (e.g., "50 of 200 messages loaded")
   **Acceptance**: Scrolling near the top triggers a fetch. Loading spinner appears at top during fetch. Scroll position doesn't jump when older messages appear. Status bar shows loaded/total count.
 
-- [ ] 9. **Pass pagination props through from session page**
+- [x] 9. **Pass pagination props through from session page**
   **What**: Wire the new pagination props from `useSessionEvents` through the session page to `ActivityStreamV1`.
   **Files**:
     - Modify `src/app/sessions/[id]/page.tsx`
@@ -233,7 +233,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - The sidebar's aggregate stats (totalCost, totalTokens, participatingAgents) currently compute across all loaded messages. Note: these will only reflect loaded messages, not all session messages. This is acceptable for now — the full stats are available when the user scrolls to load all messages. A follow-up could add a separate stats endpoint.
   **Acceptance**: Props flow through correctly. Activity stream shows pagination UI.
 
-- [ ] 10. **Create API route tests**
+- [x] 10. **Create API route tests**
   **What**: Unit tests for the new `/api/sessions/[id]/messages` route.
   **Files**:
     - Create `src/app/api/sessions/[id]/messages/__tests__/route.test.ts`
@@ -249,7 +249,7 @@ Paginate message loading so the initial fetch returns only the last N messages (
     - Follow existing test patterns (see `src/app/api/sessions/__tests__/route.test.ts`)
   **Acceptance**: `npm run test -- src/app/api/sessions/[id]/messages/__tests__/route.test.ts` passes.
 
-- [ ] 11. **Handle edge cases and polish**
+- [x] 11. **Handle edge cases and polish**
   **What**: Address edge cases for robust behavior.
   **Files**:
     - Modify `src/hooks/use-message-pagination.ts`

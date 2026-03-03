@@ -45,7 +45,7 @@ export default function SessionDetailPage() {
   const { agents } = useAgents(instanceId);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
-  const { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt } = useSessionEvents(
+  const { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt, hasMoreMessages, isLoadingOlder, loadOlderMessages, totalMessageCount, loadOlderError } = useSessionEvents(
     sessionId,
     instanceId,
     setSelectedAgent
@@ -403,6 +403,11 @@ export default function SessionDetailPage() {
                   agents={agents}
                   onReconnect={reconnect}
                   reconnectAttempt={reconnectAttempt}
+                  hasMoreMessages={hasMoreMessages}
+                  isLoadingOlder={isLoadingOlder}
+                  onLoadOlder={loadOlderMessages}
+                  totalMessageCount={totalMessageCount}
+                  loadOlderError={loadOlderError}
                 />
               </div>
               <PromptInput
