@@ -230,6 +230,12 @@ export function getSessionsForInstance(instanceId: string): DbSession[] {
     .all(instanceId) as DbSession[];
 }
 
+export function updateSessionTitle(id: string, title: string): void {
+  getDb()
+    .prepare("UPDATE sessions SET title = @title WHERE id = @id")
+    .run({ id, title });
+}
+
 export function updateSessionForResume(id: string, instanceId: string): void {
   getDb()
     .prepare(

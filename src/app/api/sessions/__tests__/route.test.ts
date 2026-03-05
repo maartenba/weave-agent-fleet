@@ -24,6 +24,7 @@ vi.mock("@/lib/server/db-repository", () => ({
   getSession: vi.fn(),
   getSessionByOpencodeId: vi.fn(),
   updateSessionStatus: vi.fn(),
+  updateSessionTitle: vi.fn(),
   getSessionsForInstance: vi.fn(() => []),
 }));
 
@@ -42,7 +43,7 @@ vi.mock("crypto", async (importOriginal) => {
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { POST, GET } from "@/app/api/sessions/route";
-import { DELETE } from "@/app/api/sessions/[id]/route";
+import { DELETE, PATCH } from "@/app/api/sessions/[id]/route";
 import * as processManager from "@/lib/server/process-manager";
 import * as workspaceManager from "@/lib/server/workspace-manager";
 import * as dbRepository from "@/lib/server/db-repository";
@@ -63,6 +64,7 @@ const mockGetSession = vi.mocked(dbRepository.getSession);
 const mockGetSessionByOpencodeId = vi.mocked(dbRepository.getSessionByOpencodeId);
 const mockUpdateSessionStatus = vi.mocked(dbRepository.updateSessionStatus);
 const mockGetSessionsForInstance = vi.mocked(dbRepository.getSessionsForInstance);
+const mockUpdateSessionTitle = vi.mocked(dbRepository.updateSessionTitle);
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -675,5 +677,114 @@ describe("DELETE /api/sessions/[id]", () => {
     expect(body.message).toBe("Session terminated");
     // updateSessionStatus should NOT be called since resolvedDbId remains null
     expect(mockUpdateSessionStatus).not.toHaveBeenCalled();
+  });
+});
+
+// ─── PATCH /api/sessions/[id] ─────────────────────────────────────────────────
+
+describe("PATCH /api/sessions/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSession.mockReturnValue(undefined as never);
+  });
+
+  it("Returns200WithUpdatedTitleOnSuccess", async () => {
+    mockGetSession.mockReturnValue(makeDbSession({ id: "db-sess-1" }) as never);
+
+    const req = new NextRequest("http://localhost/api/sessions/db-sess-1", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "My Renamed Session" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "db-sess-1" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ id: "db-sess-1", title: "My Renamed Session" });
+    expect(mockUpdateSessionTitle).toHaveBeenCalledWith("db-sess-1", "My Renamed Session");
+  });
+
+  it("Returns400ForInvalidJsonBody", async () => {
+    const req = new NextRequest("http://localhost/api/sessions/db-sess-1", {
+      method: "PATCH",
+      body: "not-valid-json{{{",
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "db-sess-1" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/invalid json/i);
+  });
+
+  it("Returns400WhenTitleFieldIsMissing", async () => {
+    const req = new NextRequest("http://localhost/api/sessions/db-sess-1", {
+      method: "PATCH",
+      body: JSON.stringify({ name: "wrong field" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "db-sess-1" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/title is required/i);
+  });
+
+  it("Returns400WhenTitleIsEmptyString", async () => {
+    const req = new NextRequest("http://localhost/api/sessions/db-sess-1", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "db-sess-1" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/title is required/i);
+  });
+
+  it("Returns404WhenSessionNotFound", async () => {
+    mockGetSession.mockReturnValue(undefined as never);
+
+    const req = new NextRequest("http://localhost/api/sessions/nonexistent", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "New Title" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "nonexistent" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(body.error).toMatch(/not found/i);
+  });
+
+  it("Returns500WhenDbUpdateFails", async () => {
+    mockGetSession.mockReturnValue(makeDbSession({ id: "db-sess-1" }) as never);
+    mockUpdateSessionTitle.mockImplementation(() => {
+      throw new Error("DB write failed");
+    });
+
+    const req = new NextRequest("http://localhost/api/sessions/db-sess-1", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "New Title" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const context = { params: Promise.resolve({ id: "db-sess-1" }) };
+
+    const res = await PATCH(req, context);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toMatch(/failed to update/i);
   });
 });

@@ -6,6 +6,7 @@ import {
   getSessionByOpencodeId,
   getWorkspace,
   updateSessionStatus,
+  updateSessionTitle,
   getSessionsForInstance,
   deleteSession,
   deleteNotificationsForSession,
@@ -17,6 +18,61 @@ import { cleanupWorkspace } from "@/lib/server/workspace-manager";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
+}
+
+// PATCH /api/sessions/[id] — rename a session
+export async function PATCH(
+  request: NextRequest,
+  context: RouteContext
+): Promise<NextResponse> {
+  const { id } = await context.params;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("title" in body) ||
+    typeof (body as Record<string, unknown>).title !== "string" ||
+    (body as Record<string, unknown>).title === ""
+  ) {
+    return NextResponse.json(
+      { error: "title is required and must be a non-empty string" },
+      { status: 400 }
+    );
+  }
+
+  const title = (body as Record<string, unknown>).title as string;
+
+  let session;
+  try {
+    session = getSession(id);
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to look up session" },
+      { status: 500 }
+    );
+  }
+
+  if (!session) {
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  try {
+    updateSessionTitle(id, title);
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to update session title" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ id, title }, { status: 200 });
 }
 
 // GET /api/sessions/[id]?instanceId=xxx — get session detail with messages
