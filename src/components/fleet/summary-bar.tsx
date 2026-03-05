@@ -1,9 +1,8 @@
 import { FleetSummary } from "@/lib/types";
-import { formatTokens, formatCost } from "@/lib/format-utils";
+import { formatTokens } from "@/lib/format-utils";
 import {
   Zap,
   Pause,
-  Coins,
   Hash,
   ListTodo,
 } from "lucide-react";
@@ -27,12 +26,6 @@ export function SummaryBar({ summary }: SummaryBarProps) {
       color: "text-zinc-400",
     },
     {
-      label: "Cost",
-      value: formatCost(summary.totalCost),
-      icon: Coins,
-      color: "text-amber-500",
-    },
-    {
       label: "Tokens",
       value: formatTokens(summary.totalTokens),
       icon: Hash,
@@ -47,7 +40,7 @@ export function SummaryBar({ summary }: SummaryBarProps) {
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <div className="grid grid-cols-4 gap-3">
       {items.map((item) => (
         <div
           key={item.label}

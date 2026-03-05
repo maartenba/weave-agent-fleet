@@ -14,7 +14,7 @@ import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Coins, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX, AlertTriangle, RefreshCw } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
@@ -150,8 +150,7 @@ export default function SessionDetailPage() {
     }
   }, [status, isResumable, isStopped]);
 
-  // Compute aggregate cost + tokens from accumulated messages
-  const totalCost = messages.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+  // Compute aggregate tokens from accumulated messages
   const totalTokens = messages.reduce(
     (sum, m) => sum + (m.tokens?.input ?? 0) + (m.tokens?.output ?? 0),
     0
@@ -278,8 +277,8 @@ export default function SessionDetailPage() {
                   : sessionStatus === "busy"
                   ? "bg-green-500 animate-pulse"
                   : status === "connected"
-                  ? "bg-zinc-500"
-                  : "bg-amber-500 animate-pulse"
+                  ? "bg-green-500"
+                  : "bg-slate-500"
               }`}
             />
             <Badge variant="secondary" className="text-xs">
@@ -507,15 +506,6 @@ export default function SessionDetailPage() {
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokens</p>
                 </div>
                 <p className="text-xs font-mono">{totalTokens.toLocaleString()}</p>
-              </div>
-
-              {/* Cost */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <Coins className="h-3 w-3 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cost</p>
-                </div>
-                <p className="text-xs font-mono">${totalCost.toFixed(4)}</p>
               </div>
 
               {/* Changes summary */}
