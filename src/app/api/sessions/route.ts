@@ -286,6 +286,10 @@ export async function GET(): Promise<NextResponse> {
           sessionID: dbSession.opencode_session_id,
         });
         if (result.data) {
+          // Overlay user-renamed title from Fleet DB
+          if (dbSession.title !== "Untitled") {
+            result.data.title = dbSession.title;
+          }
           items.push({
             instanceId: dbSession.instance_id,
             workspaceId: dbSession.workspace_id,
