@@ -64,10 +64,6 @@ export function SidebarWorkspaceItem({
   const [pinnedIds, setPinnedIds] = usePersistedState<string[]>(PINNED_KEY, []);
   const isPinned = pinnedIds.includes(group.workspaceId);
 
-  const dotColor = group.hasRunningSession
-    ? "bg-green-500 animate-pulse"
-    : "bg-slate-500";
-
   const handleRename = useCallback(
     async (newName: string) => {
       try {
@@ -88,7 +84,7 @@ export function SidebarWorkspaceItem({
   }, [group.workspaceId, setPinnedIds]);
 
   const handleTerminateAll = useCallback(async () => {
-    const active = group.sessions.filter((s) => s.sessionStatus !== "stopped");
+    const active = group.sessions.filter((s) => s.lifecycleStatus !== "stopped" && s.lifecycleStatus !== "completed");
     if (active.length === 0) return;
     const confirmed = window.confirm(
       `Terminate all ${active.length} active session${active.length !== 1 ? "s" : ""} in "${group.displayName}"?`
@@ -146,9 +142,6 @@ export function SidebarWorkspaceItem({
                 />
               </button>
             </CollapsibleTrigger>
-
-            {/* Status dot */}
-            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
 
             {/* Display name with tooltip for full path */}
             <Tooltip>

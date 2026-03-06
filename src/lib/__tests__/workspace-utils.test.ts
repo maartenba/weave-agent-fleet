@@ -30,6 +30,9 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     sessionStatus: "active",
     instanceStatus: "running",
     session: makeSDKSession(),
+    activityStatus: "busy",
+    lifecycleStatus: "running",
+    typedInstanceStatus: "running",
     ...overrides,
   };
 }
@@ -79,8 +82,8 @@ describe("groupSessionsByWorkspace", () => {
       workspaceId: "ws-1",
       workspaceDirectory: "/home/user/project",
       workspaceDisplayName: "My Project",
-      sessionStatus: "active",
-      instanceStatus: "running",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -147,10 +150,10 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].sessionCount).toBe(3);
   });
 
-  it("sets hasRunningSession true only when sessionStatus=active AND instanceStatus=running", () => {
+  it("sets hasRunningSession true only when lifecycleStatus=running AND typedInstanceStatus=running", () => {
     const session = makeSession({
-      sessionStatus: "active",
-      instanceStatus: "running",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -158,10 +161,10 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(true);
   });
 
-  it("sets hasRunningSession false when active+dead", () => {
+  it("sets hasRunningSession false when running lifecycle but instance stopped", () => {
     const session = makeSession({
-      sessionStatus: "active",
-      instanceStatus: "dead",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "stopped",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -169,10 +172,10 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
-  it("sets hasRunningSession false when stopped+running", () => {
+  it("sets hasRunningSession false when lifecycle is stopped", () => {
     const session = makeSession({
-      sessionStatus: "stopped",
-      instanceStatus: "running",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -180,10 +183,10 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
-  it("sets hasRunningSession false when disconnected+dead", () => {
+  it("sets hasRunningSession false when disconnected (running lifecycle, stopped instance)", () => {
     const session = makeSession({
-      sessionStatus: "disconnected",
-      instanceStatus: "dead",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "stopped",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -191,10 +194,11 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
-  it("sets hasRunningSession true when idle+running", () => {
+  it("sets hasRunningSession true when idle (running lifecycle, running instance)", () => {
     const session = makeSession({
-      sessionStatus: "idle",
-      instanceStatus: "running",
+      activityStatus: "idle",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -202,10 +206,10 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(true);
   });
 
-  it("sets hasRunningSession false when completed+dead", () => {
+  it("sets hasRunningSession false when completed", () => {
     const session = makeSession({
-      sessionStatus: "completed",
-      instanceStatus: "dead",
+      lifecycleStatus: "completed",
+      typedInstanceStatus: "stopped",
     });
 
     const groups = groupSessionsByWorkspace([session]);
@@ -213,18 +217,18 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
-  it("sets hasRunningSession true if ANY session in the group is active+running", () => {
+  it("sets hasRunningSession true if ANY session in the group is running+running", () => {
     const dead = makeSession({
       instanceId: "inst-dead",
       workspaceDirectory: "/shared/dir",
-      sessionStatus: "stopped",
-      instanceStatus: "dead",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "stopped",
     });
     const running = makeSession({
       instanceId: "inst-running",
       workspaceDirectory: "/shared/dir",
-      sessionStatus: "active",
-      instanceStatus: "running",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([dead, running]);
@@ -276,15 +280,15 @@ describe("groupSessionsByWorkspace", () => {
       instanceId: "inst-stopped",
       workspaceDirectory: "/dir/a-alpha",
       workspaceDisplayName: null,
-      sessionStatus: "stopped",
-      instanceStatus: "dead",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "stopped",
     });
     const runningSession = makeSession({
       instanceId: "inst-running",
       workspaceDirectory: "/dir/z-zeta",
       workspaceDisplayName: null,
-      sessionStatus: "active",
-      instanceStatus: "running",
+      lifecycleStatus: "running",
+      typedInstanceStatus: "running",
     });
 
     const groups = groupSessionsByWorkspace([stoppedSession, runningSession]);
@@ -298,22 +302,22 @@ describe("groupSessionsByWorkspace", () => {
       instanceId: "inst-c",
       workspaceDirectory: "/dir/charlie",
       workspaceDisplayName: null,
-      sessionStatus: "stopped",
-      instanceStatus: "dead",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "stopped",
     });
     const alpha = makeSession({
       instanceId: "inst-a",
       workspaceDirectory: "/dir/alpha",
       workspaceDisplayName: null,
-      sessionStatus: "stopped",
-      instanceStatus: "dead",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "stopped",
     });
     const bravo = makeSession({
       instanceId: "inst-b",
       workspaceDirectory: "/dir/bravo",
       workspaceDisplayName: null,
-      sessionStatus: "stopped",
-      instanceStatus: "dead",
+      lifecycleStatus: "stopped",
+      typedInstanceStatus: "stopped",
     });
 
     const groups = groupSessionsByWorkspace([charlie, alpha, bravo]);

@@ -1,5 +1,11 @@
 import type { DbNotification } from "@/lib/server/db-repository";
-import { emitNotification, onNotification } from "@/lib/server/notification-emitter";
+import {
+  emitNotification,
+  onNotification,
+  emitActivityStatus,
+  onActivityStatus,
+} from "@/lib/server/notification-emitter";
+import type { ActivityStatusPayload } from "@/lib/server/notification-emitter";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,5 +101,102 @@ describe("notification emitter", () => {
     expect(received).toHaveLength(3);
     expect(received.map((n) => n.id)).toEqual(["a", "b", "c"]);
     unsubscribe();
+  });
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeActivityStatus(overrides?: Partial<ActivityStatusPayload>): ActivityStatusPayload {
+  return {
+    sessionId: "sess-1",
+    instanceId: "inst-1",
+    activityStatus: "idle",
+    ...overrides,
+  };
+}
+
+// ─── Activity Status Tests ────────────────────────────────────────────────────
+
+describe("activity status emitter", () => {
+  it("SubscriberReceivesEmittedActivityStatus", () => {
+    const received: ActivityStatusPayload[] = [];
+    const unsubscribe = onActivityStatus((p) => received.push(p));
+
+    const payload = makeActivityStatus();
+    emitActivityStatus(payload);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe(payload);
+    unsubscribe();
+  });
+
+  it("MultipleSubscribersAllReceiveActivityStatus", () => {
+    const received1: ActivityStatusPayload[] = [];
+    const received2: ActivityStatusPayload[] = [];
+    const unsub1 = onActivityStatus((p) => received1.push(p));
+    const unsub2 = onActivityStatus((p) => received2.push(p));
+
+    emitActivityStatus(makeActivityStatus());
+
+    expect(received1).toHaveLength(1);
+    expect(received2).toHaveLength(1);
+    unsub1();
+    unsub2();
+  });
+
+  it("UnsubscribeStopsActivityStatusDelivery", () => {
+    const received: ActivityStatusPayload[] = [];
+    const unsubscribe = onActivityStatus((p) => received.push(p));
+
+    emitActivityStatus(makeActivityStatus({ activityStatus: "busy" }));
+    unsubscribe();
+    emitActivityStatus(makeActivityStatus({ activityStatus: "idle" }));
+
+    expect(received).toHaveLength(1);
+    expect(received[0].activityStatus).toBe("busy");
+  });
+
+  it("NoSubscribersDoesNotThrow", () => {
+    expect(() => emitActivityStatus(makeActivityStatus())).not.toThrow();
+  });
+
+  it("ActivityStatusPayloadIsPassedThrough", () => {
+    const received: ActivityStatusPayload[] = [];
+    const unsubscribe = onActivityStatus((p) => received.push(p));
+
+    const payload = makeActivityStatus({
+      sessionId: "sess-99",
+      instanceId: "inst-77",
+      activityStatus: "waiting_input",
+    });
+    emitActivityStatus(payload);
+
+    expect(received[0].sessionId).toBe("sess-99");
+    expect(received[0].instanceId).toBe("inst-77");
+    expect(received[0].activityStatus).toBe("waiting_input");
+    unsubscribe();
+  });
+
+  it("ActivityAndNotificationChannelsAreIndependent", () => {
+    const notifReceived: DbNotification[] = [];
+    const activityReceived: ActivityStatusPayload[] = [];
+
+    const unsubNotif = onNotification((n) => notifReceived.push(n));
+    const unsubActivity = onActivityStatus((p) => activityReceived.push(p));
+
+    // Emit only activity status
+    emitActivityStatus(makeActivityStatus({ activityStatus: "busy" }));
+
+    expect(activityReceived).toHaveLength(1);
+    expect(notifReceived).toHaveLength(0);
+
+    // Emit only notification
+    emitNotification(makeNotification({ id: "notif-x" }));
+
+    expect(notifReceived).toHaveLength(1);
+    expect(activityReceived).toHaveLength(1); // unchanged
+
+    unsubNotif();
+    unsubActivity();
   });
 });

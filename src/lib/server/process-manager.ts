@@ -30,6 +30,7 @@ import {
 import {
   createSessionDisconnectedNotification,
 } from "./notification-service";
+import { ensureWatching, stopWatching } from "./session-status-watcher";
 import { log } from "./logger";
 
 // ─── OPENCODE_BIN support ─────────────────────────────────────────────────────
@@ -386,6 +387,9 @@ export async function recoverInstances(): Promise<void> {
 
       instances.set(dbInst.id, instance);
       directoryToInstanceId.set(dbInst.directory, dbInst.id);
+
+      // Start watching session status events for recovered instance
+      ensureWatching(dbInst.id);
     } else {
       // Mark as stopped in DB
       try {
@@ -519,6 +523,9 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
   instances.set(instanceId, instance);
   directoryToInstanceId.set(directory, instanceId);
 
+  // Start watching session status events for this instance
+  ensureWatching(instanceId);
+
   return instance;
 }
 
@@ -531,6 +538,9 @@ export function listInstances(): ManagedInstance[] {
 }
 
 export function destroyInstance(id: string): void {
+  // Stop watching session status events before tearing down
+  stopWatching(id);
+
   const instance = instances.get(id);
   if (!instance) return;
 

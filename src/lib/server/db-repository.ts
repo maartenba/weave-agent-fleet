@@ -6,6 +6,10 @@
  */
 
 import { getDb } from "./database";
+import type {
+  SessionActivityStatus,
+  SessionLifecycleStatus,
+} from "@/lib/types";
 
 // ─── Row Types ────────────────────────────────────────────────────────────────
 
@@ -42,6 +46,10 @@ export interface DbSession {
   created_at: string;
   stopped_at: string | null;
   parent_session_id: string | null;
+  /** Activity status — what the agent is currently doing (null until first write) */
+  activity_status: SessionActivityStatus | null;
+  /** Lifecycle status — overall terminal/non-terminal state (null until first write) */
+  lifecycle_status: SessionLifecycleStatus | null;
 }
 
 // ─── Insert input types (id + timestamps are required on insert) ──────────────
@@ -217,11 +225,56 @@ export function updateSessionStatus(
   status: "active" | "idle" | "stopped" | "completed" | "disconnected" | "error" | "waiting_input",
   stoppedAt?: string
 ): void {
+  // Derive the new typed status columns from the legacy status value
+  const activityStatus = deriveActivityStatus(status);
+  const lifecycleStatus = deriveLifecycleStatus(status);
+
   getDb()
     .prepare(
-      "UPDATE sessions SET status = @status, stopped_at = @stopped_at WHERE id = @id"
+      "UPDATE sessions SET status = @status, stopped_at = @stopped_at, activity_status = @activity_status, lifecycle_status = @lifecycle_status WHERE id = @id"
     )
-    .run({ id, status, stopped_at: stoppedAt ?? null });
+    .run({ id, status, stopped_at: stoppedAt ?? null, activity_status: activityStatus, lifecycle_status: lifecycleStatus });
+}
+
+/**
+ * Derive the activity status from the legacy session status.
+ * Activity is only meaningful while a session is running — terminal states return null.
+ */
+function deriveActivityStatus(
+  status: DbSession["status"]
+): SessionActivityStatus | null {
+  switch (status) {
+    case "active":
+      return "busy";
+    case "idle":
+      return "idle";
+    case "waiting_input":
+      return "waiting_input";
+    default:
+      // Terminal states — no meaningful activity
+      return null;
+  }
+}
+
+/**
+ * Derive the lifecycle status from the legacy session status.
+ */
+function deriveLifecycleStatus(
+  status: DbSession["status"]
+): SessionLifecycleStatus {
+  switch (status) {
+    case "active":
+    case "idle":
+    case "waiting_input":
+    case "disconnected":
+      return "running";
+    case "completed":
+      return "completed";
+    case "stopped":
+      return "stopped";
+    case "error":
+      return "error";
+  }
 }
 
 export function getSessionsForInstance(instanceId: string): DbSession[] {
@@ -239,7 +292,7 @@ export function updateSessionTitle(id: string, title: string): void {
 export function updateSessionForResume(id: string, instanceId: string): void {
   getDb()
     .prepare(
-      "UPDATE sessions SET instance_id = @instance_id, status = 'active', stopped_at = NULL WHERE id = @id"
+      "UPDATE sessions SET instance_id = @instance_id, status = 'active', activity_status = 'busy', lifecycle_status = 'running', stopped_at = NULL WHERE id = @id"
     )
     .run({ id, instance_id: instanceId });
 }

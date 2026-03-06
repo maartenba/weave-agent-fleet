@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil, Square, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
@@ -22,22 +22,31 @@ interface SidebarSessionItemProps {
 }
 
 export function SidebarSessionItem({ item, isActive, isChild = false }: SidebarSessionItemProps) {
-  const { instanceId, session, instanceStatus, sessionStatus } = item;
+  const { instanceId, session, activityStatus, lifecycleStatus, typedInstanceStatus } = item;
   const { refetch } = useSessionsContext();
   const { renameSession } = useRenameSession();
   const [isRenaming, setIsRenaming] = useState(false);
 
-  const isDead = instanceStatus === "dead";
-  const isDisconnected = sessionStatus === "disconnected";
-  const isStopped = sessionStatus === "stopped";
+  const isInstanceStopped = typedInstanceStatus === "stopped";
+  const isDisconnected = lifecycleStatus === "running" && isInstanceStopped;
+  const isStopped = lifecycleStatus === "stopped";
+  const isCompleted = lifecycleStatus === "completed";
 
-  const dotColor = isDisconnected
-    ? "bg-amber-400"
-    : isStopped
-    ? "bg-slate-500"
-    : isDead
-    ? "bg-red-500"
-    : "bg-green-500 animate-pulse";
+  // Session status: purely about agent activity
+  const isBusy = activityStatus === "busy";
+  const sessionStatusDot = isBusy ? "bg-green-500 animate-pulse" : "bg-slate-400";
+
+  // Connection status: only shown when unhealthy
+  const ConnectionIcon = isDisconnected
+    ? WifiOff
+    : isStopped || isCompleted
+    ? Square
+    : null;
+  const connectionTooltip = isDisconnected
+    ? "Disconnected"
+    : isStopped || isCompleted
+    ? "Stopped"
+    : null;
 
   const title = session.title || session.id.slice(0, 12);
 
@@ -72,7 +81,12 @@ export function SidebarSessionItem({ item, isActive, isChild = false }: SidebarS
           )}
         >
           {isChild && <span className="text-muted-foreground/50 text-[10px] shrink-0">↳</span>}
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sessionStatusDot}`} />
+          {ConnectionIcon && (
+            <span title={connectionTooltip ?? undefined} className="text-muted-foreground shrink-0">
+              <ConnectionIcon className="h-2.5 w-2.5" />
+            </span>
+          )}
           <InlineEdit
             value={title}
             onSave={handleRename}

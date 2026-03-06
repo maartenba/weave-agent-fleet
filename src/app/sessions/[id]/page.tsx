@@ -272,17 +272,13 @@ export default function SessionDetailPage() {
           <div className="flex items-center gap-2">
             <span
               className={`h-2 w-2 rounded-full ${
-                isStopped
-                  ? "bg-slate-500"
-                  : sessionStatus === "busy"
+                sessionStatus === "busy"
                   ? "bg-green-500 animate-pulse"
-                  : status === "connected"
-                  ? "bg-green-500"
-                  : "bg-slate-500"
+                  : "bg-slate-400"
               }`}
             />
             <Badge variant="secondary" className="text-xs">
-              {isStopped ? "Stopped" : sessionStatus === "busy" ? "Working" : "Idle"}
+              {sessionStatus === "busy" ? "Working" : "Idle"}
             </Badge>
             {activeAgentName && (
               <Badge variant="outline" className="text-xs gap-1">

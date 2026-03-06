@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, ExternalLink, Loader2, OctagonX, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowRight, Clock, ExternalLink, Loader2, OctagonX, RotateCcw, Square, Trash2, WifiOff } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
 
 export function timeSince(timestamp: number): string {
@@ -37,44 +37,36 @@ export function LiveSessionCard({
   isParent?: boolean;
   isChild?: boolean;
 }) {
-  const { instanceId, session, instanceStatus, sessionStatus, isolationStrategy } = item;
-  const isDead = instanceStatus === "dead";
-  const isDisconnected = sessionStatus === "disconnected";
-  const isStopped = sessionStatus === "stopped";
-  const isIdle = sessionStatus === "idle";
-  const isCompleted = sessionStatus === "completed";
+  const { instanceId, session, isolationStrategy, activityStatus, lifecycleStatus, typedInstanceStatus } = item;
+  const isInstanceStopped = typedInstanceStatus === "stopped";
+  const isDisconnected = lifecycleStatus === "running" && isInstanceStopped;
+  const isStopped = lifecycleStatus === "stopped";
+  const isCompleted = lifecycleStatus === "completed";
   const isInactive = isDisconnected || isStopped || isCompleted;
 
-  const dotColor = isDisconnected
-    ? "bg-amber-400"
-    : isCompleted
-    ? "bg-blue-500"
-    : isStopped
-    ? "bg-slate-500"
-    : isIdle
-    ? "bg-yellow-400"
-    : isDead
-    ? "bg-red-500"
-    : "bg-green-500 animate-pulse";
+  // Session status: purely about agent activity
+  const isBusy = activityStatus === "busy";
+  const sessionStatusDot = isBusy ? "bg-green-500 animate-pulse" : "bg-slate-400";
+  const sessionStatusLabel = isBusy ? "working" : "idle";
+  const badgeVariant: "destructive" | "secondary" | "outline" = "secondary";
 
-  const badgeVariant: "destructive" | "secondary" | "outline" =
-    isDisconnected ? "outline" : isCompleted ? "outline" : isIdle ? "secondary" : isDead ? "destructive" : "secondary";
-
-  const statusLabel = isDisconnected
-    ? "disconnected"
-    : isCompleted
-    ? "completed"
+  // Connection status: only shown when unhealthy
+  const ConnectionIcon = isDisconnected
+    ? WifiOff
+    : isStopped || isCompleted
+    ? Square
+    : null;
+  const connectionTooltip = isDisconnected
+    ? "Disconnected"
     : isStopped
-    ? "stopped"
-    : isIdle
-    ? "idle"
-    : isDead
-    ? "dead"
-    : "running";
+    ? "Stopped"
+    : isCompleted
+    ? "Stopped"
+    : null;
 
   const canTerminate = !isStopped && !isCompleted;
   const canDelete = (isStopped || isCompleted || isDisconnected) && !!onDelete;
-  const canAbort = sessionStatus === "active" && !!onAbort;
+  const canAbort = activityStatus === "busy" && !!onAbort;
 
   return (
     <div className={`relative group ${isInactive ? "opacity-60" : ""}`}>
@@ -83,7 +75,7 @@ export function LiveSessionCard({
           <CardHeader className="pb-2 pt-4 px-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
+                <span className={`h-2.5 w-2.5 rounded-full ${sessionStatusDot}`} />
                 <h3 className="font-semibold text-sm font-mono truncate max-w-[140px]">
                   {session.title || session.id.slice(0, 12)}
                 </h3>
@@ -92,8 +84,13 @@ export function LiveSessionCard({
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <Badge variant={badgeVariant} className="text-[10px] px-1.5 py-0">
-                {statusLabel}
+                {sessionStatusLabel}
               </Badge>
+              {ConnectionIcon && (
+                <span title={connectionTooltip ?? undefined} className="text-muted-foreground">
+                  <ConnectionIcon className="h-3 w-3" />
+                </span>
+              )}
               {isolationStrategy && isolationStrategy !== "existing" && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-purple-400 border-purple-400/40">
                   {isolationStrategy}

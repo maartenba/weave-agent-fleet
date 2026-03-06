@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
-import { onNotification } from "@/lib/server/notification-emitter";
+import { onNotification, onActivityStatus } from "@/lib/server/notification-emitter";
 
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
@@ -47,10 +47,17 @@ export async function GET(request: NextRequest): Promise<Response> {
         send({ type: "notification", notification });
       });
 
+      // Subscribe to ephemeral activity status events
+      const unsubscribeActivity = onActivityStatus((payload) => {
+        if (abortController.signal.aborted) return;
+        send({ type: "activity_status", payload });
+      });
+
       // Cleanup on abort
       abortController.signal.addEventListener("abort", () => {
         clearInterval(keepalive);
         unsubscribe();
+        unsubscribeActivity();
         try {
           controller.close();
         } catch {
