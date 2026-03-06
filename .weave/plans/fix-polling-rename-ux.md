@@ -1,5 +1,7 @@
 # Fix Polling-Induced Rename Focus Loss
 
+> **GitHub Issue**: https://github.com/pgermishuys/weave-agent-fleet/issues/65
+
 ## TL;DR
 > **Summary**: Prevent sidebar polling from disrupting inline rename by deduplicating unchanged poll responses and adding focus-restoration as defense-in-depth.
 > **Estimated Effort**: Quick
