@@ -1,5 +1,7 @@
 # Fix Directory Picker Mouse Scroll Wheel Bug
 
+> **GitHub Issue**: https://github.com/pgermishuys/weave-agent-fleet/issues/64
+
 ## TL;DR
 > **Summary**: Mouse wheel scrolling doesn't work in the directory picker's CommandList. Fix by adding an explicit `onWheel` handler to the CommandList in `directory-picker.tsx` that programmatically scrolls the container.
 > **Estimated Effort**: Quick
