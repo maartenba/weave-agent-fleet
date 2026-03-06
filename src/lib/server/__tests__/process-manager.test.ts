@@ -272,10 +272,16 @@ describe("getAllowedRoots with DB roots", () => {
     delete process.env.WEAVE_DB_PATH;
   });
 
+  // getAllowedRoots always includes the Weave workspace root (~/.weave/workspaces)
+  // in addition to env and DB roots.
+  const weaveWsRoot = resolve(homedir(), ".weave", "workspaces");
+
   it("ReturnsEnvRootsWhenNoDbRootsExist", () => {
     process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
     const roots = getAllowedRoots();
-    expect(roots).toEqual([resolve("/tmp")]);
+    expect(roots).toContain(resolve("/tmp"));
+    expect(roots).toContain(weaveWsRoot);
+    expect(roots.length).toBe(2);
   });
 
   it("MergesEnvAndDbRoots", () => {
@@ -284,14 +290,16 @@ describe("getAllowedRoots with DB roots", () => {
     const roots = getAllowedRoots();
     expect(roots).toContain(resolve("/tmp"));
     expect(roots).toContain(resolve("/var"));
-    expect(roots.length).toBe(2);
+    expect(roots).toContain(weaveWsRoot);
+    expect(roots.length).toBe(3);
   });
 
   it("DeduplicatesByResolvedPath", () => {
     process.env.ORCHESTRATOR_WORKSPACE_ROOTS = "/tmp";
     insertWorkspaceRoot({ id: randomUUID(), path: resolve("/tmp") });
     const roots = getAllowedRoots();
-    expect(roots.length).toBe(1);
-    expect(roots[0]).toBe(resolve("/tmp"));
+    expect(roots).toContain(resolve("/tmp"));
+    expect(roots).toContain(weaveWsRoot);
+    expect(roots.length).toBe(2);
   });
 });
