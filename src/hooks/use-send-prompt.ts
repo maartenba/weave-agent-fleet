@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { parseSlashCommand } from "@/lib/slash-command-utils";
 
 export interface UseSendPromptResult {
   sendPrompt: (
@@ -22,20 +23,49 @@ export function useSendPrompt(): UseSendPromptResult {
       setIsSending(true);
       setError(undefined);
       try {
-        const response = await fetch(
-          `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ instanceId, text, agent }),
-          }
-        );
+        const parsed = parseSlashCommand(text);
 
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          const message = (data as { error?: string }).error ?? `HTTP ${response.status}`;
-          setError(message);
-          throw new Error(message);
+        if (parsed) {
+          // Slash command — route to the command endpoint which fires the SDK
+          // command() without awaiting it (fire-and-forget, matching the
+          // OpenCode TUI pattern).  The SSE event stream delivers session
+          // status changes and streamed messages back to the frontend.
+          const response = await fetch(
+            `/api/sessions/${encodeURIComponent(sessionId)}/command`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                instanceId,
+                command: parsed.command,
+                ...(parsed.args ? { args: parsed.args } : {}),
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const message = (data as { error?: string }).error ?? `HTTP ${response.status}`;
+            setError(message);
+            throw new Error(message);
+          }
+        } else {
+          // Regular prompt — route to promptAsync endpoint.
+          const response = await fetch(
+            `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ instanceId, text, agent }),
+            }
+          );
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const message = (data as { error?: string }).error ?? `HTTP ${response.status}`;
+            setError(message);
+            throw new Error(message);
+          }
         }
       } finally {
         setIsSending(false);

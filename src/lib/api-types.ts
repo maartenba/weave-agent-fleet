@@ -47,6 +47,17 @@ export interface SendPromptRequest {
   agent?: string;
 }
 
+export interface SendCommandRequest {
+  instanceId: string;
+  command: string;
+  args?: string;
+}
+
+export interface SendCommandResponse {
+  success: boolean;
+  sessionId: string;
+}
+
 // ─── Session List ──────────────────────────────────────────────────────────
 
 export interface SessionListItem {
