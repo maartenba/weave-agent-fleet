@@ -4,9 +4,16 @@
  */
 
 import type { Session, Part, SessionStatus } from "@opencode-ai/sdk/v2";
+import type {
+  SessionActivityStatus,
+  SessionLifecycleStatus,
+  InstanceStatus,
+} from "@/lib/types";
 
 // Re-export SDK types used across the UI
 export type { Session as SDKSession, Part, SessionStatus };
+// Re-export new status types for consumer convenience
+export type { SessionActivityStatus, SessionLifecycleStatus, InstanceStatus };
 
 // ─── Request/Response Shapes ───────────────────────────────────────────────
 
@@ -56,6 +63,19 @@ export interface SessionListItem {
   dbId?: string;
   /** Fleet DB session ID of the parent (conductor) session, if this is a child */
   parentSessionId?: string | null;
+  /**
+   * Activity status — what the session's agent is currently doing.
+   * Only meaningful while lifecycleStatus is "running".
+   */
+  activityStatus: SessionActivityStatus | null;
+  /**
+   * Lifecycle status — overall terminal/non-terminal state of the session.
+   */
+  lifecycleStatus: SessionLifecycleStatus;
+  /**
+   * Instance status — whether the OpenCode process backing this session is healthy.
+   */
+  typedInstanceStatus: InstanceStatus;
 }
 
 // ─── Streamed Event Model ──────────────────────────────────────────────────

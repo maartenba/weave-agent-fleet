@@ -88,7 +88,7 @@ export function SidebarWorkspaceItem({
   }, [group.workspaceId, setPinnedIds]);
 
   const handleTerminateAll = useCallback(async () => {
-    const active = group.sessions.filter((s) => s.sessionStatus !== "stopped");
+    const active = group.sessions.filter((s) => s.lifecycleStatus !== "stopped" && s.lifecycleStatus !== "completed");
     if (active.length === 0) return;
     const confirmed = window.confirm(
       `Terminate all ${active.length} active session${active.length !== 1 ? "s" : ""} in "${group.displayName}"?`

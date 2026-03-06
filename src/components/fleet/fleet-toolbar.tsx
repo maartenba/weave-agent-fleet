@@ -11,12 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export type GroupBy = "directory" | "status" | "source" | "none";
+export type GroupBy = "directory" | "session-status" | "connection-status" | "source" | "none";
 export type SortBy = "recent" | "name" | "status";
 
 const GROUP_BY_LABELS: Record<GroupBy, string> = {
   directory: "Directory",
-  status: "Status",
+  "session-status": "Session Status",
+  "connection-status": "Connection Status",
   source: "Source",
   none: "None",
 };

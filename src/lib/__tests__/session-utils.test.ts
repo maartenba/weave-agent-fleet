@@ -18,6 +18,9 @@ function makeItem(overrides: Partial<SessionListItem> & { sessionId?: string } =
     session: { id } as SessionListItem["session"],
     dbId: undefined,
     parentSessionId: undefined,
+    activityStatus: "busy",
+    lifecycleStatus: "running",
+    typedInstanceStatus: "running",
     ...overrides,
   };
 }

@@ -24,6 +24,26 @@ export type SessionStatus =
   | "stopped"
   | "disconnected";
 
+/**
+ * Activity status — what the session's agent is currently doing.
+ * Only meaningful while the lifecycle is "running".
+ */
+export type SessionActivityStatus = "busy" | "idle" | "waiting_input";
+
+/**
+ * Lifecycle status — the overall terminal/non-terminal state of the session.
+ */
+export type SessionLifecycleStatus =
+  | "running"
+  | "completed"
+  | "stopped"
+  | "error";
+
+/**
+ * Instance (OpenCode process) status.
+ */
+export type InstanceStatus = "running" | "stopped";
+
 export type SessionSourceType =
   | "manual"
   | "template"

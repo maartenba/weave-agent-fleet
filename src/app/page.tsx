@@ -145,11 +145,15 @@ function FleetPageInner() {
         return aTitle.localeCompare(bTitle);
       });
     } else if (prefs.sortBy === "status") {
-      const order: Record<string, number> = { active: 0, idle: 1, disconnected: 2, stopped: 3, completed: 3 };
+      const activityOrder: Record<string, number> = { busy: 0, waiting_input: 1, idle: 2 };
+      const lifecycleOrder: Record<string, number> = { running: 0, completed: 1, stopped: 2, error: 3 };
       sorted.sort((a, b) => {
-        const aOrd = order[a.sessionStatus] ?? 4;
-        const bOrd = order[b.sessionStatus] ?? 4;
-        return aOrd - bOrd;
+        const aLifecycle = lifecycleOrder[a.lifecycleStatus] ?? 4;
+        const bLifecycle = lifecycleOrder[b.lifecycleStatus] ?? 4;
+        if (aLifecycle !== bLifecycle) return aLifecycle - bLifecycle;
+        const aActivity = activityOrder[a.activityStatus ?? "idle"] ?? 3;
+        const bActivity = activityOrder[b.activityStatus ?? "idle"] ?? 3;
+        return aActivity - bActivity;
       });
     }
     return sorted;
@@ -158,11 +162,11 @@ function FleetPageInner() {
   // Derive workspace groups from filtered sessions
   const allWorkspaces = useWorkspaces(searchFiltered);
 
-  const liveCount = liveSummary?.activeSessions ?? sessions.filter((s) => s.sessionStatus === "active").length;
+  const liveCount = liveSummary?.activeSessions ?? sessions.filter((s) => s.activityStatus === "busy").length;
 
   const summary: FleetSummary = {
     activeSessions: liveSummary?.activeSessions ?? liveCount,
-    idleSessions: liveSummary?.idleSessions ?? sessions.filter((s) => s.sessionStatus === "idle").length,
+    idleSessions: liveSummary?.idleSessions ?? sessions.filter((s) => s.lifecycleStatus === "running" && s.activityStatus === "idle").length,
     totalTokens: liveSummary?.totalTokens ?? 0,
     totalCost: liveSummary?.totalCost ?? 0,
     queuedTasks: 0,
@@ -173,22 +177,92 @@ function FleetPageInner() {
       ? `${liveCount} active session${liveCount !== 1 ? "s" : ""}`
       : "No active sessions";
 
-  // Group by "Status"
-  const renderGroupedByStatus = () => {
-    const statusGroups: Record<string, SessionListItem[]> = {
-      active: [],
+  // Group by "Session Status" (working / idle)
+  const renderGroupedBySessionStatus = () => {
+    const groups: Record<string, SessionListItem[]> = {
+      working: [],
       idle: [],
-      disconnected: [],
-      stopped: [],
-      completed: [],
     };
     for (const s of searchFiltered) {
-      (statusGroups[s.sessionStatus] ?? []).push(s);
+      if (s.activityStatus === "busy") {
+        groups.working.push(s);
+      } else {
+        groups.idle.push(s);
+      }
     }
     return (
       <div className="space-y-4">
-        {(["active", "idle", "disconnected", "stopped", "completed"] as const).map((status) => {
-          const items = sortSessions(statusGroups[status]);
+        {(["working", "idle"] as const).map((status) => {
+          const items = sortSessions(groups[status]);
+          if (items.length === 0) return null;
+          return (
+            <div key={status}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {status}
+                </span>
+                <span className="text-xs text-muted-foreground">({items.length})</span>
+              </div>
+               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                 {nestSessions(items).map(({ item, children }) => (
+                   <div key={`${item.instanceId}-${item.session.id}`} className="contents">
+                     <LiveSessionCard
+                       item={item}
+                       isParent={children.length > 0}
+                       onTerminate={handleTerminate}
+                       onResume={handleResume}
+                       onDelete={handleDeleteRequest}
+                       onOpen={(dir) => handleOpen(dir)}
+                       onAbort={handleAbort}
+                       isResuming={resumingSessionId === item.session.id}
+                     />
+                     {children.map((child) => (
+                       <LiveSessionCard
+                         key={`${child.instanceId}-${child.session.id}`}
+                         item={child}
+                         isChild
+                         onTerminate={handleTerminate}
+                         onResume={handleResume}
+                         onDelete={handleDeleteRequest}
+                         onOpen={(dir) => handleOpen(dir)}
+                         onAbort={handleAbort}
+                         isResuming={resumingSessionId === child.session.id}
+                       />
+                     ))}
+                   </div>
+                 ))}
+               </div>
+             </div>
+           );
+         })}
+       </div>
+     );
+   };
+
+  // Group by "Connection Status" (connected / disconnected / stopped)
+  const renderGroupedByConnectionStatus = () => {
+    const groups: Record<string, SessionListItem[]> = {
+      connected: [],
+      disconnected: [],
+      stopped: [],
+    };
+    for (const s of searchFiltered) {
+      const isInstanceStopped = s.typedInstanceStatus === "stopped";
+      const isDisconnected = s.lifecycleStatus === "running" && isInstanceStopped;
+      const isStopped = s.lifecycleStatus === "stopped" || s.lifecycleStatus === "completed";
+
+      if (isDisconnected) {
+        groups.disconnected.push(s);
+      } else if (isStopped) {
+        groups.stopped.push(s);
+      } else {
+        groups.connected.push(s);
+      }
+    }
+    return (
+      <div className="space-y-4">
+        {(["connected", "disconnected", "stopped"] as const).map((status) => {
+          const items = sortSessions(groups[status]);
           if (items.length === 0) return null;
           return (
             <div key={status}>
@@ -348,8 +422,12 @@ function FleetPageInner() {
       );
     }
 
-    if (prefs.groupBy === "status") {
-      return renderGroupedByStatus();
+    if (prefs.groupBy === "session-status") {
+      return renderGroupedBySessionStatus();
+    }
+
+    if (prefs.groupBy === "connection-status") {
+      return renderGroupedByConnectionStatus();
     }
 
     if (prefs.groupBy === "source") {

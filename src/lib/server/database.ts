@@ -120,6 +120,19 @@ export function getDb(): Database.Database {
     // Column already exists — ignore
   }
 
+  // Phase 3: add activity_status and lifecycle_status columns
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN activity_status TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN lifecycle_status TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
   // Add index on sessions.status for efficient status-based queries
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
 

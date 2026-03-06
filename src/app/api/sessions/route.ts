@@ -9,6 +9,9 @@ import type {
   CreateSessionRequest,
   CreateSessionResponse,
   SessionListItem,
+  SessionActivityStatus,
+  SessionLifecycleStatus,
+  InstanceStatus,
 } from "@/lib/api-types";
 
 // POST /api/sessions — spawn an OpenCode instance (or reuse) and create a session
@@ -153,16 +156,21 @@ export async function GET(): Promise<NextResponse> {
         try {
           const result = await instance.client.session.list();
           const sessions = result.data ?? [];
+          const isRunning = instance.status === "running";
           for (const session of sessions) {
+            const legacyStatus = isRunning ? "active" : "stopped";
             items.push({
               instanceId: instance.id,
               workspaceId: "",
               workspaceDirectory: instance.directory,
               workspaceDisplayName: null,
               isolationStrategy: "existing",
-              sessionStatus: instance.status === "running" ? "active" : "stopped",
+              sessionStatus: legacyStatus,
               session,
               instanceStatus: instance.status,
+              activityStatus: deriveActivityStatus(legacyStatus),
+              lifecycleStatus: deriveLifecycleStatus(legacyStatus),
+              typedInstanceStatus: isRunning ? "running" : "stopped",
             });
           }
         } catch (err) {
@@ -301,6 +309,9 @@ export async function GET(): Promise<NextResponse> {
             instanceStatus,
             dbId: dbSession.id,
             parentSessionId: dbSession.parent_session_id,
+            activityStatus: deriveActivityStatus(sessionStatus),
+            lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+            typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
           });
           continue;
         }
@@ -331,8 +342,45 @@ export async function GET(): Promise<NextResponse> {
       instanceStatus,
       dbId: dbSession.id,
       parentSessionId: dbSession.parent_session_id,
+      activityStatus: deriveActivityStatus(sessionStatus),
+      lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+      typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
     });
   }
 
   return NextResponse.json(items, { status: 200 });
+}
+
+// ─── Status derivation helpers ────────────────────────────────────────────────
+
+function deriveActivityStatus(
+  sessionStatus: SessionListItem["sessionStatus"]
+): SessionActivityStatus | null {
+  switch (sessionStatus) {
+    case "active":
+      return "busy";
+    case "idle":
+      return "idle";
+    case "waiting_input":
+      return "waiting_input";
+    default:
+      return null;
+  }
+}
+
+function deriveLifecycleStatus(
+  sessionStatus: SessionListItem["sessionStatus"]
+): SessionLifecycleStatus {
+  switch (sessionStatus) {
+    case "active":
+    case "idle":
+    case "waiting_input":
+    case "disconnected":
+    case "error":
+      return "running";
+    case "completed":
+      return "completed";
+    case "stopped":
+      return "stopped";
+  }
 }
