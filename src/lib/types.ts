@@ -37,7 +37,8 @@ export type SessionLifecycleStatus =
   | "running"
   | "completed"
   | "stopped"
-  | "error";
+  | "error"
+  | "disconnected";
 
 /**
  * Instance (OpenCode process) status.

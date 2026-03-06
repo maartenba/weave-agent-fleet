@@ -37,9 +37,8 @@ export function LiveSessionCard({
   isParent?: boolean;
   isChild?: boolean;
 }) {
-  const { instanceId, session, isolationStrategy, activityStatus, lifecycleStatus, typedInstanceStatus } = item;
-  const isInstanceStopped = typedInstanceStatus === "stopped";
-  const isDisconnected = lifecycleStatus === "running" && isInstanceStopped;
+  const { instanceId, session, isolationStrategy, activityStatus, lifecycleStatus } = item;
+  const isDisconnected = lifecycleStatus === "disconnected";
   const isStopped = lifecycleStatus === "stopped";
   const isCompleted = lifecycleStatus === "completed";
   const isInactive = isDisconnected || isStopped || isCompleted;

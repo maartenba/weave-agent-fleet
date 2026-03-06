@@ -20,7 +20,8 @@ export type SessionConnectionStatus =
   | "connected"
   | "recovering"
   | "disconnected"
-  | "error";
+  | "error"
+  | "abandoned";
 
 export interface UseSessionEventsResult {
   messages: AccumulatedMessage[];
@@ -47,6 +48,7 @@ export interface UseSessionEventsResult {
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const BASE_RECONNECT_DELAY_MS = 1_000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 export function useSessionEvents(
   sessionId: string,
@@ -164,14 +166,22 @@ export function useSessionEvents(
       if (!isMounted.current) return;
       es.close();
       eventSourceRef.current = null;
-      setStatus("disconnected");
-      setReconnectAttempt((prev) => prev + 1);
 
-      const delay = reconnectDelay.current;
-      reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
-      reconnectTimerRef.current = setTimeout(() => {
-        if (isMounted.current) connectRef.current?.();
-      }, delay);
+      setReconnectAttempt((prev) => {
+        const next = prev + 1;
+        if (next >= MAX_RECONNECT_ATTEMPTS) {
+          setStatus("abandoned");
+          // Don't schedule any more retries
+          return next;
+        }
+        setStatus("disconnected");
+        const delay = reconnectDelay.current;
+        reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+        reconnectTimerRef.current = setTimeout(() => {
+          if (isMounted.current) connectRef.current?.();
+        }, delay);
+        return next;
+      });
     };
   }, [sessionId, instanceId, loadAllMessages, loadInitialMessages]);
 

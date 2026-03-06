@@ -35,7 +35,7 @@ import {
   listSessions,
   listActiveSessions,
   updateSessionStatus,
-  getSessionsForInstance,
+  getNonTerminalSessionsForInstance,
 } from "@/lib/server/db-repository";
 import {
   createWorkspace,
@@ -268,29 +268,28 @@ describe("V2-Verify-4: Server restart → disconnected", () => {
     expect(getRunningInstances().length).toBe(0);
   });
 
-  it("SessionsBecomeDisconnectedWhenInstanceStops", () => {
+  it("SessionsBecomeStoppedWhenRecoveryMarksInstanceDead", () => {
     const dirs = [makeTempDir(), makeTempDir()].map(trackDir);
     const sessions = dirs.map((dir, i) =>
       setupFullSession({ directory: dir, port: 4097 + i })
     );
 
-    // Simulate orphan recovery: mark instances stopped, sessions disconnected
+    // Simulate recovery: mark instances stopped, then cascade to sessions
     const now = new Date().toISOString();
     for (const s of sessions) {
       updateInstanceStatus(s.instId, "stopped", now);
-      // Sessions associated with this instance become disconnected
-      const activeSessions = getSessionsForInstance(s.instId);
-      for (const as of activeSessions) {
-        updateSessionStatus(as.id, "disconnected");
+      // Recovery cascades: find non-terminal sessions and mark them stopped
+      const orphaned = getNonTerminalSessionsForInstance(s.instId);
+      for (const os of orphaned) {
+        updateSessionStatus(os.id, "stopped", now);
       }
     }
 
-    // All sessions should now be disconnected
+    // All sessions should now be stopped
     const allSessions = listSessions();
     for (const sess of allSessions) {
-      expect(sess.status).toBe("disconnected");
+      expect(sess.status).toBe("stopped");
     }
-    // None are active
     expect(listActiveSessions().length).toBe(0);
   });
 });

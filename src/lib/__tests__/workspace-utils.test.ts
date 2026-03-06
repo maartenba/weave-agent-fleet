@@ -183,9 +183,9 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups[0].hasRunningSession).toBe(false);
   });
 
-  it("sets hasRunningSession false when disconnected (running lifecycle, stopped instance)", () => {
+  it("sets hasRunningSession false when disconnected", () => {
     const session = makeSession({
-      lifecycleStatus: "running",
+      lifecycleStatus: "disconnected",
       typedInstanceStatus: "stopped",
     });
 

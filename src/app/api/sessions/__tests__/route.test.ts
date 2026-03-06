@@ -398,6 +398,7 @@ describe("GET /api/sessions", () => {
     expect(res.status).toBe(200);
     expect(body).toHaveLength(1);
     expect(body[0].sessionStatus).toBe("disconnected");
+    expect(body[0].lifecycleStatus).toBe("disconnected");
     expect(body[0].instanceStatus).toBe("dead");
   });
 
@@ -497,6 +498,22 @@ describe("GET /api/sessions", () => {
     expect(body).toHaveLength(1);
     expect(body[0].sessionStatus).toBe("completed");
     expect(body[0].instanceStatus).toBe("dead");
+  });
+
+  it("ReturnsErrorLifecycleStatusWhenDbSessionIsInErrorState", async () => {
+    const dbSession = makeDbSession({ status: "error" });
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([]);
+    mockGetInstance.mockReturnValue(undefined as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("error");
+    expect(body[0].lifecycleStatus).toBe("error");
   });
 
   it("SynthesizesStubSessionForDisconnectedSessionsWhenSdkFetchFails", async () => {

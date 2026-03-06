@@ -21,6 +21,7 @@ import {
   listActiveSessions,
   updateSessionStatus,
   getSessionsForInstance,
+  getNonTerminalSessionsForInstance,
   updateSessionForResume,
   deleteSession,
   getSessionsForWorkspace,
@@ -446,6 +447,41 @@ describe("session repository", () => {
   it("UpdateSessionForResumeIsNoOpForNonexistentSession", () => {
     // Should not throw — updating a non-existent row is a no-op in SQLite
     expect(() => updateSessionForResume("nonexistent-id", "some-inst-id")).not.toThrow();
+  });
+
+  it("GetNonTerminalSessionsForInstanceReturnsActiveIdleAndDisconnected", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId(); // active
+    const id2 = mkSessionId(); // idle
+    const id3 = mkSessionId(); // disconnected
+    const id4 = mkSessionId(); // stopped (terminal)
+    const id5 = mkSessionId(); // completed (terminal)
+
+    for (const id of [id1, id2, id3, id4, id5]) {
+      insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    updateSessionStatus(id2, "idle");
+    updateSessionStatus(id3, "disconnected");
+    updateSessionStatus(id4, "stopped", new Date().toISOString());
+    updateSessionStatus(id5, "completed", new Date().toISOString());
+
+    const sessions = getNonTerminalSessionsForInstance(instId);
+    const ids = sessions.map((s) => s.id);
+    expect(ids).toContain(id1); // active
+    expect(ids).toContain(id2); // idle
+    expect(ids).toContain(id3); // disconnected
+    expect(ids).not.toContain(id4); // stopped
+    expect(ids).not.toContain(id5); // completed
+  });
+
+  it("GetNonTerminalSessionsForInstanceReturnsEmptyWhenAllTerminal", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id1, "stopped", new Date().toISOString());
+
+    const sessions = getNonTerminalSessionsForInstance(instId);
+    expect(sessions.length).toBe(0);
   });
 });
 
