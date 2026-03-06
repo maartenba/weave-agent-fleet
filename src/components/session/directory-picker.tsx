@@ -62,6 +62,21 @@ export function DirectoryPicker({
     setSearch,
   } = useDirectoryBrowser(popoverOpen);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const commandListRef = useRef<HTMLDivElement>(null);
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const el = commandListRef.current;
+    if (!el) return;
+
+    const scrollingDown = event.deltaY > 0;
+    const canScrollDown = el.scrollTop + el.clientHeight < el.scrollHeight;
+    const canScrollUp = el.scrollTop > 0;
+
+    if ((scrollingDown && canScrollDown) || (!scrollingDown && canScrollUp)) {
+      event.preventDefault();
+      el.scrollTop += event.deltaY;
+    }
+  };
 
   // Focus search input when popover opens
   useEffect(() => {
@@ -178,7 +193,7 @@ export function DirectoryPicker({
               value={search}
               onValueChange={setSearch}
             />
-            <CommandList className="max-h-[250px]">
+            <CommandList ref={commandListRef} onWheel={handleWheel} className="max-h-[250px]">
               {/* Loading state */}
               {isLoading && (
                 <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
