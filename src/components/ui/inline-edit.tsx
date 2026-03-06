@@ -118,7 +118,7 @@ export function InlineEdit({
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         className={cn("h-6 px-1 py-0 text-sm font-medium", className)}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       />
     );
   }
