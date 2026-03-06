@@ -6,7 +6,17 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// POST /api/sessions/[id]/command — execute a slash command via the SDK command API
+// POST /api/sessions/[id]/command — execute a slash command via promptAsync
+//
+// The SDK's `client.session.command()` hits a blocking endpoint that returns
+// the complete result in the HTTP response body (200) rather than streaming
+// via SSE.  Using it with fire-and-forget discards the response, so the user
+// never sees the command output.
+//
+// Instead, we reconstruct the slash command text (e.g. "/compact args") and
+// send it through `promptAsync`, which is truly async — it returns 204
+// immediately and streams results via the SSE event pipeline that the
+// frontend already consumes.
 export async function POST(
   request: NextRequest,
   context: RouteContext
@@ -47,16 +57,15 @@ export async function POST(
   }
 
   try {
-    // Fire the command but don't await it — the SDK's command() blocks until
-    // the agent finishes, which would keep the HTTP request open for the entire
-    // duration.  Instead, fire-and-forget like promptAsync: the SSE event stream
-    // delivers real-time progress to the frontend.
-    client.session.command({
+    // Reconstruct the slash command text and send via promptAsync so the
+    // OpenCode server processes it asynchronously with full SSE streaming.
+    const commandText = args
+      ? `/${command.trim()} ${args}`
+      : `/${command.trim()}`;
+
+    await client.session.promptAsync({
       sessionID: sessionId,
-      command: command.trim(),
-      ...(args ? { arguments: args } : {}),
-    }).catch((err) => {
-      console.error(`[POST /api/sessions/${sessionId}/command] Async error:`, err);
+      parts: [{ type: "text", text: commandText }],
     });
 
     const responseBody: SendCommandResponse = { success: true, sessionId };
