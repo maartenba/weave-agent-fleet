@@ -22,13 +22,12 @@ interface SidebarSessionItemProps {
 }
 
 export function SidebarSessionItem({ item, isActive, isChild = false }: SidebarSessionItemProps) {
-  const { instanceId, session, activityStatus, lifecycleStatus, typedInstanceStatus } = item;
+  const { instanceId, session, activityStatus, lifecycleStatus } = item;
   const { refetch } = useSessionsContext();
   const { renameSession } = useRenameSession();
   const [isRenaming, setIsRenaming] = useState(false);
 
-  const isInstanceStopped = typedInstanceStatus === "stopped";
-  const isDisconnected = lifecycleStatus === "running" && isInstanceStopped;
+  const isDisconnected = lifecycleStatus === "disconnected";
   const isStopped = lifecycleStatus === "stopped";
   const isCompleted = lifecycleStatus === "completed";
 

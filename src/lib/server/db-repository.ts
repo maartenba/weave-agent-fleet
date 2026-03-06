@@ -262,12 +262,13 @@ function deriveActivityStatus(
 function deriveLifecycleStatus(
   status: DbSession["status"]
 ): SessionLifecycleStatus {
-  switch (status) {
+    switch (status) {
     case "active":
     case "idle":
     case "waiting_input":
-    case "disconnected":
       return "running";
+    case "disconnected":
+      return "disconnected";
     case "completed":
       return "completed";
     case "stopped":
@@ -280,6 +281,18 @@ function deriveLifecycleStatus(
 export function getSessionsForInstance(instanceId: string): DbSession[] {
   return getDb()
     .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status IN ('active', 'idle')")
+    .all(instanceId) as DbSession[];
+}
+
+/**
+ * Get all sessions for an instance that are NOT in a terminal state.
+ * Used during recovery to cascade instance death to orphaned sessions.
+ * Unlike getSessionsForInstance() which only returns active/idle,
+ * this includes disconnected/waiting_input sessions too.
+ */
+export function getNonTerminalSessionsForInstance(instanceId: string): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE instance_id = ? AND status NOT IN ('stopped', 'completed', 'error')")
     .all(instanceId) as DbSession[];
 }
 

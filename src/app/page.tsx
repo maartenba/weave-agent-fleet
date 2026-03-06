@@ -146,7 +146,7 @@ function FleetPageInner() {
       });
     } else if (prefs.sortBy === "status") {
       const activityOrder: Record<string, number> = { busy: 0, waiting_input: 1, idle: 2 };
-      const lifecycleOrder: Record<string, number> = { running: 0, completed: 1, stopped: 2, error: 3 };
+      const lifecycleOrder: Record<string, number> = { running: 0, completed: 1, stopped: 2, error: 3, disconnected: 4 };
       sorted.sort((a, b) => {
         const aLifecycle = lifecycleOrder[a.lifecycleStatus] ?? 4;
         const bLifecycle = lifecycleOrder[b.lifecycleStatus] ?? 4;
@@ -247,8 +247,7 @@ function FleetPageInner() {
       stopped: [],
     };
     for (const s of searchFiltered) {
-      const isInstanceStopped = s.typedInstanceStatus === "stopped";
-      const isDisconnected = s.lifecycleStatus === "running" && isInstanceStopped;
+      const isDisconnected = s.lifecycleStatus === "disconnected";
       const isStopped = s.lifecycleStatus === "stopped" || s.lifecycleStatus === "completed";
 
       if (isDisconnected) {

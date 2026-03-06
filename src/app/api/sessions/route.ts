@@ -265,6 +265,8 @@ export async function GET(): Promise<NextResponse> {
           sessionStatus = "stopped";
         } else if (dbSession.status === "disconnected") {
           sessionStatus = "disconnected";
+        } else if (dbSession.status === "error") {
+          sessionStatus = "error";
         } else {
           // active session with dead instance → disconnected
           sessionStatus = "disconnected";
@@ -371,16 +373,18 @@ function deriveActivityStatus(
 function deriveLifecycleStatus(
   sessionStatus: SessionListItem["sessionStatus"]
 ): SessionLifecycleStatus {
-  switch (sessionStatus) {
+    switch (sessionStatus) {
     case "active":
     case "idle":
     case "waiting_input":
-    case "disconnected":
-    case "error":
       return "running";
+    case "disconnected":
+      return "disconnected";
     case "completed":
       return "completed";
     case "stopped":
       return "stopped";
+    case "error":
+      return "error";
   }
 }

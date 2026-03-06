@@ -148,6 +148,9 @@ export default function SessionDetailPage() {
     if (status === "connected" && isResumable && !isStopped) {
       setIsResumable(false);
     }
+    if (status === "abandoned" && !isResumable && !isStopped) {
+      setIsResumable(true);
+    }
   }, [status, isResumable, isStopped]);
 
   // Compute aggregate tokens from accumulated messages
@@ -556,7 +559,7 @@ export default function SessionDetailPage() {
                 <div className="flex items-center gap-1.5">
                   {status === "error" ? (
                     <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
-                  ) : status === "disconnected" ? (
+                  ) : status === "disconnected" || status === "abandoned" ? (
                     <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
                   ) : (
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
@@ -568,18 +571,20 @@ export default function SessionDetailPage() {
                   )}
                   <p className={`text-xs ${
                     status === "error" ? "text-red-500 font-medium" :
-                    status === "disconnected" ? "text-amber-400" :
+                    status === "disconnected" || status === "abandoned" ? "text-amber-400" :
                     ""
                   }`}>
                     {status === "error" ? "Error" :
-                     status === "disconnected"
+                     status === "abandoned"
+                       ? "Instance unreachable"
+                       : status === "disconnected"
                        ? `Disconnected${reconnectAttempt > 0 ? ` (retry ${reconnectAttempt})` : ""}`
                        : status === "recovering" ? "Recovering…"
                        : status === "connecting" ? "Connecting…"
                        : "Connected"}
                   </p>
                 </div>
-                {status === "disconnected" && (
+                {(status === "disconnected" || status === "abandoned") && (
                   <button
                     onClick={reconnect}
                     className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"

@@ -24,6 +24,7 @@ import {
   updateInstanceStatus,
   getRunningInstances,
   getSessionsForInstance,
+  getNonTerminalSessionsForInstance,
   updateSessionStatus,
   listWorkspaceRoots,
 } from "./db-repository";
@@ -392,10 +393,26 @@ export async function recoverInstances(): Promise<void> {
       ensureWatching(dbInst.id);
     } else {
       // Mark as stopped in DB
+      const now = new Date().toISOString();
       try {
-        updateInstanceStatus(dbInst.id, "stopped", new Date().toISOString());
+        updateInstanceStatus(dbInst.id, "stopped", now);
       } catch (err) {
         log.warn("process-manager", "Failed to mark unreachable instance as stopped in DB", { instanceId: dbInst.id, err });
+      }
+      // Cascade: mark all non-terminal sessions on this dead instance as stopped.
+      // This handles both scenarios:
+      //   - Graceful shutdown: sessions stuck as "disconnected"
+      //   - Crash: sessions stuck as "active"/"idle"/"waiting_input"
+      try {
+        const orphanedSessions = getNonTerminalSessionsForInstance(dbInst.id);
+        for (const session of orphanedSessions) {
+          updateSessionStatus(session.id, "stopped", now);
+        }
+        if (orphanedSessions.length > 0) {
+          log.info("process-manager", `Recovered ${orphanedSessions.length} orphaned session(s) for dead instance`, { instanceId: dbInst.id });
+        }
+      } catch (err) {
+        log.warn("process-manager", "Failed to cascade session stops during recovery", { instanceId: dbInst.id, err });
       }
     }
   }

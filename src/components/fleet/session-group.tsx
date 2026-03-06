@@ -76,7 +76,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
   );
 
   const handleTerminateAll = useCallback(async () => {
-    const active = group.sessions.filter((s) => s.lifecycleStatus !== "stopped" && s.lifecycleStatus !== "completed");
+    const active = group.sessions.filter((s) => s.lifecycleStatus !== "stopped" && s.lifecycleStatus !== "completed" && s.lifecycleStatus !== "disconnected");
     await Promise.allSettled(
       active.map((s) => terminateSession(s.session.id, s.instanceId))
     );
