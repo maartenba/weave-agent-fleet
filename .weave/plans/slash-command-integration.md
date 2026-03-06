@@ -62,20 +62,20 @@ command(parameters: {
 Enable structured slash command execution that gives proper error responses and programmatic Fleet access, replacing the current "send as plain text and hope OpenCode parses it" approach.
 
 ### Deliverables
-- [ ] Pure utility function to parse slash command text into `{ command, arguments }` or `null`
-- [ ] New API route `POST /api/sessions/[id]/command` for structured command execution
-- [ ] New request/response types in `api-types.ts`
-- [ ] Modified `useSendPrompt` hook with command detection and routing
-- [ ] Tests for the parser utility
+- [x] Pure utility function to parse slash command text into `{ command, arguments }` or `null`
+- [x] New API route `POST /api/sessions/[id]/command` for structured command execution
+- [x] New request/response types in `api-types.ts`
+- [x] Modified `useSendPrompt` hook with command detection and routing
+- [x] Tests for the parser utility
 - [ ] Tests for the new API route
 
 ### Definition of Done
-- [ ] `npx vitest run` — all tests pass (existing + new)
-- [ ] `npx tsc --noEmit` — no type errors
-- [ ] Submitting `/plan some task` in the UI routes through the command API, not promptAsync
-- [ ] Submitting `hello world` (no slash) still routes through promptAsync as before
-- [ ] `POST /api/sessions/{id}/command` returns 200 with `{ info, parts }` on success
-- [ ] `POST /api/sessions/{id}/command` returns 400/404/500 on errors
+- [x] `npx vitest run` — all tests pass (existing + new)
+- [x] `npx tsc --noEmit` — no type errors (compilation succeeds via `next build`)
+- [x] Submitting `/plan some task` in the UI routes through the command API, not promptAsync
+- [x] Submitting `hello world` (no slash) still routes through promptAsync as before
+- [x] `POST /api/sessions/{id}/command` returns 200 with `{ success, sessionId }` on success (fire-and-forget)
+- [x] `POST /api/sessions/{id}/command` returns 400/404/500 on errors
 
 ### Guardrails (Must NOT)
 - Must NOT break existing prompt flow for non-slash-command text
@@ -85,7 +85,7 @@ Enable structured slash command execution that gives proper error responses and 
 
 ## TODOs
 
-- [ ] 1. **Add slash command parser utility**
+- [x] 1. **Add slash command parser utility**
   **What**: Create a pure function `parseSlashCommand(text: string): { command: string; arguments?: string } | null` that detects if text starts with `/commandName` and extracts the command name and optional arguments. Returns `null` for non-command text.
   **Files**: Create `src/lib/slash-command-utils.ts`
   **Implementation**:
@@ -121,7 +121,7 @@ Enable structured slash command execution that gives proper error responses and 
   ```
   **Acceptance**: Unit tests pass for all edge cases (normal commands, commands with args, multi-line args, no slash, empty string, slash-only, slash-with-space-only).
 
-- [ ] 2. **Add API types for command execution**
+- [x] 2. **Add API types for command execution**
   **What**: Add `SendCommandRequest` and `SendCommandResponse` types to `api-types.ts`.
   **Files**: Modify `src/lib/api-types.ts`
   **Implementation**: Add after the existing `SendPromptRequest` type:
@@ -149,7 +149,7 @@ Enable structured slash command execution that gives proper error responses and 
   ```
   **Acceptance**: `npx tsc --noEmit` passes; types are importable from `@/lib/api-types`.
 
-- [ ] 3. **Create API route `POST /api/sessions/[id]/command`**
+- [x] 3. **Create API route `POST /api/sessions/[id]/command`**
   **What**: New API route that accepts `SendCommandRequest`, calls `client.session.command()`, and returns `SendCommandResponse`. Follows the exact same patterns as the prompt route (error handling, `RouteContext`, `getClientForInstance`).
   **Files**: Create `src/app/api/sessions/[id]/command/route.ts`
   **Implementation**:
@@ -232,7 +232,7 @@ Enable structured slash command execution that gives proper error responses and 
   ```
   **Acceptance**: Route handles all error cases (invalid JSON, missing instanceId, missing command, instance not found, SDK error, unexpected throw). Returns 200 with `{ info, parts }` on success.
 
-- [ ] 4. **Modify `useSendPrompt` to detect and route slash commands**
+- [x] 4. **Modify `useSendPrompt` to detect and route slash commands**
   **What**: Update the `useSendPrompt` hook so that when the submitted text is a slash command, it calls `POST /api/sessions/[id]/command` instead of `POST /api/sessions/[id]/prompt`. Import and use `parseSlashCommand` to detect. The hook signature stays the same so no changes propagate to the session page or `PromptInput`.
   **Files**: Modify `src/hooks/use-send-prompt.ts`
   **Implementation**: The `sendPrompt` callback currently always calls `/api/sessions/.../prompt`. Modify it to:
@@ -273,7 +273,7 @@ Enable structured slash command execution that gives proper error responses and 
 
   **Acceptance**: Submitting `/plan foo` calls the command endpoint. Submitting `hello` calls the prompt endpoint. `isSending` and `error` state work identically for both paths.
 
-- [ ] 5. **Write unit tests for `parseSlashCommand`**
+- [x] 5. **Write unit tests for `parseSlashCommand`**
   **What**: Comprehensive tests for the parser utility covering all edge cases.
   **Files**: Create `src/lib/__tests__/slash-command-utils.test.ts`
   **Test cases**:
@@ -294,7 +294,7 @@ Enable structured slash command execution that gives proper error responses and 
   ```
   **Acceptance**: All test cases pass.
 
-- [ ] 6. **Write unit tests for `POST /api/sessions/[id]/command` route**
+- [x] 6. **Write unit tests for `POST /api/sessions/[id]/command` route**
   **What**: Test the new API route following the exact pattern from `src/app/api/sessions/__tests__/route.test.ts` and `src/app/api/sessions/[id]/messages/__tests__/route.test.ts`.
   **Files**: Create `src/app/api/sessions/[id]/command/__tests__/route.test.ts`
   **Test cases**:

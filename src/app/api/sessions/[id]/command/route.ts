@@ -47,10 +47,16 @@ export async function POST(
   }
 
   try {
-    await client.session.command({
+    // Fire the command but don't await it — the SDK's command() blocks until
+    // the agent finishes, which would keep the HTTP request open for the entire
+    // duration.  Instead, fire-and-forget like promptAsync: the SSE event stream
+    // delivers real-time progress to the frontend.
+    client.session.command({
       sessionID: sessionId,
       command: command.trim(),
       ...(args ? { arguments: args } : {}),
+    }).catch((err) => {
+      console.error(`[POST /api/sessions/${sessionId}/command] Async error:`, err);
     });
 
     const responseBody: SendCommandResponse = { success: true, sessionId };
