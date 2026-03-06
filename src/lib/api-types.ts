@@ -75,6 +75,12 @@ export interface SessionListItem {
   /** Fleet DB session ID of the parent (conductor) session, if this is a child */
   parentSessionId?: string | null;
   /**
+   * The original project directory this session was created from.
+   * For worktree/clone sessions, this is the source project path (e.g. /Users/you/my-project).
+   * For "existing" sessions or when DB is unavailable, this is null.
+   */
+  sourceDirectory: string | null;
+  /**
    * Activity status — what the session's agent is currently doing.
    * Only meaningful while lifecycleStatus is "running".
    */

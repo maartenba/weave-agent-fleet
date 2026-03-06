@@ -305,7 +305,7 @@ export function Sidebar() {
                 ) : (
                   workspaces.map((group) => (
                     <SidebarWorkspaceItem
-                      key={group.workspaceId}
+                      key={group.workspaceDirectory}
                       group={group}
                       activeSessionPath={pathname}
                     />

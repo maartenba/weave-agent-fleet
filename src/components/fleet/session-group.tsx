@@ -140,7 +140,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
           <DropdownMenuContent align="end">
             {onNewSession && (
               <DropdownMenuItem
-                onClick={() => onNewSession(group.workspaceDirectory)}
+                onClick={() => onNewSession(group.sessions[0]?.workspaceDirectory ?? group.workspaceDirectory)}
                 className="gap-2 text-xs"
               >
                 <Plus className="size-3.5" />
@@ -151,7 +151,7 @@ export function SessionGroup({ group, onTerminate, onNewSession, onResume, onDel
             {onOpen && (
               <>
                 <OpenToolDropdownSubmenu
-                  directory={group.workspaceDirectory}
+                  directory={group.sessions[0]?.workspaceDirectory ?? group.workspaceDirectory}
                   onOpen={onOpen}
                 />
                 <DropdownMenuSeparator />

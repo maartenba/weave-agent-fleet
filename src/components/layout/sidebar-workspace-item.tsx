@@ -232,7 +232,7 @@ export function SidebarWorkspaceItem({
           New Session
         </ContextMenuItem>
         <OpenToolContextSubmenu
-          directory={group.workspaceDirectory}
+          directory={group.sessions[0]?.workspaceDirectory ?? group.workspaceDirectory}
           onOpen={handleOpen}
         />
         <ContextMenuSeparator />

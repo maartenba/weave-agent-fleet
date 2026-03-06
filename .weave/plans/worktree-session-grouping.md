@@ -44,12 +44,12 @@ Make worktree/clone sessions appear grouped under their source project alongside
 
 ## TODOs
 
-- [ ] 1. **Add `sourceDirectory` to `SessionListItem` interface**
+- [x] 1. **Add `sourceDirectory` to `SessionListItem` interface**
   **What**: Add a `sourceDirectory: string | null` field to the `SessionListItem` interface. This represents the original project directory that the worktree/clone was created from. For "existing" strategy sessions, this will be `null` or equal to `workspaceDirectory`.
   **Files**: `src/lib/api-types.ts` (line ~59, add field after `parentSessionId`)
   **Acceptance**: TypeScript compiles; the field exists on the interface.
 
-- [ ] 2. **Populate `sourceDirectory` in the sessions API route**
+- [x] 2. **Populate `sourceDirectory` in the sessions API route**
   **What**: In the `GET /api/sessions` handler, extract `ws.source_directory` from the workspace object (already fetched via `getWorkspace()`) and include it in all three `items.push()` calls:
   - **Live session** (line ~293): add `sourceDirectory`
   - **Stub session** (line ~313): add `sourceDirectory`
@@ -58,22 +58,22 @@ Make worktree/clone sessions appear grouped under their source project alongside
   **Files**: `src/app/api/sessions/route.ts`
   **Acceptance**: API response includes `sourceDirectory` for every session in all code paths. For worktree/clone sessions, it contains the original project path; for "existing" or DB-unavailable fallback, it's `null`.
 
-- [ ] 3. **Update `groupSessionsByWorkspace()` to group by source directory**
+- [x] 3. **Update `groupSessionsByWorkspace()` to group by source directory**
   **What**: Change the grouping key on line 43 from `session.workspaceDirectory` to `session.sourceDirectory ?? session.workspaceDirectory`. This ensures worktree/clone sessions (whose `sourceDirectory` is `/Users/you/my-project`) merge into the same group as "existing" sessions for that directory. Also update the `WorkspaceGroup` creation (line 73) so that `workspaceDirectory` is set to this resolved key (the logical/source directory) rather than the raw `workspaceDirectory`. The `deriveDisplayName()` function (line 28) reads `item.workspaceDirectory` for fallback name derivation — this is fine as-is because groups will now be keyed by source directory, and the group's `workspaceDirectory` field will be the source dir.
   **Files**: `src/lib/workspace-utils.ts` (function `groupSessionsByWorkspace`, lines 37-97)
   **Acceptance**: Sessions with different `workspaceDirectory` values but the same `sourceDirectory` end up in the same `WorkspaceGroup`. The group's `workspaceDirectory` reflects the source/logical directory.
 
-- [ ] 4. **Update `filterSessionsByWorkspace()` to resolve by source directory**
+- [x] 4. **Update `filterSessionsByWorkspace()` to resolve by source directory**
   **What**: On line 114, change `matched.workspaceDirectory` to `matched.sourceDirectory ?? matched.workspaceDirectory` for the `targetDir`. On line 115, change the filter predicate to compare `s.sourceDirectory ?? s.workspaceDirectory` against `targetDir`. This ensures sidebar filtering correctly includes worktree/clone sessions that share a source directory.
   **Files**: `src/lib/workspace-utils.ts` (function `filterSessionsByWorkspace`, lines 107-116)
   **Acceptance**: Filtering by a workspace ID that belongs to a worktree session returns all sessions (including "existing" ones) that share the same source directory.
 
-- [ ] 5. **Update `deriveDisplayName()` to prefer source directory for name derivation**
+- [x] 5. **Update `deriveDisplayName()` to prefer source directory for name derivation**
   **What**: On line 28, change the fallback from `item.workspaceDirectory` to `item.sourceDirectory ?? item.workspaceDirectory`. This prevents UUID paths from leaking into display names when a worktree/clone session has no explicit `workspaceDisplayName`.
   **Files**: `src/lib/workspace-utils.ts` (function `deriveDisplayName`, lines 24-30)
   **Acceptance**: A worktree session with `workspaceDirectory: "~/.weave/workspaces/abc-123"` and `sourceDirectory: "/Users/you/my-project"` derives display name `"my-project"` instead of `"abc-123"`.
 
-- [ ] 6. **Replace isolation strategy text badge with icon + tooltip on session card**
+- [x] 6. **Replace isolation strategy text badge with icon + tooltip on session card**
   **What**: In `live-session-card.tsx`, replace the text badge block (lines 97-101) with an icon-based approach:
   - Import `GitBranch` and `Copy` from `lucide-react` (add to existing import on line 7).
   - Import `Tooltip`, `TooltipTrigger`, `TooltipContent`, `TooltipProvider` from `@/components/ui/tooltip`.
@@ -84,7 +84,7 @@ Make worktree/clone sessions appear grouped under their source project alongside
   **Files**: `src/components/fleet/live-session-card.tsx` (lines 7, 97-101)
   **Acceptance**: Worktree sessions show a small purple git-branch icon; clone sessions show a small purple copy icon. Hovering reveals a tooltip with the strategy name. No text badge.
 
-- [ ] 7. **Clean up directory display on session card for worktree/clone sessions**
+- [x] 7. **Clean up directory display on session card for worktree/clone sessions**
   **What**: The `session.directory` shown on line 112-114 is the UUID workspace path for worktree/clone sessions, which is meaningless. Conditionally hide this or replace it:
   - If `isolationStrategy !== "existing"` and `item.sourceDirectory` exists, show nothing for the directory (the source directory is already visible in the group header).
   - Alternatively, if the workspace has a `branch` (available if we add it to the API), show the branch name. However, since `branch` is not currently on `SessionListItem` and adding it would expand scope, the simplest approach is to just hide the directory line for non-"existing" sessions.
@@ -92,17 +92,17 @@ Make worktree/clone sessions appear grouped under their source project alongside
   **Files**: `src/components/fleet/live-session-card.tsx` (lines 112-114)
   **Acceptance**: Worktree/clone session cards no longer show a UUID path. "Existing" session cards still show the directory as before.
 
-- [ ] 8. **Preserve physical directory for "Open in Editor" on session card**
+- [x] 8. **Preserve physical directory for "Open in Editor" on session card**
   **What**: Verify that `live-session-card.tsx` line 207 (`onOpen(item.workspaceDirectory)`) still passes the **physical** workspace directory (the worktree path), not the source directory. Since `item.workspaceDirectory` remains unchanged on the `SessionListItem` (we only changed what `WorkspaceGroup.workspaceDirectory` resolves to), this should already be correct. No code change needed — just verify.
   **Files**: `src/components/fleet/live-session-card.tsx` (line 207)
   **Acceptance**: Clicking "Open in Editor" on a worktree session card opens the worktree directory (the physical path where the code is checked out), not the source directory.
 
-- [ ] 9. **Update search filtering on main page**
+- [x] 9. **Update search filtering on main page**
   **What**: In `src/app/page.tsx` line 130, the search filter checks `s.workspaceDirectory.toLowerCase()`. This should also check `s.sourceDirectory` so that searching for the project name matches worktree/clone sessions. Change to: `const dir = (s.sourceDirectory ?? s.workspaceDirectory).toLowerCase()`.
   **Files**: `src/app/page.tsx` (line 130)
   **Acceptance**: Searching for the project name in the main page search bar finds worktree/clone sessions that have that project as their source directory.
 
-- [ ] 10. **Update existing tests and add new test cases**
+- [x] 10. **Update existing tests and add new test cases**
   **What**: Update the test helpers and add new test cases in `src/lib/__tests__/workspace-utils.test.ts`:
   - Add `sourceDirectory: null` to the `makeSession()` helper (line 23-35) default.
   - Add test: two sessions with different `workspaceDirectory` but same `sourceDirectory` should be grouped together by `groupSessionsByWorkspace()`.
@@ -114,8 +114,8 @@ Make worktree/clone sessions appear grouped under their source project alongside
   **Acceptance**: All tests pass with `npm test`. New test cases cover the worktree/clone grouping scenarios.
 
 ## Verification
-- [ ] `npm run build` completes with no TypeScript errors
-- [ ] `npm test` passes — all existing and new workspace-utils tests green
+- [x] `npm run build` completes with no TypeScript errors
+- [x] `npm test` passes — all existing and new workspace-utils tests green
 - [ ] No regressions: "existing" sessions still group and display correctly
 - [ ] Manual test: create a worktree session from a project → appears in the same group as existing sessions for that project
 - [ ] Manual test: hover over the git-branch icon on a worktree session card → tooltip shows "worktree"

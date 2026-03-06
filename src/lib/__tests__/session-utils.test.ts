@@ -13,6 +13,7 @@ function makeItem(overrides: Partial<SessionListItem> & { sessionId?: string } =
     workspaceDirectory: "/tmp/proj",
     workspaceDisplayName: null,
     isolationStrategy: "existing",
+    sourceDirectory: null,
     sessionStatus: "active",
     instanceStatus: "running",
     session: { id } as SessionListItem["session"],

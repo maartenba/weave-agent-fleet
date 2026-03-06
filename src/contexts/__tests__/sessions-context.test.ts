@@ -11,6 +11,7 @@ function makeSession(id: string, overrides: Partial<SessionListItem> = {}): Sess
     workspaceDirectory: "/tmp/proj",
     workspaceDisplayName: null,
     isolationStrategy: "existing",
+    sourceDirectory: null,
     sessionStatus: "idle",
     instanceStatus: "running",
     session: { id } as SessionListItem["session"],

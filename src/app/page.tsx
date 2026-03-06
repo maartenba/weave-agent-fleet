@@ -127,7 +127,7 @@ function FleetPageInner() {
     if (!q) return workspaceFiltered;
     return workspaceFiltered.filter((s) => {
       const title = s.session.title?.toLowerCase() ?? "";
-      const dir = s.workspaceDirectory.toLowerCase();
+      const dir = (s.sourceDirectory ?? s.workspaceDirectory).toLowerCase();
       const displayName = s.workspaceDisplayName?.toLowerCase() ?? "";
       return title.includes(q) || dir.includes(q) || displayName.includes(q);
     });
@@ -438,7 +438,7 @@ function FleetPageInner() {
       <div className="space-y-2">
         {allWorkspaces.map((group) => (
           <SessionGroup
-              key={group.workspaceId}
+              key={group.workspaceDirectory}
               group={{ ...group, sessions: sortSessions(group.sessions) }}
               onTerminate={handleTerminate}
               onResume={handleResume}

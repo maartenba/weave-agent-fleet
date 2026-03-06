@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, ExternalLink, Loader2, OctagonX, RotateCcw, Square, Trash2, WifiOff } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { ArrowRight, Clock, Copy, ExternalLink, GitBranch, Loader2, OctagonX, RotateCcw, Square, Trash2, WifiOff } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
 
 export function timeSince(timestamp: number): string {
@@ -91,9 +92,20 @@ export function LiveSessionCard({
                 </span>
               )}
               {isolationStrategy && isolationStrategy !== "existing" && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-purple-400 border-purple-400/40">
-                  {isolationStrategy}
-                </Badge>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-purple-400 cursor-default">
+                        {isolationStrategy === "worktree" ? (
+                          <GitBranch className="h-3 w-3" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{isolationStrategy}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {isParent && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-cyan-400 border-cyan-400/40">
@@ -105,9 +117,11 @@ export function LiveSessionCard({
                   child
                 </Badge>
               )}
-              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
-                {session.directory}
-              </span>
+              {isolationStrategy === "existing" && (
+                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
+                  {session.directory}
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">

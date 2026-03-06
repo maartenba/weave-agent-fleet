@@ -165,6 +165,7 @@ export async function GET(): Promise<NextResponse> {
               workspaceDirectory: instance.directory,
               workspaceDisplayName: null,
               isolationStrategy: "existing",
+              sourceDirectory: null,
               sessionStatus: legacyStatus,
               session,
               instanceStatus: instance.status,
@@ -278,12 +279,14 @@ export async function GET(): Promise<NextResponse> {
     let workspaceDirectory = dbSession.directory;
     let isolationStrategy: string = "existing";
     let workspaceDisplayName: string | null = null;
+    let sourceDirectory: string | null = null;
     try {
       const ws = getWorkspace(dbSession.workspace_id);
       if (ws) {
         workspaceDirectory = ws.directory;
         isolationStrategy = ws.isolation_strategy;
         workspaceDisplayName = ws.display_name;
+        sourceDirectory = ws.source_directory;
       }
     } catch (err) {
       log.warn("sessions-route", "Failed to fetch workspace info from DB", { workspaceId: dbSession.workspace_id, err });
@@ -306,6 +309,7 @@ export async function GET(): Promise<NextResponse> {
             workspaceDirectory,
             workspaceDisplayName,
             isolationStrategy,
+            sourceDirectory,
             sessionStatus,
             session: result.data,
             instanceStatus,
@@ -329,6 +333,7 @@ export async function GET(): Promise<NextResponse> {
       workspaceDirectory,
       workspaceDisplayName,
       isolationStrategy,
+      sourceDirectory,
       sessionStatus,
       session: {
         id: dbSession.opencode_session_id,

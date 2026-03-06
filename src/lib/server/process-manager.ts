@@ -242,9 +242,11 @@ export function getEnvRoots(): string[] {
 }
 
 /**
- * Allowed workspace base directories. Returns the union of env-var roots and
- * user-added roots (persisted in SQLite), deduplicated by resolved path.
- * Only directories under these roots can be used to spawn OpenCode instances.
+ * Allowed workspace base directories. Returns the union of env-var roots,
+ * user-added roots (persisted in SQLite), and the Weave workspace root
+ * (where worktree/clone directories live), deduplicated by resolved path.
+ * Only directories under these roots can be used to spawn OpenCode instances
+ * or be opened in an editor.
  */
 export function getAllowedRoots(): string[] {
   const envRoots = getEnvRoots();
@@ -256,9 +258,15 @@ export function getAllowedRoots(): string[] {
     log.warn("process-manager", "Failed to read workspace roots from DB", { err });
   }
 
+  // Always allow the Weave workspace root where worktree/clone directories
+  // are created (WEAVE_WORKSPACE_ROOT or ~/.weave/workspaces by default).
+  const weaveWsRoot = process.env.WEAVE_WORKSPACE_ROOT
+    ? resolve(process.env.WEAVE_WORKSPACE_ROOT)
+    : resolve(homedir(), ".weave", "workspaces");
+
   const seen = new Set<string>();
   const merged: string[] = [];
-  for (const root of [...envRoots, ...dbRoots]) {
+  for (const root of [...envRoots, ...dbRoots, weaveWsRoot]) {
     const resolved = resolve(root);
     if (!seen.has(resolved)) {
       seen.add(resolved);

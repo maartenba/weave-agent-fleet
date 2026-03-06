@@ -23,8 +23,9 @@ export function deriveDisplayName(item: SessionListItem): string {
   if (item.workspaceDisplayName) {
     return item.workspaceDisplayName;
   }
-  const parts = item.workspaceDirectory.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? item.workspaceDirectory;
+  const dir = item.sourceDirectory ?? item.workspaceDirectory;
+  const parts = dir.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? dir;
 }
 
 /**
@@ -36,9 +37,12 @@ export function groupSessionsByWorkspace(
   sessions: SessionListItem[]
 ): WorkspaceGroup[] {
   const map = new Map<string, WorkspaceGroup>();
+  // Track whether the group's displayName came from an explicit
+  // workspaceDisplayName (custom rename) vs. a directory-derived fallback.
+  const hasExplicitName = new Set<string>();
 
   for (const session of sessions) {
-    const key = session.workspaceDirectory;
+    const key = session.sourceDirectory ?? session.workspaceDirectory;
     const existing = map.get(key);
     if (existing) {
       existing.sessions.push(session);
@@ -49,20 +53,19 @@ export function groupSessionsByWorkspace(
       ) {
         existing.hasRunningSession = true;
       }
-      // Prefer an explicit display name if one session has it
-      if (
-        !existing.displayName ||
-        existing.displayName === deriveDisplayName(session)
-      ) {
-        const candidateName = session.workspaceDisplayName;
-        if (candidateName) {
-          existing.displayName = candidateName;
-        }
+      // An explicit (custom) name always wins over a derived name,
+      // regardless of which session is processed first.
+      if (session.workspaceDisplayName && !hasExplicitName.has(key)) {
+        existing.displayName = session.workspaceDisplayName;
+        hasExplicitName.add(key);
       }
     } else {
+      if (session.workspaceDisplayName) {
+        hasExplicitName.add(key);
+      }
       map.set(key, {
         workspaceId: session.workspaceId,
-        workspaceDirectory: session.workspaceDirectory,
+        workspaceDirectory: key,
         displayName: deriveDisplayName(session),
         sessionCount: 1,
         hasRunningSession:
@@ -100,6 +103,6 @@ export function filterSessionsByWorkspace(
   if (!workspaceFilter) return sessions;
   const matched = sessions.find((s) => s.workspaceId === workspaceFilter);
   if (!matched) return [];
-  const targetDir = matched.workspaceDirectory;
-  return sessions.filter((s) => s.workspaceDirectory === targetDir);
+  const targetDir = matched.sourceDirectory ?? matched.workspaceDirectory;
+  return sessions.filter((s) => (s.sourceDirectory ?? s.workspaceDirectory) === targetDir);
 }
