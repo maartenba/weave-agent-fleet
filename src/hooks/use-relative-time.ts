@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 const TICK_INTERVAL_MS = 30_000;
 
 let now = Date.now();
-let subscribers = new Set<() => void>();
+const subscribers = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 function subscribe(callback: () => void): () => void {
