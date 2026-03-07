@@ -77,8 +77,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   // the poll is the source of truth.
   const ssePatchesRef = useRef<Map<string, SessionActivityStatus>>(new Map());
   const lastPolledRef = useRef(polledSessions);
-  const [, forceRender] = useState(0);
+  const [sseGeneration, setSseGeneration] = useState(0);
   const isMounted = useRef(true);
+  const rafRef = useRef<number | null>(null);
+  const reconnectDelayRef = useRef(1000);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sseReconnectKey, setSseReconnectKey] = useState(0);
 
   // Subscribe to the global notifications SSE stream for activity_status events
   useEffect(() => {
@@ -99,18 +103,47 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
         if (data.type === "activity_status" && data.payload) {
           ssePatchesRef.current = new Map(ssePatchesRef.current);
           ssePatchesRef.current.set(data.payload.sessionId, data.payload.activityStatus);
-          forceRender((n) => n + 1);
+          if (rafRef.current === null) {
+            rafRef.current = requestAnimationFrame(() => {
+              rafRef.current = null;
+              setSseGeneration((n) => n + 1);
+            });
+          }
         }
       } catch {
         // Ignore parse errors
       }
     };
 
+    es.onerror = () => {
+      if (!isMounted.current) return;
+      es.close();
+      const delay = reconnectDelayRef.current;
+      reconnectDelayRef.current = Math.min(delay * 2, 30_000);
+      reconnectTimerRef.current = setTimeout(() => {
+        if (isMounted.current) {
+          setSseReconnectKey(n => n + 1);
+        }
+      }, delay);
+    };
+
+    es.onopen = () => {
+      reconnectDelayRef.current = 1000; // reset backoff on success
+    };
+
     return () => {
       isMounted.current = false;
       es.close();
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [sseReconnectKey]);
 
   // Merge polled sessions with any pending SSE patches.
   // Clear patches when polled data changes (poll is the source of truth).
@@ -128,12 +161,17 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       result = patchActivityStatus(result, sessionId, activityStatus);
     }
     return result;
-    // forceRender counter is not used directly but triggers re-evaluation
+    // sseGeneration counter triggers re-evaluation when SSE patches arrive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polledSessions, forceRender]);
+  }, [polledSessions, sseGeneration]);
+
+  const contextValue = useMemo(
+    () => ({ sessions, isLoading, error, refetch, summary }),
+    [sessions, isLoading, error, refetch, summary]
+  );
 
   return (
-    <SessionsContext.Provider value={{ sessions, isLoading, error, refetch, summary }}>
+    <SessionsContext.Provider value={contextValue}>
       {children}
     </SessionsContext.Provider>
   );

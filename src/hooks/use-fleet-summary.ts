@@ -29,7 +29,17 @@ export function useFleetSummary(
       }
       const data = (await response.json()) as FleetSummaryResponse;
       if (isMounted.current) {
-        setSummary(data);
+        setSummary(prev => {
+          if (
+            prev &&
+            prev.activeSessions === data.activeSessions &&
+            prev.idleSessions === data.idleSessions &&
+            prev.totalTokens === data.totalTokens &&
+            prev.totalCost === data.totalCost &&
+            prev.queuedTasks === data.queuedTasks
+          ) return prev;
+          return data;
+        });
         setError(undefined);
       }
     } catch (err) {
