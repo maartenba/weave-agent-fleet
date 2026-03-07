@@ -280,7 +280,9 @@ export async function GET(): Promise<NextResponse> {
         } else if (dbSession.status === "stopped") {
           sessionStatus = "stopped";
         } else if (dbSession.status === "disconnected") {
-          sessionStatus = "disconnected";
+          // Instance is dead and session was "disconnected" (e.g. from a previous
+          // graceful shutdown). Since the instance is gone, the session is stopped.
+          sessionStatus = "stopped";
         } else if (dbSession.status === "error") {
           sessionStatus = "error";
         } else {

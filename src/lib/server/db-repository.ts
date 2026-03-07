@@ -177,6 +177,49 @@ export function getRunningInstances(): DbInstance[] {
     .all() as DbInstance[];
 }
 
+/**
+ * Mark ALL running instances as stopped.
+ *
+ * Called at the very start of recovery. When Fleet restarts (whether after a
+ * crash or a graceful shutdown) every previous OpenCode process is
+ * definitively dead — there is nothing to "reconnect" to. Eagerly
+ * transitioning every instance to "stopped" means the subsequent session
+ * sweep can work unconditionally.
+ *
+ * Returns the number of instances transitioned.
+ */
+export function markAllInstancesStopped(stoppedAt: string): number {
+  const result = getDb()
+    .prepare(
+      `UPDATE instances
+         SET status = 'stopped', stopped_at = @stopped_at
+       WHERE status = 'running'`
+    )
+    .run({ stopped_at: stoppedAt });
+  return result.changes;
+}
+
+/**
+ * Mark ALL non-terminal sessions as stopped.
+ *
+ * Called immediately after `markAllInstancesStopped()` during startup.
+ * Because every OpenCode process is dead on Fleet restart, any session still
+ * in a non-terminal state (active, idle, waiting_input, disconnected) is
+ * stale and must be moved to "stopped".
+ *
+ * Returns the number of sessions transitioned.
+ */
+export function markAllNonTerminalSessionsStopped(stoppedAt: string): number {
+  const result = getDb()
+    .prepare(
+      `UPDATE sessions
+         SET status = 'stopped', stopped_at = @stopped_at
+       WHERE status NOT IN ('stopped', 'completed', 'error')`
+    )
+    .run({ stopped_at: stoppedAt });
+  return result.changes;
+}
+
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
 export function insertSession(sess: InsertSession): void {

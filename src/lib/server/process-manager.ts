@@ -22,9 +22,9 @@ import { randomUUID } from "crypto";
 import {
   insertInstance,
   updateInstanceStatus,
-  getRunningInstances,
+  markAllInstancesStopped,
+  markAllNonTerminalSessionsStopped,
   getSessionsForInstance,
-  getNonTerminalSessionsForInstance,
   updateSessionStatus,
   listWorkspaceRoots,
 } from "./db-repository";
@@ -339,91 +339,26 @@ export function _resetForTests(): void {
 }
 
 /**
- * Attempt to recover instances that were running before the server restarted.
- * Reads running instances from the DB, checks if their port is still reachable,
- * and re-adds them to the in-memory Map if so. Marks unreachable instances as stopped.
+ * Mark all previous instances and sessions as stopped on startup.
+ *
+ * When Fleet restarts — whether after a crash or a graceful shutdown — every
+ * previous OpenCode process is definitively dead. There is nothing to
+ * "reconnect" to. This function eagerly transitions all running instances
+ * and all non-terminal sessions to "stopped" in a single pass, eliminating
+ * stale "disconnected" or "active" records left behind by the previous run.
  *
  * Called once on module init (lazily, on first API call that calls `ensureRecovered()`).
  */
 export async function recoverInstances(): Promise<void> {
-  let runningDbInstances: ReturnType<typeof getRunningInstances>;
   try {
-    runningDbInstances = getRunningInstances();
-  } catch (err) {
-    log.warn("process-manager", "DB not available — skipping instance recovery", { err });
-    _recoveryCompleteResolve?.();
-    _recoveryCompleteResolve = null;
-    _g.__weaveRecoveryResolve = null;
-    return;
-  }
-
-  for (const dbInst of runningDbInstances) {
-    // Skip if already in memory (e.g. running in-process)
-    if (instances.has(dbInst.id)) continue;
-
-    // Check if the port is still responsive
-    const isAlive = await checkPortAlive(dbInst.url);
-
-    if (isAlive) {
-      // Re-register the port as in use
-      usedPorts.add(dbInst.port);
-
-      const client = createOpencodeClient({
-        baseUrl: dbInst.url,
-        directory: dbInst.directory,
-      });
-
-      const recoveredPid = dbInst.pid;
-      const instance: ManagedInstance = {
-        id: dbInst.id,
-        port: dbInst.port,
-        url: dbInst.url,
-        directory: dbInst.directory,
-        client,
-        close: () => {
-          // For recovered instances, kill the process by PID if available.
-          if (recoveredPid) {
-            try {
-              process.kill(recoveredPid);
-            } catch (err) {
-              log.warn("process-manager", "Failed to kill recovered process — may have already exited", { pid: recoveredPid, err });
-            }
-          }
-        },
-        status: "running",
-        createdAt: new Date(dbInst.created_at),
-        recovered: true,
-      };
-
-      instances.set(dbInst.id, instance);
-      directoryToInstanceId.set(dbInst.directory, dbInst.id);
-
-      // Start watching session status events for recovered instance
-      ensureWatching(dbInst.id);
-    } else {
-      // Mark as stopped in DB
-      const now = new Date().toISOString();
-      try {
-        updateInstanceStatus(dbInst.id, "stopped", now);
-      } catch (err) {
-        log.warn("process-manager", "Failed to mark unreachable instance as stopped in DB", { instanceId: dbInst.id, err });
-      }
-      // Cascade: mark all non-terminal sessions on this dead instance as stopped.
-      // This handles both scenarios:
-      //   - Graceful shutdown: sessions stuck as "disconnected"
-      //   - Crash: sessions stuck as "active"/"idle"/"waiting_input"
-      try {
-        const orphanedSessions = getNonTerminalSessionsForInstance(dbInst.id);
-        for (const session of orphanedSessions) {
-          updateSessionStatus(session.id, "stopped", now);
-        }
-        if (orphanedSessions.length > 0) {
-          log.info("process-manager", `Recovered ${orphanedSessions.length} orphaned session(s) for dead instance`, { instanceId: dbInst.id });
-        }
-      } catch (err) {
-        log.warn("process-manager", "Failed to cascade session stops during recovery", { instanceId: dbInst.id, err });
-      }
+    const now = new Date().toISOString();
+    const stoppedInstances = markAllInstancesStopped(now);
+    const stoppedSessions = markAllNonTerminalSessionsStopped(now);
+    if (stoppedInstances > 0 || stoppedSessions > 0) {
+      log.info("process-manager", `Startup cleanup: marked ${stoppedInstances} instance(s) and ${stoppedSessions} session(s) as stopped`);
     }
+  } catch (err) {
+    log.warn("process-manager", "DB not available — skipping startup cleanup", { err });
   }
 
   _recoveryCompleteResolve?.();
