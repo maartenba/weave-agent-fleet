@@ -16,7 +16,7 @@ function makeItem(overrides: Partial<SessionListItem> & { sessionId?: string } =
     sourceDirectory: null,
     sessionStatus: "active",
     instanceStatus: "running",
-    session: { id, title: "Test Session", messageCount: 0, ...overrides.session } as SessionListItem["session"],
+    session: { id, title: "Test Session", ...overrides.session } as SessionListItem["session"],
     dbId: undefined,
     parentSessionId: undefined,
     activityStatus: "busy",
@@ -196,14 +196,8 @@ describe("sessionsChanged", () => {
   });
 
   it("returns true when session title changes", () => {
-    const a = [makeItem({ sessionId: "s1", session: { id: "s1", title: "Old", messageCount: 0 } as SessionListItem["session"] })];
-    const b = [makeItem({ sessionId: "s1", session: { id: "s1", title: "New", messageCount: 0 } as SessionListItem["session"] })];
-    expect(sessionsChanged(a, b)).toBe(true);
-  });
-
-  it("returns true when session messageCount changes", () => {
-    const a = [makeItem({ sessionId: "s1", session: { id: "s1", title: "T", messageCount: 5 } as SessionListItem["session"] })];
-    const b = [makeItem({ sessionId: "s1", session: { id: "s1", title: "T", messageCount: 6 } as SessionListItem["session"] })];
+    const a = [makeItem({ sessionId: "s1", session: { id: "s1", title: "Old" } as unknown as SessionListItem["session"] })];
+    const b = [makeItem({ sessionId: "s1", session: { id: "s1", title: "New" } as unknown as SessionListItem["session"] })];
     expect(sessionsChanged(a, b)).toBe(true);
   });
 });

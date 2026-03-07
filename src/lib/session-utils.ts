@@ -24,8 +24,7 @@ export function sessionsChanged(
       a.activityStatus !== b.activityStatus ||
       a.lifecycleStatus !== b.lifecycleStatus ||
       a.instanceStatus !== b.instanceStatus ||
-      a.session.title !== b.session.title ||
-      a.session.messageCount !== b.session.messageCount
+      a.session.title !== b.session.title
     ) return true;
   }
   return false;
