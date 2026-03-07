@@ -64,9 +64,26 @@ export function formatTimestamp(timestamp: number | undefined | null): string {
  * @param timestamp - unix milliseconds
  * @param now       - reference time in unix ms (defaults to Date.now(); injectable for tests)
  */
-export function formatRelativeTime(timestamp: number, now?: number): string {
+export function formatRelativeTime(
+  timestamp: number | Date | string,
+  now?: number
+): string {
+  let ts: number;
+  if (typeof timestamp === "number") {
+    ts = timestamp;
+  } else if (timestamp instanceof Date) {
+    ts = timestamp.getTime();
+  } else {
+    // String — handle SQLite datetime format (may lack timezone indicator)
+    const normalized =
+      timestamp.endsWith("Z") || timestamp.includes("+")
+        ? timestamp
+        : timestamp + "Z";
+    ts = new Date(normalized).getTime();
+  }
+
   const reference = now ?? Date.now();
-  const diffMs = reference - timestamp;
+  const diffMs = reference - ts;
   const diffS = Math.floor(diffMs / 1000);
 
   if (diffS < 30) return "just now";
@@ -78,7 +95,7 @@ export function formatRelativeTime(timestamp: number, now?: number): string {
   const diffH = Math.floor(diffM / 60);
   if (diffH < 24) return `${diffH}h ago`;
 
-  return formatTimestamp(timestamp);
+  return formatTimestamp(ts);
 }
 
 export function getStatusColor(status: string): string {
