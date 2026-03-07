@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/context-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { SidebarSessionItem } from "@/components/layout/sidebar-session-item";
+import { NewSessionDialog } from "@/components/session/new-session-dialog";
 import { useRenameWorkspace } from "@/hooks/use-rename-workspace";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { usePersistedState } from "@/hooks/use-persisted-state";
@@ -60,6 +61,7 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
 
   const [pinnedIds, setPinnedIds] = usePersistedState<string[]>(PINNED_KEY, []);
   const isPinned = pinnedIds.includes(group.workspaceId);
@@ -105,6 +107,7 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
   );
 
   return (
+    <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <Collapsible
@@ -229,7 +232,10 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
           {isPinned ? "Unpin" : "Pin to top"}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="gap-2 text-xs">
+        <ContextMenuItem
+          onClick={() => setNewSessionOpen(true)}
+          className="gap-2 text-xs"
+        >
           <Plus className="h-3.5 w-3.5" />
           New Session
         </ContextMenuItem>
@@ -248,5 +254,11 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+    <NewSessionDialog
+      open={newSessionOpen}
+      onOpenChange={setNewSessionOpen}
+      defaultDirectory={group.sessions[0]?.workspaceDirectory ?? group.workspaceDirectory}
+    />
+    </>
   );
 });

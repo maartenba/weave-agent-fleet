@@ -47,18 +47,29 @@ interface NewSessionDialogProps {
   trigger?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  defaultDirectory?: string;
 }
 
-export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange }: NewSessionDialogProps) {
+export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, defaultDirectory }: NewSessionDialogProps) {
   const router = useRouter();
   const [internalOpen, setInternalOpen] = useState(false);
   const [directory, setDirectory] = usePersistedState("weave:new-session:lastDirectory", "");
+
+  // When a defaultDirectory is provided and the dialog opens, pre-fill the directory
+  const open = controlledOpen ?? internalOpen;
+  const [lastDefaultDir, setLastDefaultDir] = useState<string | undefined>(undefined);
+  if (open && defaultDirectory && defaultDirectory !== lastDefaultDir) {
+    setDirectory(defaultDirectory);
+    setLastDefaultDir(defaultDirectory);
+  }
+  if (!open && lastDefaultDir !== undefined) {
+    setLastDefaultDir(undefined);
+  }
   const [title, setTitle] = useState("");
   const [isolationStrategy, setIsolationStrategy] = useState<IsolationStrategy>("existing");
   const [branch, setBranch] = useState("");
   const { createSession, isLoading, error } = useCreateSession();
 
-  const open = controlledOpen ?? internalOpen;
   const setOpen = (value: boolean) => {
     setInternalOpen(value);
     onOpenChange?.(value);
