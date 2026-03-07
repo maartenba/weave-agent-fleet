@@ -3,10 +3,20 @@
 import { Loader2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+} from "@/components/ui/select";
 import { useConfig } from "@/hooks/use-config";
 
 export function AgentsTab() {
-  const { config, installedSkills, isLoading } = useConfig();
+  const { config, installedSkills, providers, isLoading, updateConfig } =
+    useConfig();
 
   if (isLoading) {
     return (
@@ -18,6 +28,19 @@ export function AgentsTab() {
 
   const agents = config?.agents ?? {};
   const agentNames = Object.keys(agents);
+  const connectedProviders = providers.filter((p) => p.connected);
+
+  const onModelChange = async (agentName: string, model: string) => {
+    const currentAgents = config?.agents ?? {};
+    const updatedAgents = {
+      ...currentAgents,
+      [agentName]: {
+        ...currentAgents[agentName],
+        model: model || undefined, // clear if empty
+      },
+    };
+    await updateConfig({ agents: updatedAgents });
+  };
 
   if (agentNames.length === 0) {
     return (
@@ -38,13 +61,14 @@ export function AgentsTab() {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         {agentNames.length} agent{agentNames.length !== 1 ? "s" : ""} configured.
-        Showing skills assigned to each agent.
+        Showing skills and model assignments for each agent.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
         {agentNames.sort().map((agentName) => {
           const agentConfig = agents[agentName];
           const skills = agentConfig.skills ?? [];
+          const currentModel = agentConfig.model ?? "";
 
           return (
             <Card key={agentName}>
@@ -82,6 +106,48 @@ export function AgentsTab() {
                     })}
                   </div>
                 )}
+
+                {/* Model selection */}
+                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                  <label className="text-xs text-muted-foreground font-medium">
+                    Model
+                  </label>
+                  {connectedProviders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Connect a provider in the Providers tab to select models.
+                    </p>
+                  ) : (
+                    <Select
+                      value={currentModel}
+                      onValueChange={(value) =>
+                        onModelChange(agentName, value === "__default__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Default (no override)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__" className="text-xs">
+                          Default (no override)
+                        </SelectItem>
+                        {connectedProviders.map((provider) => (
+                          <SelectGroup key={provider.id}>
+                            <SelectLabel>{provider.name}</SelectLabel>
+                            {provider.models.map((model) => (
+                              <SelectItem
+                                key={`${provider.id}/${model.id}`}
+                                value={`${provider.id}/${model.id}`}
+                                className="text-xs"
+                              >
+                                {model.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </CardContent>
             </Card>
           );

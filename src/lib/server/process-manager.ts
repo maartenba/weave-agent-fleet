@@ -33,6 +33,7 @@ import {
 } from "./notification-service";
 import { ensureWatching, stopWatching } from "./session-status-watcher";
 import { log } from "./logger";
+import { getMergedConfig } from "./config-manager";
 
 // ─── OPENCODE_BIN support ─────────────────────────────────────────────────────
 // If OPENCODE_BIN is set to the full path of the opencode binary, prepend its
@@ -453,6 +454,33 @@ async function checkPortAlive(url: string): Promise<boolean> {
 }
 
 /**
+ * Build agent model config from merged WeaveConfig for a directory.
+ * Returns `{ agent: { <name>: { model: "provider/model" } } }` if any agents
+ * have model overrides, or an empty object if none do.
+ *
+ * Exported for testing.
+ */
+export function buildAgentModelConfig(directory: string): Record<string, unknown> {
+  try {
+    const weaveConfig = getMergedConfig(directory);
+    const agentConfig: Record<string, { model: string }> = {};
+    if (weaveConfig.agents) {
+      for (const [name, cfg] of Object.entries(weaveConfig.agents)) {
+        if (cfg.model) {
+          agentConfig[name] = { model: cfg.model };
+        }
+      }
+    }
+    if (Object.keys(agentConfig).length > 0) {
+      return { agent: agentConfig };
+    }
+  } catch (err) {
+    log.warn("process-manager", "Failed to read agent model config — proceeding without model overrides", { directory, err });
+  }
+  return {};
+}
+
+/**
  * Spawn a new OpenCode server instance for the given directory.
  * Reuses an existing running instance if one already exists for that directory.
  *
@@ -502,6 +530,7 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
         config: {
           plugin: [],
           permission: { edit: "allow", bash: "allow", external_directory: "allow" },
+          ...buildAgentModelConfig(directory),
         },
       });
       // Success — break out of retry loop

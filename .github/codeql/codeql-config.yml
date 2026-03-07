@@ -1,0 +1,12 @@
+name: "Weave Agent Fleet CodeQL Config"
+
+# Exclude test files and test utilities from security analysis.
+# Test code runs in controlled environments and does not need
+# production-grade security scanning (e.g. temp-file creation
+# patterns that are intentional in test harnesses).
+paths-ignore:
+  - "**/__tests__/**"
+  - "**/*.test.ts"
+  - "**/*.test.js"
+  - "**/*.spec.ts"
+  - "**/*.spec.js"

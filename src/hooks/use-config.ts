@@ -10,13 +10,27 @@ interface InstalledSkill {
 }
 
 interface WeaveConfig {
-  agents?: Record<string, { skills?: string[] }>;
+  agents?: Record<string, { skills?: string[]; model?: string }>;
+}
+
+interface ProviderModelInfo {
+  id: string;
+  name: string;
+}
+
+interface ProviderStatus {
+  id: string;
+  name: string;
+  connected: boolean;
+  authType: "api" | "oauth" | "wellknown" | null;
+  models: ProviderModelInfo[];
 }
 
 interface ConfigData {
   userConfig: WeaveConfig;
   installedSkills: InstalledSkill[];
   paths: { userConfig: string; skillsDir: string };
+  connectedProviders?: ProviderStatus[];
 }
 
 export function useConfig() {
@@ -70,6 +84,7 @@ export function useConfig() {
     config: data?.userConfig ?? null,
     installedSkills: data?.installedSkills ?? [],
     paths: data?.paths ?? null,
+    providers: data?.connectedProviders ?? [],
     isLoading,
     error,
     fetchConfig,

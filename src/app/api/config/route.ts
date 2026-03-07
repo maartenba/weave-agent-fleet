@@ -5,19 +5,34 @@ import {
   listInstalledSkills,
   getConfigPaths,
 } from "@/lib/server/config-manager";
+import { getConnectedProviders } from "@/lib/server/auth-store";
+import { BUNDLED_PROVIDERS } from "@/lib/provider-registry";
 
-// GET /api/config — returns user-level config and installed skills
+// GET /api/config — returns user-level config, installed skills, and connected providers
 export async function GET(): Promise<NextResponse> {
   try {
     const userConfig = getUserConfig();
     const installedSkills = listInstalledSkills();
     const paths = getConfigPaths();
 
+    const connected = getConnectedProviders();
+    const connectedProviders = BUNDLED_PROVIDERS.map((provider) => {
+      const conn = connected.find((c) => c.id === provider.id);
+      return {
+        id: provider.id,
+        name: provider.name,
+        connected: !!conn,
+        authType: conn?.authType ?? null,
+        models: provider.models,
+      };
+    });
+
     return NextResponse.json(
       {
         userConfig: userConfig ?? { agents: {} },
         installedSkills,
         paths,
+        connectedProviders,
       },
       { status: 200 }
     );
