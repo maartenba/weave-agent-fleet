@@ -132,8 +132,13 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polledSessions, forceRender]);
 
+  const contextValue = useMemo(
+    () => ({ sessions, isLoading, error, refetch, summary }),
+    [sessions, isLoading, error, refetch, summary]
+  );
+
   return (
-    <SessionsContext.Provider value={{ sessions, isLoading, error, refetch, summary }}>
+    <SessionsContext.Provider value={contextValue}>
       {children}
     </SessionsContext.Provider>
   );
