@@ -71,6 +71,8 @@ async function processEventStream(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const properties: Record<string, any> = event?.properties ?? event ?? {};
 
+      const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
+
       if (type === "session.status") {
         const statusType: string = properties?.status?.type ?? "";
         const eventSessionId: string =
@@ -81,7 +83,7 @@ async function processEventStream(
         if (statusType === "idle") {
           try {
             const dbSession = getSessionByOpencodeId(eventSessionId);
-            if (dbSession && dbSession.status !== "idle") {
+            if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "idle") {
               updateSessionStatus(dbSession.id, "idle");
               emitActivityStatus({
                 sessionId: eventSessionId,
@@ -99,7 +101,7 @@ async function processEventStream(
         } else if (statusType === "busy") {
           try {
             const dbSession = getSessionByOpencodeId(eventSessionId);
-            if (dbSession && dbSession.status !== "active") {
+            if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "active") {
               updateSessionStatus(dbSession.id, "active");
               emitActivityStatus({
                 sessionId: eventSessionId,
@@ -123,7 +125,7 @@ async function processEventStream(
 
         try {
           const dbSession = getSessionByOpencodeId(eventSessionId);
-          if (dbSession && dbSession.status !== "idle") {
+          if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "idle") {
             updateSessionStatus(dbSession.id, "idle");
             emitActivityStatus({
               sessionId: eventSessionId,
@@ -146,7 +148,7 @@ async function processEventStream(
 
         try {
           const dbSession = getSessionByOpencodeId(eventSessionId);
-          if (dbSession && dbSession.status !== "waiting_input") {
+          if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "waiting_input") {
             updateSessionStatus(dbSession.id, "waiting_input");
             emitActivityStatus({
               sessionId: eventSessionId,

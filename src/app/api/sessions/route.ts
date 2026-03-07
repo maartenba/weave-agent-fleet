@@ -231,29 +231,35 @@ export async function GET(): Promise<NextResponse> {
     if (liveInstance) {
       instanceStatus = liveInstance.status;
       if (liveInstance.status === "running") {
-        // Check live session status from the SDK polling (catches idle transitions
-        // that happened without an SSE observer)
-        const statusMap = instanceStatusMaps.get(dbSession.instance_id);
-        const liveStatus = statusMap?.[dbSession.opencode_session_id];
-        if (liveStatus?.type === "idle" && dbSession.status === "active") {
-          // Session went idle without SSE observer — persist correction
-          try {
-            updateSessionStatus(dbSession.id, "idle");
-          } catch (err) {
-            log.warn("sessions-route", "Failed to persist idle status correction in DB", { sessionId: dbSession.id, err });
-          }
-          sessionStatus = "idle";
-        } else if (liveStatus?.type === "busy" && dbSession.status === "idle") {
-          // Session became busy again — correct stale idle state
-          try {
-            updateSessionStatus(dbSession.id, "active");
-          } catch (err) {
-            log.warn("sessions-route", "Failed to correct stale idle status to active in DB", { sessionId: dbSession.id, err });
-          }
-          sessionStatus = "active";
+        // Respect terminal statuses — don't overwrite stopped/completed/error
+        const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
+        if (TERMINAL_STATUSES.includes(dbSession.status)) {
+          sessionStatus = dbSession.status;
         } else {
-          // Respect persisted idle status from the SSE stream
-          sessionStatus = dbSession.status === "idle" ? "idle" : "active";
+          // Check live session status from the SDK polling (catches idle transitions
+          // that happened without an SSE observer)
+          const statusMap = instanceStatusMaps.get(dbSession.instance_id);
+          const liveStatus = statusMap?.[dbSession.opencode_session_id];
+          if (liveStatus?.type === "idle" && dbSession.status === "active") {
+            // Session went idle without SSE observer — persist correction
+            try {
+              updateSessionStatus(dbSession.id, "idle");
+            } catch (err) {
+              log.warn("sessions-route", "Failed to persist idle status correction in DB", { sessionId: dbSession.id, err });
+            }
+            sessionStatus = "idle";
+          } else if (liveStatus?.type === "busy" && dbSession.status === "idle") {
+            // Session became busy again — correct stale idle state
+            try {
+              updateSessionStatus(dbSession.id, "active");
+            } catch (err) {
+              log.warn("sessions-route", "Failed to correct stale idle status to active in DB", { sessionId: dbSession.id, err });
+            }
+            sessionStatus = "active";
+          } else {
+            // Respect persisted idle status from the SSE stream
+            sessionStatus = dbSession.status === "idle" ? "idle" : "active";
+          }
         }
       } else {
         sessionStatus = "stopped";
