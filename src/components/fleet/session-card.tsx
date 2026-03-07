@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Session } from "@/lib/types";
-import { formatTokens, formatCost, getStatusDot } from "@/lib/format-utils";
+import { formatTokens, formatCost, getStatusDot, formatRelativeTime } from "@/lib/format-utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -51,15 +51,6 @@ function getAgentColor(agent: string): string {
     case "warp": return "bg-[#E74C3C]/10 text-[#E74C3C]";
     default: return "bg-zinc-500/10 text-zinc-500";
   }
-}
-
-function timeSince(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
 }
 
 export function SessionCard({ session }: SessionCardProps) {
@@ -134,7 +125,7 @@ export function SessionCard({ session }: SessionCardProps) {
             )}
             <span className="ml-auto flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {timeSince(session.createdAt)}
+              {formatRelativeTime(session.createdAt)}
             </span>
           </div>
 

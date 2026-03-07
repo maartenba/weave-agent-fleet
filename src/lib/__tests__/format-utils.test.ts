@@ -286,6 +286,58 @@ describe("formatRelativeTime", () => {
     const result = formatRelativeTime(0, BASE);
     expect(result).toBe("");
   });
+
+  // ── Date input overload ──────────────────────────────────────────────────
+
+  it("accepts a Date input and produces the same result as the equivalent number", () => {
+    const ts = BASE - 5 * 60_000;
+    const dateInput = new Date(ts);
+    expect(formatRelativeTime(dateInput, BASE)).toBe("5m ago");
+  });
+
+  it("accepts a Date input for 'just now' range", () => {
+    const dateInput = new Date(BASE - 10_000);
+    expect(formatRelativeTime(dateInput, BASE)).toBe("just now");
+  });
+
+  it("accepts a Date input for hours-ago range", () => {
+    const dateInput = new Date(BASE - 3 * 3_600_000);
+    expect(formatRelativeTime(dateInput, BASE)).toBe("3h ago");
+  });
+
+  // ── String input overload ────────────────────────────────────────────────
+
+  it("accepts a string input with timezone (ISO 8601 with Z)", () => {
+    // Create a known ISO string that is 2 minutes before BASE
+    const ts = BASE - 2 * 60_000;
+    const isoString = new Date(ts).toISOString(); // ends with 'Z'
+    expect(formatRelativeTime(isoString, BASE)).toBe("2m ago");
+  });
+
+  it("accepts a string input with timezone offset (+00:00)", () => {
+    const ts = BASE - 45_000;
+    // Construct an ISO string with explicit +00:00
+    const isoZ = new Date(ts).toISOString();
+    const withOffset = isoZ.replace("Z", "+00:00");
+    expect(formatRelativeTime(withOffset, BASE)).toBe("45s ago");
+  });
+
+  it("accepts a SQLite datetime string without timezone (appends Z)", () => {
+    // SQLite format: "YYYY-MM-DD HH:MM:SS" (no T, no Z)
+    // We need the result to be 10 minutes before BASE
+    const ts = BASE - 10 * 60_000;
+    const d = new Date(ts);
+    const sqliteStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
+    expect(formatRelativeTime(sqliteStr, BASE)).toBe("10m ago");
+  });
+
+  it("accepts a string with T separator but no timezone (appends Z)", () => {
+    const ts = BASE - 30_000;
+    const d = new Date(ts);
+    // ISO-like but without trailing Z
+    const noZ = d.toISOString().replace("Z", "");
+    expect(formatRelativeTime(noZ, BASE)).toBe("30s ago");
+  });
 });
 
 // ─── formatTimestamp ─────────────────────────────────────────────────────────

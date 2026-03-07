@@ -7,15 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { ArrowRight, Clock, Copy, ExternalLink, GitBranch, Loader2, OctagonX, RotateCcw, Square, Trash2, WifiOff } from "lucide-react";
 import type { SessionListItem } from "@/lib/api-types";
-
-export function timeSince(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
+import { formatRelativeTime } from "@/lib/format-utils";
 
 export function LiveSessionCard({
   item,
@@ -127,7 +119,7 @@ export function LiveSessionCard({
           <CardContent className="px-4 pb-4">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
-              <span>{timeSince(session.time.created)}</span>
+              <span>{formatRelativeTime(session.time.created)}</span>
               <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">
                 {session.id.slice(0, 8)}…
               </span>
