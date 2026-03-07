@@ -1,13 +1,11 @@
-import { tmpdir } from "os";
 import { join } from "path";
 import {
   mkdirSync,
-  writeFileSync,
   rmSync,
   existsSync,
   readFileSync,
 } from "fs";
-import { randomUUID } from "crypto";
+
 import {
   getUserConfig,
   getProjectConfig,
@@ -16,6 +14,9 @@ import {
   listInstalledSkills,
   getConfigPaths,
 } from "@/lib/server/config-manager";
+import { getConnectedProviders } from "@/lib/server/auth-store";
+import { BUNDLED_PROVIDERS } from "@/lib/provider-registry";
+import { createSecureTempDir, writeTempFile } from "@/lib/server/__tests__/test-temp-utils";
 
 // We need to mock the config-paths module to use temp directories
 // so we don't modify real user config during tests
@@ -31,6 +32,8 @@ vi.mock("@/cli/config-paths", () => {
     getProjectConfigDir: (dir: string) => join(dir, ".opencode"),
     getProjectWeaveConfigPath: (dir: string) =>
       join(dir, ".opencode", "weave-opencode.jsonc"),
+    getDataDir: () => join(testConfigDir, "data"),
+    getAuthJsonPath: () => join(testConfigDir, "data", "auth.json"),
   };
 });
 
@@ -38,12 +41,10 @@ describe("config-manager", () => {
   let testProjectDir: string;
 
   beforeEach(() => {
-    testConfigDir = join(tmpdir(), `config-mgr-test-${randomUUID()}`);
+    testConfigDir = createSecureTempDir("config-mgr-test-");
     testSkillsDir = join(testConfigDir, "skills");
-    testProjectDir = join(tmpdir(), `project-test-${randomUUID()}`);
-    mkdirSync(testConfigDir, { recursive: true });
+    testProjectDir = createSecureTempDir("project-test-");
     mkdirSync(testSkillsDir, { recursive: true });
-    mkdirSync(testProjectDir, { recursive: true });
   });
 
   afterEach(() => {
@@ -61,9 +62,9 @@ describe("config-manager", () => {
     });
 
     it("ReturnsConfigWhenFileExists", () => {
-      const configPath = join(testConfigDir, "weave-opencode.jsonc");
-      writeFileSync(
-        configPath,
+      writeTempFile(
+        testConfigDir,
+        "weave-opencode.jsonc",
         JSON.stringify({
           agents: { tapestry: { skills: ["skill-a"] } },
         })
@@ -97,10 +98,9 @@ describe("config-manager", () => {
     });
 
     it("ReturnsProjectConfigWhenExists", () => {
-      const configDir = join(testProjectDir, ".opencode");
-      mkdirSync(configDir, { recursive: true });
-      writeFileSync(
-        join(configDir, "weave-opencode.jsonc"),
+      writeTempFile(
+        testProjectDir,
+        join(".opencode", "weave-opencode.jsonc"),
         JSON.stringify({
           agents: { weft: { skills: ["reviewing-code"] } },
         })
@@ -115,9 +115,9 @@ describe("config-manager", () => {
   describe("getMergedConfig", () => {
     it("MergesUserAndProjectConfigs", () => {
       // User config
-      const userPath = join(testConfigDir, "weave-opencode.jsonc");
-      writeFileSync(
-        userPath,
+      writeTempFile(
+        testConfigDir,
+        "weave-opencode.jsonc",
         JSON.stringify({
           agents: {
             tapestry: { skills: ["user-skill"] },
@@ -127,10 +127,9 @@ describe("config-manager", () => {
       );
 
       // Project config
-      const projectConfigDir = join(testProjectDir, ".opencode");
-      mkdirSync(projectConfigDir, { recursive: true });
-      writeFileSync(
-        join(projectConfigDir, "weave-opencode.jsonc"),
+      writeTempFile(
+        testProjectDir,
+        join(".opencode", "weave-opencode.jsonc"),
         JSON.stringify({
           agents: {
             shuttle: { skills: ["project-skill"] },
@@ -148,9 +147,9 @@ describe("config-manager", () => {
     });
 
     it("ReturnsUserConfigWhenNoProjectConfig", () => {
-      const userPath = join(testConfigDir, "weave-opencode.jsonc");
-      writeFileSync(
-        userPath,
+      writeTempFile(
+        testConfigDir,
+        "weave-opencode.jsonc",
         JSON.stringify({
           agents: { tapestry: { skills: ["only-user"] } },
         })
@@ -165,8 +164,9 @@ describe("config-manager", () => {
     it("ListsSkillsFromSkillsDir", () => {
       const skillDir = join(testSkillsDir, "test-skill");
       mkdirSync(skillDir);
-      writeFileSync(
-        join(skillDir, "SKILL.md"),
+      writeTempFile(
+        skillDir,
+        "SKILL.md",
         `---\nname: test-skill\ndescription: A test\n---\n# Content`
       );
 
@@ -181,6 +181,81 @@ describe("config-manager", () => {
       const paths = getConfigPaths();
       expect(paths.userConfig).toContain("weave-opencode.jsonc");
       expect(paths.skillsDir).toContain("skills");
+    });
+  });
+
+  describe("connectedProviders via auth-store", () => {
+    it("ReturnsEmptyArrayWhenAuthJsonDoesNotExist", () => {
+      const result = getConnectedProviders();
+      expect(result).toEqual([]);
+    });
+
+    it("ReturnsConnectedProvidersFromAuthJson", () => {
+      writeTempFile(
+        testConfigDir,
+        join("data", "auth.json"),
+        JSON.stringify({
+          anthropic: { type: "api", token: "sk-ant-xxx" },
+          "github-copilot": { type: "oauth", token: "ghu_xxx" },
+        })
+      );
+
+      const result = getConnectedProviders();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ id: "anthropic", authType: "api" });
+      expect(result[1]).toEqual({ id: "github-copilot", authType: "oauth" });
+    });
+
+    it("BundledProvidersRegistryHasExpectedProviders", () => {
+      const ids = BUNDLED_PROVIDERS.map((p) => p.id);
+      expect(ids).toContain("anthropic");
+      expect(ids).toContain("openai");
+      expect(ids).toContain("google");
+      expect(ids).toContain("github-copilot");
+    });
+  });
+
+  describe("config with model field", () => {
+    it("WritesAndReadsConfigWithModelField", () => {
+      const config = {
+        agents: {
+          tapestry: { skills: ["skill-a"], model: "anthropic/claude-sonnet-4-5" },
+          shuttle: { skills: ["skill-b"] },
+        },
+      };
+      updateUserConfig(config);
+
+      const readBack = getUserConfig();
+      expect(readBack).not.toBeNull();
+      expect(readBack!.agents!.tapestry.model).toBe("anthropic/claude-sonnet-4-5");
+      expect(readBack!.agents!.shuttle.model).toBeUndefined();
+    });
+
+    it("MergesModelFieldCorrectly", () => {
+      // User config with model
+      writeTempFile(
+        testConfigDir,
+        "weave-opencode.jsonc",
+        JSON.stringify({
+          agents: {
+            tapestry: { skills: ["skill-a"], model: "anthropic/claude-sonnet-4-5" },
+          },
+        })
+      );
+
+      // Project config overrides model
+      writeTempFile(
+        testProjectDir,
+        join(".opencode", "weave-opencode.jsonc"),
+        JSON.stringify({
+          agents: {
+            tapestry: { model: "openai/gpt-4.1" },
+          },
+        })
+      );
+
+      const result = getMergedConfig(testProjectDir);
+      expect(result.agents!.tapestry.model).toBe("openai/gpt-4.1");
     });
   });
 });

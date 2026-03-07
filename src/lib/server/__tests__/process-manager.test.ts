@@ -4,9 +4,26 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { resolve } from "path";
-import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots } from "@/lib/server/process-manager";
+import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots, buildAgentModelConfig } from "@/lib/server/process-manager";
 import { _resetDbForTests } from "@/lib/server/database";
 import { getInstance as getDbInstance, getRunningInstances, insertWorkspaceRoot } from "@/lib/server/db-repository";
+import { createSecureTempDir, writeTempFile } from "./test-temp-utils";
+
+// ---------------------------------------------------------------------------
+// Mock config-paths so buildAgentModelConfig tests use temp directories
+// instead of real user config. The mock variables are set per-test in
+// the buildAgentModelConfig describe block.
+// ---------------------------------------------------------------------------
+let mockConfigDir: string = join(tmpdir(), "pm-mock-config-fallback");
+vi.mock("@/cli/config-paths", () => ({
+  getUserConfigDir: () => mockConfigDir,
+  getUserWeaveConfigPath: () => join(mockConfigDir, "weave-opencode.jsonc"),
+  getSkillsDir: () => join(mockConfigDir, "skills"),
+  getProjectConfigDir: (dir: string) => join(dir, ".opencode"),
+  getProjectWeaveConfigPath: (dir: string) => join(dir, ".opencode", "weave-opencode.jsonc"),
+  getDataDir: () => join(mockConfigDir, "data"),
+  getAuthJsonPath: () => join(mockConfigDir, "data", "auth.json"),
+}));
 
 // Use an isolated temp DB for all process-manager tests
 beforeAll(() => {
@@ -301,5 +318,87 @@ describe("getAllowedRoots with DB roots", () => {
     expect(roots).toContain(resolve("/tmp"));
     expect(roots).toContain(weaveWsRoot);
     expect(roots.length).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildAgentModelConfig — agent model injection
+// ---------------------------------------------------------------------------
+
+describe("buildAgentModelConfig", () => {
+  let testProjectDir: string;
+
+  beforeEach(() => {
+    // Point the hoisted vi.mock to a fresh temp dir for user config
+    mockConfigDir = createSecureTempDir("model-cfg-test-");
+    testProjectDir = createSecureTempDir("model-proj-test-");
+  });
+
+  afterEach(() => {
+    for (const dir of [mockConfigDir, testProjectDir]) {
+      try { rmSync(dir, { recursive: true, force: true }); } catch {}
+    }
+  });
+
+  it("ReturnsEmptyObjectWhenNoModelsConfigured", () => {
+    // No config files exist in either user or project dirs
+    const result = buildAgentModelConfig(testProjectDir);
+    expect(result).toEqual({});
+  });
+
+  it("ReturnsAgentConfigWhenModelsAreSet", () => {
+    // Write user-level config with model fields
+    writeTempFile(
+      mockConfigDir,
+      "weave-opencode.jsonc",
+      JSON.stringify({
+        agents: {
+          tapestry: { skills: ["skill-a"], model: "anthropic/claude-sonnet-4-5" },
+          shuttle: { skills: ["skill-b"] },
+          weft: { model: "openai/gpt-4.1" },
+        },
+      })
+    );
+
+    const result = buildAgentModelConfig(testProjectDir);
+    expect(result).toEqual({
+      agent: {
+        tapestry: { model: "anthropic/claude-sonnet-4-5" },
+        weft: { model: "openai/gpt-4.1" },
+      },
+    });
+    // shuttle should NOT be included (no model field)
+    expect((result as Record<string, Record<string, unknown>>).agent?.shuttle).toBeUndefined();
+  });
+
+  it("MergesProjectConfigModelOverrides", () => {
+    // User config has model for tapestry
+    writeTempFile(
+      mockConfigDir,
+      "weave-opencode.jsonc",
+      JSON.stringify({
+        agents: {
+          tapestry: { model: "anthropic/claude-sonnet-4-5" },
+        },
+      })
+    );
+
+    // Project config overrides tapestry model
+    writeTempFile(
+      testProjectDir,
+      join(".opencode", "weave-opencode.jsonc"),
+      JSON.stringify({
+        agents: {
+          tapestry: { model: "openai/gpt-4.1" },
+        },
+      })
+    );
+
+    const result = buildAgentModelConfig(testProjectDir);
+    expect(result).toEqual({
+      agent: {
+        tapestry: { model: "openai/gpt-4.1" },
+      },
+    });
   });
 });

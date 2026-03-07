@@ -44,3 +44,30 @@ export function getProjectConfigDir(projectDir: string): string {
 export function getProjectWeaveConfigPath(projectDir: string): string {
   return join(getProjectConfigDir(projectDir), "weave-opencode.jsonc");
 }
+
+/**
+ * Returns the OpenCode data directory (XDG data home).
+ * Respects $XDG_DATA_HOME; falls back to platform defaults.
+ */
+export function getDataDir(): string {
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  if (xdgDataHome) {
+    return join(xdgDataHome, "opencode");
+  }
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      return join(localAppData, "opencode");
+    }
+    // Fallback for Windows if LOCALAPPDATA is not set
+    return join(homedir(), "AppData", "Local", "opencode");
+  }
+  return join(homedir(), ".local", "share", "opencode");
+}
+
+/**
+ * Returns the path to OpenCode's auth.json file.
+ */
+export function getAuthJsonPath(): string {
+  return join(getDataDir(), "auth.json");
+}

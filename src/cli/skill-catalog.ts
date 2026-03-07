@@ -16,6 +16,7 @@ export interface InstalledSkill {
 
 export interface WeaveAgentConfig {
   skills?: string[];
+  model?: string;
 }
 
 export interface WeaveConfig {
