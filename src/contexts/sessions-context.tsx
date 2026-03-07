@@ -79,6 +79,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const lastPolledRef = useRef(polledSessions);
   const [sseGeneration, setSseGeneration] = useState(0);
   const isMounted = useRef(true);
+  const rafRef = useRef<number | null>(null);
 
   // Subscribe to the global notifications SSE stream for activity_status events
   useEffect(() => {
@@ -99,7 +100,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
         if (data.type === "activity_status" && data.payload) {
           ssePatchesRef.current = new Map(ssePatchesRef.current);
           ssePatchesRef.current.set(data.payload.sessionId, data.payload.activityStatus);
-          setSseGeneration((n) => n + 1);
+          if (rafRef.current === null) {
+            rafRef.current = requestAnimationFrame(() => {
+              rafRef.current = null;
+              setSseGeneration((n) => n + 1);
+            });
+          }
         }
       } catch {
         // Ignore parse errors
@@ -109,6 +115,10 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted.current = false;
       es.close();
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, []);
 
