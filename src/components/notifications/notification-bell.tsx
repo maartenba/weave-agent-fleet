@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/contexts/notifications-context";
+import { formatRelativeTime } from "@/lib/format-utils";
 import type { DbNotification } from "@/lib/server/db-repository";
 
 function getNotificationIcon(type: string) {
@@ -29,18 +30,6 @@ function getNotificationIcon(type: string) {
     default:
       return <Bell className="h-4 w-4 text-muted-foreground shrink-0" />;
   }
-}
-
-function timeSince(dateString: string): string {
-  // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS' (UTC, no T/Z).
-  // Normalise to ISO 8601 so the Date constructor parses it as UTC.
-  const iso = dateString.includes("T") ? dateString : dateString.replace(" ", "T") + "Z";
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
 }
 
 export function NotificationBell() {
@@ -115,7 +104,7 @@ export function NotificationBell() {
                   {notif.message}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  {timeSince(notif.created_at)}
+                  {formatRelativeTime(notif.created_at)}
                 </p>
               </div>
             </DropdownMenuItem>
