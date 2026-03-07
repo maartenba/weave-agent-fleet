@@ -1,4 +1,4 @@
-import { nestSessions, type NestedSession } from "@/lib/session-utils";
+import { nestSessions, sessionsChanged, type NestedSession } from "@/lib/session-utils";
 import type { SessionListItem } from "@/lib/api-types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ function makeItem(overrides: Partial<SessionListItem> & { sessionId?: string } =
     sourceDirectory: null,
     sessionStatus: "active",
     instanceStatus: "running",
-    session: { id } as SessionListItem["session"],
+    session: { id, title: "Test Session", messageCount: 0, ...overrides.session } as SessionListItem["session"],
     dbId: undefined,
     parentSessionId: undefined,
     activityStatus: "busy",
@@ -139,5 +139,71 @@ describe("nestSessions", () => {
 
     expect(result.length).toBe(1);
     expect(result[0]!.children).toEqual([]);
+  });
+});
+
+// ─── sessionsChanged Tests ────────────────────────────────────────────────────
+
+describe("sessionsChanged", () => {
+  beforeEach(() => {
+    counter = 0;
+  });
+
+  it("returns false when arrays are identical (same data)", () => {
+    const a = [makeItem({ sessionId: "s1" }), makeItem({ sessionId: "s2" })];
+    const b = [makeItem({ sessionId: "s1" }), makeItem({ sessionId: "s2" })];
+    expect(sessionsChanged(a, b)).toBe(false);
+  });
+
+  it("returns true when a session's activityStatus changes", () => {
+    const a = [makeItem({ sessionId: "s1", activityStatus: "busy" })];
+    const b = [makeItem({ sessionId: "s1", activityStatus: "idle" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when array lengths differ", () => {
+    const a = [makeItem({ sessionId: "s1" })];
+    const b = [makeItem({ sessionId: "s1" }), makeItem({ sessionId: "s2" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when session order changes (different session.id at same index)", () => {
+    const a = [makeItem({ sessionId: "s1" }), makeItem({ sessionId: "s2" })];
+    const b = [makeItem({ sessionId: "s2" }), makeItem({ sessionId: "s1" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns false for empty arrays", () => {
+    expect(sessionsChanged([], [])).toBe(false);
+  });
+
+  it("returns true when sessionStatus changes", () => {
+    const a = [makeItem({ sessionId: "s1", sessionStatus: "active" })];
+    const b = [makeItem({ sessionId: "s1", sessionStatus: "idle" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when lifecycleStatus changes", () => {
+    const a = [makeItem({ sessionId: "s1", lifecycleStatus: "running" })];
+    const b = [makeItem({ sessionId: "s1", lifecycleStatus: "completed" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when instanceStatus changes", () => {
+    const a = [makeItem({ sessionId: "s1", instanceStatus: "running" })];
+    const b = [makeItem({ sessionId: "s1", instanceStatus: "dead" })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when session title changes", () => {
+    const a = [makeItem({ sessionId: "s1", session: { id: "s1", title: "Old", messageCount: 0 } as SessionListItem["session"] })];
+    const b = [makeItem({ sessionId: "s1", session: { id: "s1", title: "New", messageCount: 0 } as SessionListItem["session"] })];
+    expect(sessionsChanged(a, b)).toBe(true);
+  });
+
+  it("returns true when session messageCount changes", () => {
+    const a = [makeItem({ sessionId: "s1", session: { id: "s1", title: "T", messageCount: 5 } as SessionListItem["session"] })];
+    const b = [makeItem({ sessionId: "s1", session: { id: "s1", title: "T", messageCount: 6 } as SessionListItem["session"] })];
+    expect(sessionsChanged(a, b)).toBe(true);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SessionListItem } from "@/lib/api-types";
+import { sessionsChanged } from "@/lib/session-utils";
 
 export interface UseSessionsResult {
   sessions: SessionListItem[];
@@ -28,7 +29,7 @@ export function useSessions(
       }
       const data = (await response.json()) as SessionListItem[];
       if (isMounted.current) {
-        setSessions(data);
+        setSessions(prev => sessionsChanged(prev, data) ? data : prev);
         setError(undefined);
       }
     } catch (err) {

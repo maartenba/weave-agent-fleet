@@ -6,6 +6,32 @@ export interface NestedSession {
 }
 
 /**
+ * Returns true if the two session arrays differ in any UI-visible field.
+ * Used for structural sharing: skip setState when poll data is unchanged.
+ * Only compares fields the UI actually renders — avoids deep comparison of
+ * large nested objects like session.messages.
+ */
+export function sessionsChanged(
+  prev: SessionListItem[],
+  next: SessionListItem[]
+): boolean {
+  if (prev.length !== next.length) return true;
+  for (let i = 0; i < prev.length; i++) {
+    const a = prev[i]!, b = next[i]!;
+    if (
+      a.session.id !== b.session.id ||
+      a.sessionStatus !== b.sessionStatus ||
+      a.activityStatus !== b.activityStatus ||
+      a.lifecycleStatus !== b.lifecycleStatus ||
+      a.instanceStatus !== b.instanceStatus ||
+      a.session.title !== b.session.title ||
+      a.session.messageCount !== b.session.messageCount
+    ) return true;
+  }
+  return false;
+}
+
+/**
  * Groups a flat list of sessions into a nested parent-child structure.
  *
  * Sessions with a `parentSessionId` that matches a `dbId` in the same list
