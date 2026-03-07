@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-03-07T08:57:17.748Z",
+  "stack": [
+    {
+      "name": "typescript",
+      "confidence": "high",
+      "evidence": "tsconfig.json exists"
+    },
+    {
+      "name": "node",
+      "confidence": "high",
+      "evidence": "package.json exists"
+    },
+    {
+      "name": "npm",
+      "confidence": "high",
+      "evidence": "package-lock.json exists"
+    },
+    {
+      "name": "next",
+      "confidence": "high",
+      "evidence": "next.config.ts exists"
+    },
+    {
+      "name": "react",
+      "confidence": "medium",
+      "evidence": "react in package.json dependencies"
+    }
+  ],
+  "isMonorepo": false,
+  "packageManager": "npm",
+  "primaryLanguage": "typescript",
+  "os": "win32",
+  "arch": "x64"
+}
