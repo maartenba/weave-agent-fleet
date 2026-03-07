@@ -77,7 +77,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   // the poll is the source of truth.
   const ssePatchesRef = useRef<Map<string, SessionActivityStatus>>(new Map());
   const lastPolledRef = useRef(polledSessions);
-  const [, forceRender] = useState(0);
+  const [sseGeneration, setSseGeneration] = useState(0);
   const isMounted = useRef(true);
 
   // Subscribe to the global notifications SSE stream for activity_status events
@@ -99,7 +99,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
         if (data.type === "activity_status" && data.payload) {
           ssePatchesRef.current = new Map(ssePatchesRef.current);
           ssePatchesRef.current.set(data.payload.sessionId, data.payload.activityStatus);
-          forceRender((n) => n + 1);
+          setSseGeneration((n) => n + 1);
         }
       } catch {
         // Ignore parse errors
@@ -128,9 +128,9 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       result = patchActivityStatus(result, sessionId, activityStatus);
     }
     return result;
-    // forceRender counter is not used directly but triggers re-evaluation
+    // sseGeneration counter triggers re-evaluation when SSE patches arrive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polledSessions, forceRender]);
+  }, [polledSessions, sseGeneration]);
 
   const contextValue = useMemo(
     () => ({ sessions, isLoading, error, refetch, summary }),
