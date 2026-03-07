@@ -47,20 +47,16 @@ export function getProjectWeaveConfigPath(projectDir: string): string {
 
 /**
  * Returns the OpenCode data directory (XDG data home).
- * Respects $XDG_DATA_HOME; falls back to platform defaults.
+ * Respects $XDG_DATA_HOME; falls back to ~/.local/share/opencode on all platforms.
+ *
+ * IMPORTANT: OpenCode uses the `xdg-basedir` npm package which resolves to
+ * ~/.local/share on ALL platforms (including Windows) when $XDG_DATA_HOME is not set.
+ * We must match that behavior exactly — do NOT use %LOCALAPPDATA% on Windows.
  */
 export function getDataDir(): string {
   const xdgDataHome = process.env.XDG_DATA_HOME;
   if (xdgDataHome) {
     return join(xdgDataHome, "opencode");
-  }
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (localAppData) {
-      return join(localAppData, "opencode");
-    }
-    // Fallback for Windows if LOCALAPPDATA is not set
-    return join(homedir(), "AppData", "Local", "opencode");
   }
   return join(homedir(), ".local", "share", "opencode");
 }
