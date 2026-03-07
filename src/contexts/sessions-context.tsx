@@ -80,6 +80,9 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const [sseGeneration, setSseGeneration] = useState(0);
   const isMounted = useRef(true);
   const rafRef = useRef<number | null>(null);
+  const reconnectDelayRef = useRef(1000);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sseReconnectKey, setSseReconnectKey] = useState(0);
 
   // Subscribe to the global notifications SSE stream for activity_status events
   useEffect(() => {
@@ -112,6 +115,22 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    es.onerror = () => {
+      if (!isMounted.current) return;
+      es.close();
+      const delay = reconnectDelayRef.current;
+      reconnectDelayRef.current = Math.min(delay * 2, 30_000);
+      reconnectTimerRef.current = setTimeout(() => {
+        if (isMounted.current) {
+          setSseReconnectKey(n => n + 1);
+        }
+      }, delay);
+    };
+
+    es.onopen = () => {
+      reconnectDelayRef.current = 1000; // reset backoff on success
+    };
+
     return () => {
       isMounted.current = false;
       es.close();
@@ -119,8 +138,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [sseReconnectKey]);
 
   // Merge polled sessions with any pending SSE patches.
   // Clear patches when polled data changes (poll is the source of truth).
