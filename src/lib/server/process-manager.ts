@@ -669,10 +669,22 @@ const _healthFailCounts: Map<string, number> = (_g.__weaveHealthFailCounts ??= n
 export function startHealthCheckLoop(): void {
   if (_g.__weaveHealthCheckInterval) return; // already running
   _g.__weaveHealthCheckInterval = setInterval(async () => {
-    for (const [id, instance] of instances) {
-      if (instance.status !== "running") continue;
+    // Collect running instances for parallel port checks
+    const running = [...instances.entries()].filter(([, i]) => i.status === "running");
 
-      const alive = await checkPortAlive(instance.url);
+    // Parallel port checks — all run concurrently instead of sequentially
+    const results = await Promise.allSettled(
+      running.map(async ([id, instance]) => ({
+        id,
+        instance,
+        alive: await checkPortAlive(instance.url),
+      }))
+    );
+
+    // Process results with the same failure-counting logic
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const { id, instance, alive } = result.value;
       if (alive) {
         _healthFailCounts.delete(id);
       } else {
