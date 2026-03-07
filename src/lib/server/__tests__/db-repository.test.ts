@@ -38,6 +38,7 @@ import {
   listWorkspaceRoots,
   deleteWorkspaceRoot,
   getWorkspaceRootByPath,
+  getSessionStatusCounts,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -596,6 +597,61 @@ describe("session deletion", () => {
   it("DeleteNotificationsForSessionReturnsZeroWhenNoneMatch", () => {
     const count = deleteNotificationsForSession("nonexistent-session-id");
     expect(count).toBe(0);
+  });
+});
+
+// ─── Session Status Counts ────────────────────────────────────────────────────
+
+describe("getSessionStatusCounts", () => {
+  function setup() {
+    const wsId = mkWorkspaceId();
+    const instId = mkInstanceId();
+    insertWorkspace({ id: wsId, directory: "/tmp/proj", isolation_strategy: "existing" });
+    insertInstance({ id: instId, port: 4550, directory: "/tmp/proj", url: "http://localhost:4550" });
+    return { wsId, instId };
+  }
+
+  it("ReturnsZerosWhenNoSessions", () => {
+    const counts = getSessionStatusCounts();
+    expect(counts).toEqual({ active: 0, idle: 0 });
+  });
+
+  it("CountsActiveAndIdleSessions", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    const id3 = mkSessionId();
+    const id4 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id3, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id4, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id2, "idle");
+    updateSessionStatus(id3, "idle");
+    updateSessionStatus(id4, "stopped");
+
+    const counts = getSessionStatusCounts();
+    expect(counts.active).toBe(1);
+    expect(counts.idle).toBe(2);
+  });
+
+  it("ExcludesStoppedCompletedAndDisconnectedSessions", () => {
+    const { wsId, instId } = setup();
+    insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    const stoppedId = mkSessionId();
+    const completedId = mkSessionId();
+    const disconnectedId = mkSessionId();
+    insertSession({ id: stoppedId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: completedId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: disconnectedId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(stoppedId, "stopped");
+    updateSessionStatus(completedId, "completed");
+    updateSessionStatus(disconnectedId, "disconnected");
+
+    const counts = getSessionStatusCounts();
+    expect(counts.active).toBe(1);
+    expect(counts.idle).toBe(0);
   });
 });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
-import { listSessions } from "@/lib/server/db-repository";
+import { getSessionStatusCounts } from "@/lib/server/db-repository";
 
 export interface FleetSummaryResponse {
   activeSessions: number;
@@ -15,10 +15,10 @@ export async function GET(): Promise<NextResponse> {
   await _recoveryComplete;
 
   try {
-    const sessions = listSessions();
+    const counts = getSessionStatusCounts();
 
-    const activeSessions = sessions.filter((s) => s.status === "active").length;
-    const idleSessions = sessions.filter((s) => s.status === "idle").length;
+    const activeSessions = counts.active;
+    const idleSessions = counts.idle;
 
     const summary: FleetSummaryResponse = {
       activeSessions,
