@@ -214,6 +214,25 @@ export function listSessions(): DbSession[] {
     .all() as DbSession[];
 }
 
+/**
+ * Count sessions grouped by status using SQL aggregation.
+ * Returns { active, idle } counts without loading full rows into memory.
+ */
+export function getSessionStatusCounts(): { active: number; idle: number } {
+  const rows = getDb()
+    .prepare(
+      "SELECT status, COUNT(*) as count FROM sessions WHERE status IN ('active', 'idle') GROUP BY status"
+    )
+    .all() as Array<{ status: string; count: number }>;
+
+  const counts = { active: 0, idle: 0 };
+  for (const row of rows) {
+    if (row.status === "active") counts.active = row.count;
+    else if (row.status === "idle") counts.idle = row.count;
+  }
+  return counts;
+}
+
 export function listActiveSessions(): DbSession[] {
   return getDb()
     .prepare("SELECT * FROM sessions WHERE status IN ('active', 'idle') ORDER BY created_at DESC")

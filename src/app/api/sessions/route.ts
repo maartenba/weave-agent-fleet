@@ -206,6 +206,21 @@ export async function GET(): Promise<NextResponse> {
       })
   );
 
+  // ── Pass 1: Synchronous status/workspace determination ──────────────────
+  // Collects sessions that need a live session.get() call into pendingFetches,
+  // and pushes stub items for everything else. This avoids sequential awaits.
+  interface PendingFetch {
+    dbSession: typeof dbSessions[number];
+    liveInstance: typeof liveInstances[number];
+    sessionStatus: SessionListItem["sessionStatus"];
+    instanceStatus: "running" | "dead";
+    workspaceDirectory: string;
+    workspaceDisplayName: string | null;
+    isolationStrategy: string;
+    sourceDirectory: string | null;
+  }
+  const pendingFetches: PendingFetch[] = [];
+
   for (const dbSession of dbSessions) {
     // Determine the live instance state
     const liveInstance = liveInstanceMap.get(dbSession.instance_id);
@@ -292,67 +307,122 @@ export async function GET(): Promise<NextResponse> {
       log.warn("sessions-route", "Failed to fetch workspace info from DB", { workspaceId: dbSession.workspace_id, err });
     }
 
-    // Fetch the OpenCode session details from the live instance if available
+    // Queue live sessions for parallel fetch; push stubs for the rest
     if (liveInstance && instanceStatus === "running") {
-      try {
+      pendingFetches.push({
+        dbSession,
+        liveInstance,
+        sessionStatus,
+        instanceStatus,
+        workspaceDirectory,
+        workspaceDisplayName,
+        isolationStrategy,
+        sourceDirectory,
+      });
+    } else {
+      // For disconnected/stopped sessions, synthesize a stub session object
+      items.push({
+        instanceId: dbSession.instance_id,
+        workspaceId: dbSession.workspace_id,
+        workspaceDirectory,
+        workspaceDisplayName,
+        isolationStrategy,
+        sourceDirectory,
+        sessionStatus,
+        session: {
+          id: dbSession.opencode_session_id,
+          title: dbSession.title,
+          directory: dbSession.directory,
+          projectID: "",
+          version: "0",
+          time: {
+            created: new Date(dbSession.created_at).getTime(),
+            updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
+          },
+        } as Parameters<typeof items.push>[0]["session"],
+        instanceStatus,
+        dbId: dbSession.id,
+        parentSessionId: dbSession.parent_session_id,
+        activityStatus: deriveActivityStatus(sessionStatus),
+        lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+        typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+      });
+    }
+  }
+
+  // ── Pass 2: Parallel session.get() calls (chunked to limit concurrency) ───
+  const PARALLEL_FETCH_LIMIT = 10;
+  for (let offset = 0; offset < pendingFetches.length; offset += PARALLEL_FETCH_LIMIT) {
+    const chunk = pendingFetches.slice(offset, offset + PARALLEL_FETCH_LIMIT);
+    const fetchResults = await Promise.allSettled(
+      chunk.map(async ({ dbSession, liveInstance }) => {
         const result = await liveInstance.client.session.get({
           sessionID: dbSession.opencode_session_id,
         });
-        if (result.data) {
-          // Overlay user-renamed title from Fleet DB
-          if (dbSession.title !== "Untitled") {
-            result.data.title = dbSession.title;
-          }
-          items.push({
-            instanceId: dbSession.instance_id,
-            workspaceId: dbSession.workspace_id,
-            workspaceDirectory,
-            workspaceDisplayName,
-            isolationStrategy,
-            sourceDirectory,
-            sessionStatus,
-            session: result.data,
-            instanceStatus,
-            dbId: dbSession.id,
-            parentSessionId: dbSession.parent_session_id,
-            activityStatus: deriveActivityStatus(sessionStatus),
-            lifecycleStatus: deriveLifecycleStatus(sessionStatus),
-            typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
-          });
-          continue;
+        return result.data;
+      })
+    );
+
+    for (let i = 0; i < chunk.length; i++) {
+      const pending = chunk[i]!;
+      const { dbSession, sessionStatus, instanceStatus, workspaceDirectory, workspaceDisplayName, isolationStrategy, sourceDirectory } = pending;
+      const fetchResult = fetchResults[i]!;
+
+      if (fetchResult.status === "fulfilled" && fetchResult.value) {
+        const sessionData = fetchResult.value;
+        // Overlay user-renamed title from Fleet DB
+        if (dbSession.title !== "Untitled") {
+          sessionData.title = dbSession.title;
         }
-      } catch (err) {
-        log.warn("sessions-route", "Failed to fetch live session details from SDK — using stub", { sessionId: dbSession.opencode_session_id, err });
+        items.push({
+          instanceId: dbSession.instance_id,
+          workspaceId: dbSession.workspace_id,
+          workspaceDirectory,
+          workspaceDisplayName,
+          isolationStrategy,
+          sourceDirectory,
+          sessionStatus,
+          session: sessionData,
+          instanceStatus,
+          dbId: dbSession.id,
+          parentSessionId: dbSession.parent_session_id,
+          activityStatus: deriveActivityStatus(sessionStatus),
+          lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+          typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+        });
+      } else {
+        // SDK call failed — fall back to stub
+        if (fetchResult.status === "rejected") {
+          log.warn("sessions-route", "Failed to fetch live session details from SDK — using stub", { sessionId: dbSession.opencode_session_id, err: fetchResult.reason });
+        }
+        items.push({
+          instanceId: dbSession.instance_id,
+          workspaceId: dbSession.workspace_id,
+          workspaceDirectory,
+          workspaceDisplayName,
+          isolationStrategy,
+          sourceDirectory,
+          sessionStatus,
+          session: {
+            id: dbSession.opencode_session_id,
+            title: dbSession.title,
+            directory: dbSession.directory,
+            projectID: "",
+            version: "0",
+            time: {
+              created: new Date(dbSession.created_at).getTime(),
+              updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
+            },
+          } as Parameters<typeof items.push>[0]["session"],
+          instanceStatus,
+          dbId: dbSession.id,
+          parentSessionId: dbSession.parent_session_id,
+          activityStatus: deriveActivityStatus(sessionStatus),
+          lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+          typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+        });
       }
     }
-
-    // For disconnected/stopped sessions, synthesize a stub session object
-    items.push({
-      instanceId: dbSession.instance_id,
-      workspaceId: dbSession.workspace_id,
-      workspaceDirectory,
-      workspaceDisplayName,
-      isolationStrategy,
-      sourceDirectory,
-      sessionStatus,
-      session: {
-        id: dbSession.opencode_session_id,
-        title: dbSession.title,
-        directory: dbSession.directory,
-        projectID: "",
-        version: "0",
-        time: {
-          created: new Date(dbSession.created_at).getTime(),
-          updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
-        },
-      } as Parameters<typeof items.push>[0]["session"],
-      instanceStatus,
-      dbId: dbSession.id,
-      parentSessionId: dbSession.parent_session_id,
-      activityStatus: deriveActivityStatus(sessionStatus),
-      lifecycleStatus: deriveLifecycleStatus(sessionStatus),
-      typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
-    });
   }
 
   return NextResponse.json(items, { status: 200 });
