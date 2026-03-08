@@ -409,12 +409,11 @@ function removeSkill(name, options = {}) {
   if (!(0, import_fs4.existsSync)(skillDir)) {
     throw new Error(`Skill '${name}' is not installed.`);
   }
-  const { rmSync } = require("fs");
-  rmSync(skillDir, { recursive: true, force: true });
+  (0, import_fs4.rmSync)(skillDir, { recursive: true, force: true });
   removeSkillFromAgents(name, cfgPath);
 }
 function addSkillToAgents(skillName, agents, configPath) {
-  let config = readWeaveConfig(configPath) ?? {};
+  const config = readWeaveConfig(configPath) ?? {};
   if (!config.agents) {
     config.agents = {};
   }

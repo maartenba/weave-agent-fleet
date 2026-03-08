@@ -135,7 +135,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 1: Tauri Project Initialization
 
-- [ ] 1. **Initialize Tauri v2 project structure**
+- [x] 1. **Initialize Tauri v2 project structure**
   **What**: Create the `src-tauri/` directory with the standard Tauri v2 project layout. This is NOT done via `npm create tauri-app` (which scaffolds a new project). Instead, manually create the required files to add Tauri to the existing Next.js project.
   **Files**:
     - `src-tauri/Cargo.toml` — Rust project manifest
@@ -247,7 +247,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   ```
   **Acceptance**: `src-tauri/` directory exists with valid Cargo.toml that compiles (`cargo check` in src-tauri)
 
-- [ ] 2. **Add Tauri npm dependencies and scripts to package.json**
+- [x] 2. **Add Tauri npm dependencies and scripts to package.json**
   **What**: Install `@tauri-apps/cli` as a devDependency and add convenience scripts.
   **Files**: `package.json` — add devDependencies and scripts
   **Implementation notes**:
@@ -266,13 +266,13 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Note: `@tauri-apps/plugin-shell`, `@tauri-apps/plugin-updater`, `@tauri-apps/plugin-process` are NOT needed as npm packages since we don't invoke Tauri APIs from the frontend JS — all Tauri plugin usage is in Rust only.
   **Acceptance**: `npx tauri info` runs and shows project information
 
-- [ ] 3. **Generate app icons**
+- [x] 3. **Generate app icons**
   **What**: Use `cargo tauri icon` to generate platform-specific icons from the existing `public/weave_logo.png`. Tauri needs icons in specific sizes and formats (`.ico`, `.icns`, `.png`).
   **Files**:
     - `src-tauri/icons/` — generated icon files (32x32.png, 128x128.png, 128x128@2x.png, icon.icns, icon.ico)
   **Acceptance**: Icon files exist in `src-tauri/icons/` and are referenced in `tauri.conf.json`
 
-- [ ] 4. **Add `src-tauri/` to .gitignore (selective)**
+- [x] 4. **Add `src-tauri/` to .gitignore (selective)**
   **What**: Add Rust build artifacts to `.gitignore` but keep source files tracked.
   **Files**: `.gitignore` — add Tauri-specific ignores
   **Implementation notes**:
@@ -290,7 +290,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 2: Sidecar Setup
 
-- [ ] 5. **Create the Tauri pre-build script (`scripts/tauri-prebuild.mjs`)**
+- [x] 5. **Create the Tauri pre-build script (`scripts/tauri-prebuild.mjs`)**
   **What**: A Node.js script that runs before `tauri build`. It:
     1. Runs `next build` to produce the standalone output
     2. Runs the existing assemble-standalone script to copy static assets, public/, better-sqlite3 addon
@@ -322,7 +322,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
   **Acceptance**: After running the script, `src-tauri/binaries/node-<triple>[.exe]` exists and is executable; `.next/standalone/` is assembled; Node.js binary checksum is verified
 
-- [ ] 6. **Configure resource bundling for standalone app in `tauri.conf.json`**
+- [x] 6. **Configure resource bundling for standalone app in `tauri.conf.json`**
   **What**: The `bundle.resources` field in `tauri.conf.json` must map the assembled standalone directory into the app bundle. The assembled standalone directory contains: `server.js`, `.next/static/`, `public/`, `node_modules/`, `cli.js`, `VERSION`.
   **Files**: `src-tauri/tauri.conf.json` — configure `bundle.resources`
   **Implementation notes**:
@@ -349,7 +349,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 3: Rust Main Process — Sidecar Lifecycle
 
-- [ ] 7. **Implement port discovery in Rust**
+- [x] 7. **Implement port discovery in Rust**
   **What**: Write a function in `src-tauri/src/lib.rs` that finds a free TCP port for the sidecar to bind to. Bind to port 0 via `std::net::TcpListener` (no external crate needed).
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -362,7 +362,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Store the port in Tauri managed state so it's accessible from commands and the tray menu updater.
   **Acceptance**: Function reliably returns a port that is not in use
 
-- [ ] 8. **Implement sidecar spawning and lifecycle management**
+- [x] 8. **Implement sidecar spawning and lifecycle management**
   **What**: In the Tauri `setup()` hook, spawn the Node.js sidecar with the correct arguments and environment variables. The sidecar command is:
   ```
   node <resource_dir>/app/server.js
@@ -425,7 +425,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   **Key consideration**: The sidecar must be killed when the Tauri app exits. Use `on_event` to handle `tauri::RunEvent::ExitRequested` and kill the child process.
   **Acceptance**: The sidecar starts, binds to the expected port, and logs output. It stops when the app closes.
 
-- [ ] 9. **Implement health check and webview URL loading**
+- [x] 9. **Implement health check and webview URL loading**
   **What**: After spawning the sidecar, poll `http://127.0.0.1:<port>/api/version` until it returns 200 (or timeout after 30s). Once healthy, navigate the webview to `http://127.0.0.1:<port>`.
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -473,7 +473,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Track restart count; cap at 3 attempts.
   **Acceptance**: If the sidecar is manually killed, the app restarts it and continues working
 
-- [ ] 11. **Handle app shutdown — kill sidecar on exit**
+- [x] 11. **Handle app shutdown — kill sidecar on exit**
   **What**: Ensure the sidecar Node.js process is terminated when the Tauri app exits. Use the `on_event` handler with `RunEvent::ExitRequested` and `RunEvent::Exit`.
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -494,7 +494,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 4: System Tray
 
-- [ ] 12. **Create system tray with menu**
+- [x] 12. **Create system tray with menu**
   **What**: Add a system tray icon with a context menu containing: "Show/Hide Window", a separator, "Agents: N active" (disabled info item), a separator, and "Quit". The tray icon uses the app icon.
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -550,7 +550,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   ```
   **Acceptance**: Tray icon appears on all platforms; menu items work
 
-- [ ] 13. **Implement minimize-to-tray on window close**
+- [x] 13. **Implement minimize-to-tray on window close**
   **What**: Override the window close behavior so that clicking the close button minimizes to tray instead of quitting. Only "Quit" from the tray menu or keyboard shortcut actually exits.
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -568,7 +568,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Update the "Show/Hide" menu item text dynamically when the window visibility changes.
   **Acceptance**: Clicking the close button hides the window to tray; the app keeps running
 
-- [ ] 14. **Implement agent count polling for tray menu**
+- [x] 14. **Implement agent count polling for tray menu**
   **What**: Periodically (every 10 seconds) poll `http://127.0.0.1:<port>/api/fleet/summary` from Rust to get active agent count. Update the tray tooltip and menu item text to "Agents: N active".
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -613,7 +613,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 5: Single Instance & Auto-Updater
 
-- [ ] 15. **Configure single-instance plugin**
+- [x] 15. **Configure single-instance plugin**
   **What**: Prevent multiple instances of the app from running simultaneously. When a second instance is launched, focus the first instance's window instead.
   **Files**: `src-tauri/src/lib.rs`, `src-tauri/Cargo.toml`
   **Implementation notes**:
@@ -641,7 +641,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   - Add the public key string to `tauri.conf.json` `plugins.updater.pubkey`
   **Acceptance**: Keypair exists; public key is in config
 
-- [ ] 17. **Configure auto-updater plugin**
+- [x] 17. **Configure auto-updater plugin**
   **What**: Initialize the updater plugin in the Rust setup. Configure it to check for updates on startup and optionally show a notification to the user.
   **Files**: `src-tauri/src/lib.rs`
   **Implementation notes**:
@@ -672,7 +672,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 6: Build Pipeline & CI
 
-- [ ] 18. **Create the Tauri build script (`scripts/tauri-prebuild.mjs`) — detailed implementation**
+- [x] 18. **Create the Tauri build script (`scripts/tauri-prebuild.mjs`) — detailed implementation**
   **What**: Full implementation of the pre-build script from TODO #5. This script is the bridge between the Next.js build and the Tauri build.
   **Files**: `scripts/tauri-prebuild.mjs` — new file
   **Implementation notes**:
@@ -704,7 +704,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
   **Acceptance**: Running `node scripts/tauri-prebuild.mjs` produces all required artifacts
 
-- [ ] 19. **Create GitHub Actions workflow for Tauri desktop releases**
+- [x] 19. **Create GitHub Actions workflow for Tauri desktop releases**
   **What**: Add `.github/workflows/release-desktop.yml` — a new workflow that builds the Tauri desktop app for all platforms. Triggered by tags matching `desktop-v*` (separate from the existing `v*` tags for standalone releases).
   **Files**: `.github/workflows/release-desktop.yml` — new file
   **Implementation notes**:
@@ -752,7 +752,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   **Note**: The existing `release.yml` workflow (triggered by `v*` tags) continues to produce standalone releases. Desktop releases use a different tag pattern.
   **Acceptance**: Pushing a `desktop-v*` tag produces GitHub Release with .msi, .dmg, .AppImage, and `latest.json`
 
-- [ ] 20. **Configure `tauri-action` to generate updater JSON**
+- [x] 20. **Configure `tauri-action` to generate updater JSON**
   **What**: Ensure the `tauri-action` in the CI workflow generates `latest.json` and uploads it as a release asset. This is the file the updater plugin fetches to check for updates.
   **Files**: `.github/workflows/release-desktop.yml`
   **Implementation notes**:
@@ -776,7 +776,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 7: Dev Experience
 
-- [ ] 21. **Configure Tauri dev mode**
+- [x] 21. **Configure Tauri dev mode**
   **What**: Set up the `tauri dev` command to work with the existing Next.js dev server. In dev mode, no sidecar is needed — the webview points directly at the Next.js dev server on `http://localhost:3000`.
   **Files**: `src-tauri/tauri.conf.json`
   **Implementation notes**:
@@ -805,7 +805,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   In dev mode, the webview loads `devUrl` directly — no sidecar management needed.
   **Acceptance**: `npm run tauri:dev` opens a native window showing the Next.js dev server; hot reload works
 
-- [ ] 22. **Create a development-only Tauri capability for dev tools**
+- [x] 22. **Create a development-only Tauri capability for dev tools**
   **What**: In development, enable Chrome DevTools in the webview for debugging.
   **Files**: `src-tauri/capabilities/default.json`
   **Implementation notes**:
@@ -829,7 +829,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 8: Cross-Platform Considerations
 
-- [ ] 23. **Handle Windows-specific concerns**
+- [x] 23. **Handle Windows-specific concerns**
   **What**: Address Windows-specific issues:
     - `.exe` extension for the Node.js sidecar binary
     - MSI installer configuration via Wix
@@ -855,7 +855,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Both MSI (Wix) and NSIS installer formats are produced by default. NSIS is preferred for the updater (`installMode: "passive"` for background updates).
   **Acceptance**: Windows build produces an .msi and/or .exe installer that installs and runs correctly
 
-- [ ] 24. **Handle macOS-specific concerns**
+- [x] 24. **Handle macOS-specific concerns**
   **What**: Address macOS-specific issues:
     - App bundle structure (.app)
     - Code signing and notarization (required for distribution without Gatekeeper warnings)
@@ -877,7 +877,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   Code signing is optional for the initial release — it can be added later.
   **Acceptance**: macOS build produces a .dmg that installs and runs correctly
 
-- [ ] 25. **Handle Linux-specific concerns**
+- [x] 25. **Handle Linux-specific concerns**
   **What**: Address Linux-specific issues:
     - AppImage format for distribution
     - System dependencies: `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `patchelf`
@@ -897,7 +897,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
 
 ### Phase 9: Version Synchronization & Final Integration
 
-- [ ] 26. **Synchronize version numbers between package.json and tauri.conf.json**
+- [x] 26. **Synchronize version numbers between package.json and tauri.conf.json**
   **What**: Ensure the version in `src-tauri/tauri.conf.json` stays in sync with `package.json`. Either:
     - (a) Read from `package.json` at build time and inject into the Tauri config
     - (b) Use a script to update both files simultaneously
@@ -913,7 +913,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   ```
   **Acceptance**: `tauri.conf.json` version always matches `package.json` version at build time
 
-- [ ] 27. **Handle `OPENCODE_BIN` and `opencode` CLI in Tauri context**
+- [x] 27. **Handle `OPENCODE_BIN` and `opencode` CLI in Tauri context**
   **What**: The standalone `launcher.cmd`/`launcher.sh` checks for the `opencode` CLI on PATH. In the Tauri desktop app, the same requirement exists — `opencode` must be available for the sidecar to spawn agent sessions. The Tauri app should:
     1. Check if `opencode` is on PATH
     2. If not, show a dialog or notification to the user
@@ -935,7 +935,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   This is a best-effort check — don't block startup, just warn.
   **Acceptance**: App shows a warning if `opencode` is not on PATH
 
-- [ ] 28. **Write the complete `src-tauri/src/lib.rs` integrating all components**
+- [x] 28. **Write the complete `src-tauri/src/lib.rs` integrating all components**
   **What**: Combine all the Rust components (port discovery, sidecar lifecycle, health check, system tray, single instance, updater, close-to-tray) into the final `lib.rs`. This is the integration step.
   **Files**: `src-tauri/src/lib.rs` — final implementation
   **Implementation notes**:
@@ -972,7 +972,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   4. `on_event`: kill sidecar on `RunEvent::Exit`
   **Acceptance**: The complete app lifecycle works end-to-end
 
-- [ ] 29. **Update `.gitignore` with all Tauri artifacts**
+- [x] 29. **Update `.gitignore` with all Tauri artifacts**
   **What**: Ensure all generated/downloaded Tauri artifacts are properly ignored.
   **Files**: `.gitignore`
   **Implementation notes**:
@@ -988,7 +988,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   **Note**: `src-tauri/Cargo.lock` must NOT be in `.gitignore` — it should be committed for reproducible builds.
   **Acceptance**: `git status` is clean after a build (except Cargo.lock which should be tracked)
 
-- [ ] 30. **End-to-end verification**
+- [x] 30. **End-to-end verification**
   **What**: Verify the complete workflow works on at least one platform:
   1. `node scripts/tauri-prebuild.mjs` succeeds
   2. `npx tauri build` produces an installer
@@ -1001,9 +1001,9 @@ A build script downloads the correct Node.js binary and renames it before `cargo
   **Acceptance**: All checks pass on the development machine
 
 ## Verification
-- [ ] `npm run build` (standalone Next.js build) still works
-- [ ] `npm run build:standalone` still works (assemble standalone)
-- [ ] `npx tauri build` produces platform-specific installers
+- [x] `npm run build` (standalone Next.js build) still works
+- [x] `npm run build:standalone` still works (assemble standalone)
+- [x] `npx tauri build` produces platform-specific installers
 - [ ] Desktop app launches, sidecar starts, UI loads
 - [ ] SSE events (session events, notifications) work in the webview
 - [ ] System tray: icon visible, menu works, show/hide, quit

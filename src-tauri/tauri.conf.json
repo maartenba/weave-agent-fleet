@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Weave Fleet",
+  "version": "0.7.2",
+  "identifier": "io.tryweave.fleet",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "",
+    "frontendDist": "./frontend-dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "dangerousDisableAssetCspModification": true
+    },
+    "windows": [
+      {
+        "title": "Weave Fleet",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "visible": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/node"
+    ],
+    "resources": {
+      "../src-tauri/app-bundle/": "app/"
+    },
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/pgermishuys/weave-agent-fleet/releases/download/desktop-v__VERSION__/latest.json"
+      ]
+    }
+  }
+}

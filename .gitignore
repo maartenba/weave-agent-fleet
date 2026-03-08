@@ -46,3 +46,10 @@ weave-fleet-*.tar.gz
 weave-fleet-*.tar.gz.sha256
 weave-fleet-*.zip
 weave-fleet-*.zip.sha256
+
+# Tauri
+/src-tauri/target/
+/src-tauri/binaries/
+/src-tauri/frontend-dist/
+/src-tauri/app-bundle/
+/src-tauri/gen/
