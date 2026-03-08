@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  ChevronRight,
   LayoutGrid,
   Bell,
   History,
@@ -17,11 +16,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -29,7 +23,6 @@ import {
 import { useNotifications } from "@/contexts/notifications-context";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
   useSidebar,
   SIDEBAR_COLLAPSED_WIDTH,
@@ -38,8 +31,6 @@ import {
 } from "@/contexts/sidebar-context";
 import { useSidebarResize } from "@/hooks/use-sidebar-resize";
 import { SidebarWorkspaceItem } from "@/components/layout/sidebar-workspace-item";
-
-const FLEET_EXPANDED_KEY = "weave:sidebar:fleet-expanded";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -54,11 +45,6 @@ export function Sidebar() {
     isResizing,
     setIsResizing,
   } = useSidebar();
-  const [fleetExpanded, setFleetExpanded] = usePersistedState<boolean>(
-    FLEET_EXPANDED_KEY,
-    true
-  );
-
   const treeRef = useRef<HTMLDivElement>(null);
 
   const handleResizeStart = useCallback(() => {
@@ -120,38 +106,21 @@ export function Sidebar() {
         }
         case "ArrowRight": {
           e.preventDefault();
-          // If focused item is a treeitem that is collapsed, expand it
+          // Move to first child item
           if (focused?.getAttribute("role") === "treeitem") {
-            const expanded = focused.getAttribute("aria-expanded");
-            if (expanded === "false") {
-              const trigger = focused.querySelector<HTMLElement>(
-                "[data-tree-expand]"
-              );
-              trigger?.click();
-            } else {
-              // Already expanded — move to first child
-              const next = items[currentIndex + 1];
-              next?.focus();
-            }
+            const next = items[currentIndex + 1];
+            next?.focus();
           }
           break;
         }
         case "ArrowLeft": {
           e.preventDefault();
           if (focused?.getAttribute("role") === "treeitem") {
-            const expanded = focused.getAttribute("aria-expanded");
-            if (expanded === "true") {
-              const trigger = focused.querySelector<HTMLElement>(
-                "[data-tree-expand]"
-              );
-              trigger?.click();
-            } else {
-              // Move to parent (tree root / All Sessions row)
-              const allSessionsRow = tree.querySelector<HTMLElement>(
-                "[data-all-sessions]"
-              );
-              allSessionsRow?.focus();
-            }
+            // Move to parent (tree root / All Sessions row)
+            const allSessionsRow = tree.querySelector<HTMLElement>(
+              "[data-all-sessions]"
+            );
+            allSessionsRow?.focus();
           }
           break;
         }
@@ -237,8 +206,8 @@ export function Sidebar() {
             <TooltipContent side="right">Fleet</TooltipContent>
           </Tooltip>
         ) : (
-          /* Expanded: full collapsible tree */
-          <Collapsible open={fleetExpanded} onOpenChange={setFleetExpanded}>
+          /* Expanded: static Fleet heading + workspace tree */
+          <>
             {/* Fleet header row */}
             <div
               className={cn(
@@ -248,21 +217,6 @@ export function Sidebar() {
                   : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
               )}
             >
-              {/* Expand/collapse chevron */}
-              <CollapsibleTrigger asChild>
-                <button
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
-                  aria-label={fleetExpanded ? "Collapse Fleet" : "Expand Fleet"}
-                >
-                  <ChevronRight
-                    className={cn(
-                      "h-4 w-4 transition-transform duration-150",
-                      fleetExpanded && "rotate-90"
-                    )}
-                  />
-                </button>
-              </CollapsibleTrigger>
-
               {/* All Sessions link */}
               <Link
                 href="/"
@@ -285,36 +239,34 @@ export function Sidebar() {
             </div>
 
             {/* Workspace tree */}
-            <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 transition-all">
-              <div
-                ref={treeRef}
-                role="tree"
-                aria-label="Workspaces"
-                onKeyDown={handleTreeKeyDown}
-                className="mt-0.5 space-y-0.5"
-              >
-                {error ? (
-                  <div className="flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs text-destructive">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    <span>Failed to load</span>
-                  </div>
-                ) : workspaces.length === 0 ? (
-                  <p className="pl-8 pr-3 py-1.5 text-xs text-muted-foreground">
-                    No workspaces yet
-                  </p>
-                ) : (
-                  workspaces.map((group) => (
-                    <SidebarWorkspaceItem
-                      key={group.workspaceDirectory}
-                      group={group}
-                      activeSessionPath={pathname}
-                      refetch={refetch}
-                    />
-                  ))
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+            <div
+              ref={treeRef}
+              role="tree"
+              aria-label="Workspaces"
+              onKeyDown={handleTreeKeyDown}
+              className="mt-0.5 space-y-0.5"
+            >
+              {error ? (
+                <div className="flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>Failed to load</span>
+                </div>
+              ) : workspaces.length === 0 ? (
+                <p className="pl-8 pr-3 py-1.5 text-xs text-muted-foreground">
+                  No workspaces yet
+                </p>
+              ) : (
+                workspaces.map((group) => (
+                  <SidebarWorkspaceItem
+                    key={group.workspaceDirectory}
+                    group={group}
+                    activeSessionPath={pathname}
+                    refetch={refetch}
+                  />
+                ))
+              )}
+            </div>
+          </>
         )}
 
         {/* Alerts */}

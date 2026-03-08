@@ -3,14 +3,9 @@
 import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronRight, Pencil, Pin, Plus, Trash2 } from "lucide-react";
+import { Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Tooltip,
   TooltipContent,
@@ -59,7 +54,6 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
   const { openDirectory } = useOpenDirectory();
   const [, setPreferredTool] = usePreferredOpenTool();
 
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
 
@@ -110,11 +104,8 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
     <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <Collapsible
-          open={isExpanded}
-          onOpenChange={setIsExpanded}
+        <div
           role="treeitem"
-          aria-expanded={isExpanded}
           aria-label={group.displayName}
           tabIndex={0}
           className="focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-md"
@@ -122,30 +113,12 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
           {/* Workspace row */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors cursor-pointer",
+              "flex items-center gap-2 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors",
               isActiveWorkspace
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
             )}
           >
-            {/* Expand chevron */}
-            <CollapsibleTrigger asChild>
-              <button
-                data-tree-expand
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronRight
-                  className={cn(
-                    "h-3 w-3 transition-transform duration-150",
-                    isExpanded && "rotate-90"
-                  )}
-                />
-              </button>
-            </CollapsibleTrigger>
-
             {/* Display name with tooltip for full path */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -190,30 +163,28 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
             />
           </div>
 
-          {/* Expanded session list with animation */}
-          <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 transition-all">
-            <div className="space-y-0.5 mt-0.5" role="group">
-              {nestSessions(group.sessions).map(({ item, children }) => (
-                <div key={`${item.instanceId}-${item.session.id}`}>
+          {/* Session list — always visible */}
+          <div className="space-y-0.5 mt-0.5" role="group">
+            {nestSessions(group.sessions).map(({ item, children }) => (
+              <div key={`${item.instanceId}-${item.session.id}`}>
+                <SidebarSessionItem
+                  item={item}
+                  isActive={activeSessionPath === `/sessions/${item.session.id}`}
+                  refetch={refetch}
+                />
+                {children.map((child) => (
                   <SidebarSessionItem
-                    item={item}
-                    isActive={activeSessionPath === `/sessions/${item.session.id}`}
+                    key={`${child.instanceId}-${child.session.id}`}
+                    item={child}
+                    isActive={activeSessionPath === `/sessions/${child.session.id}`}
+                    isChild
                     refetch={refetch}
                   />
-                  {children.map((child) => (
-                    <SidebarSessionItem
-                      key={`${child.instanceId}-${child.session.id}`}
-                      item={child}
-                      isActive={activeSessionPath === `/sessions/${child.session.id}`}
-                      isChild
-                      refetch={refetch}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
       </ContextMenuTrigger>
 
       <ContextMenuContent>
