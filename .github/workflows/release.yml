@@ -274,7 +274,7 @@ jobs:
             args: '--target x86_64-apple-darwin'
             rust_target: x86_64-apple-darwin
           - platform: ubuntu-22.04
-            args: ''
+            args: '--bundles deb,rpm'
             rust_target: ''
           - platform: windows-latest
             args: ''
@@ -323,7 +323,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPIMAGE_EXTRACT_AND_RUN: 1
         with:
           releaseId: ${{ needs.release.outputs.release_id }}
           tagName: ${{ github.ref_name }}
