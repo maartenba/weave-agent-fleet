@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { patchActivityStatus, activityToSessionStatus } from "@/contexts/sessions-context";
+import type { SessionActivityStatus } from "@/lib/types";
+import { patchActivityStatus, activityToSessionStatus, pruneStalePatches } from "@/contexts/sessions-context";
 import type { SessionListItem } from "@/lib/api-types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,5 +94,80 @@ describe("patchActivityStatus", () => {
     // Unchanged sessions retain same object references
     expect(result[0]).toBe(sessions[0]);
     expect(result[2]).toBe(sessions[2]);
+  });
+});
+
+// ─── pruneStalePatches ────────────────────────────────────────────────────────
+
+describe("pruneStalePatches", () => {
+  it("ReturnsSameMapWhenPatchesAreEmpty", () => {
+    const patches = new Map<string, SessionActivityStatus>();
+    const sessions = [makeSession("sess-1")];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result).toBe(patches);
+  });
+
+  it("KeepsPatchWhenPolledStatusDiffersFromPatch", () => {
+    const patches = new Map<string, SessionActivityStatus>([
+      ["sess-1", "busy"],
+    ]);
+    const sessions = [makeSession("sess-1", { activityStatus: "idle" })];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result.size).toBe(1);
+    expect(result.get("sess-1")).toBe("busy");
+  });
+
+  it("PrunesPatchWhenPolledStatusMatchesPatch", () => {
+    const patches = new Map<string, SessionActivityStatus>([
+      ["sess-1", "busy"],
+    ]);
+    const sessions = [makeSession("sess-1", { activityStatus: "busy" })];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result.size).toBe(0);
+  });
+
+  it("PrunesPatchWhenSessionNotInPollResults", () => {
+    const patches = new Map<string, SessionActivityStatus>([
+      ["sess-deleted", "busy"],
+    ]);
+    const sessions = [makeSession("sess-1")];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result.size).toBe(0);
+  });
+
+  it("HandlesMultiplePatchesWithMixedOutcomes", () => {
+    const patches = new Map<string, SessionActivityStatus>([
+      ["sess-1", "busy"],           // poll says idle → keep
+      ["sess-2", "idle"],           // poll says idle → prune (matches)
+      ["sess-3", "waiting_input"],  // not in poll → prune
+    ]);
+    const sessions = [
+      makeSession("sess-1", { activityStatus: "idle" }),
+      makeSession("sess-2", { activityStatus: "idle" }),
+    ];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result.size).toBe(1);
+    expect(result.get("sess-1")).toBe("busy");
+    expect(result.has("sess-2")).toBe(false);
+    expect(result.has("sess-3")).toBe(false);
+  });
+
+  it("PrunesAllPatchesWhenAllMatchPolledStatus", () => {
+    const patches = new Map<string, SessionActivityStatus>([
+      ["sess-1", "busy"],
+      ["sess-2", "idle"],
+    ]);
+    const sessions = [
+      makeSession("sess-1", { activityStatus: "busy" }),
+      makeSession("sess-2", { activityStatus: "idle" }),
+    ];
+    const result = pruneStalePatches(patches, sessions);
+
+    expect(result.size).toBe(0);
   });
 });

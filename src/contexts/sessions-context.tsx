@@ -68,6 +68,29 @@ export function patchActivityStatus(
   return updated;
 }
 
+/**
+ * Prune SSE patches that the poll has caught up with.
+ * Keeps patches where the polled status differs (SSE is still ahead of the poll).
+ * Drops patches where the poll already matches or the session is no longer in the poll results.
+ */
+export function pruneStalePatches(
+  patches: Map<string, SessionActivityStatus>,
+  polledSessions: SessionListItem[]
+): Map<string, SessionActivityStatus> {
+  if (patches.size === 0) return patches;
+
+  const remaining = new Map<string, SessionActivityStatus>();
+  for (const [sessionId, patchedStatus] of patches) {
+    const polled = polledSessions.find((s) => s.session.id === sessionId);
+    // Keep patch only if polled status doesn't match (SSE is still ahead)
+    if (polled && polled.activityStatus !== patchedStatus) {
+      remaining.set(sessionId, patchedStatus);
+    }
+    // If session not in poll results, drop the patch (session may be deleted)
+  }
+  return remaining;
+}
+
 export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const { sessions: polledSessions, isLoading, error, refetch } = useSessions(5000);
   const { summary } = useFleetSummary(10000);
@@ -116,11 +139,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   }, [sse]);
 
   // Merge polled sessions with any pending SSE patches.
-  // Clear patches when polled data changes (poll is the source of truth).
+  // Prune patches that the poll has caught up with (instead of clearing all).
   const sessions = useMemo(() => {
     if (lastPolledRef.current !== polledSessions) {
       lastPolledRef.current = polledSessions;
-      ssePatchesRef.current = new Map();
+      // Smart pruning: only drop patches where the poll has caught up
+      ssePatchesRef.current = pruneStalePatches(ssePatchesRef.current, polledSessions);
     }
 
     const patches = ssePatchesRef.current;

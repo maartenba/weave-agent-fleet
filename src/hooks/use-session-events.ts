@@ -6,6 +6,7 @@ import type {
   SSEEvent,
 } from "@/lib/api-types";
 import { apiFetch, sseUrl } from "@/lib/api-client";
+import { fetchSessionStatus } from "@/lib/session-status-utils";
 import {
   ensureMessage,
   mergeMessageUpdate,
@@ -162,6 +163,16 @@ export function useSessionEvents(
     }
   }, [sessionId, instanceId, paginationLoadInitial]);
 
+  /**
+   * Fetch the current session status from the API (one-shot).
+   * Used on connect/reconnect to initialize sessionStatus from live state.
+   */
+  const loadSessionStatus = useCallback(async (): Promise<void> => {
+    if (!sessionId || !instanceId) return;
+    const status = await fetchSessionStatus(sessionId, instanceId);
+    if (isMounted.current) setSessionStatus(status);
+  }, [sessionId, instanceId]);
+
   const connect = useCallback(() => {
     if (!isMounted.current) return;
 
@@ -178,18 +189,21 @@ export function useSessionEvents(
       if (hasConnectedOnce.current) {
         // Reconnect after a drop — load only the gap since last known message
         setStatus("recovering");
-        loadMessagesSince(lastMessageIdRef.current).then(() => {
+        void Promise.all([
+          loadMessagesSince(lastMessageIdRef.current),
+          loadSessionStatus(),
+        ]).then(() => {
           if (isMounted.current) {
             setStatus("connected");
             setError(undefined);
           }
         });
       } else {
-        // First connect — load initial batch (paginated)
+        // First connect — load initial batch (paginated) + current status
         hasConnectedOnce.current = true;
         setStatus("connected");
         setError(undefined);
-        loadInitialMessages();
+        void Promise.all([loadInitialMessages(), loadSessionStatus()]);
       }
     };
 
@@ -225,7 +239,7 @@ export function useSessionEvents(
         return next;
       });
     };
-  }, [sessionId, instanceId, loadMessagesSince, loadInitialMessages]);
+  }, [sessionId, instanceId, loadMessagesSince, loadInitialMessages, loadSessionStatus]);
 
   useEffect(() => {
     connectRef.current = connect;
