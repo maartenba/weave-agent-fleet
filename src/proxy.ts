@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * CORS middleware for API routes.
+ * CORS proxy for API routes.
  *
  * Adds permissive CORS headers to all `/api/` responses so the frontend
  * can be served from a different origin (e.g. Tauri webview or a separate
@@ -16,7 +16,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Preflight requests — respond immediately with 204
   if (request.method === "OPTIONS") {
     return new NextResponse(null, {
