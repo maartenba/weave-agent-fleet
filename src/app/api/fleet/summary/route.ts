@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
 import { getSessionStatusCounts } from "@/lib/server/db-repository";
+import type { FleetSummaryResponse } from "@/lib/api-types";
 
-export interface FleetSummaryResponse {
-  activeSessions: number;
-  idleSessions: number;
-  totalTokens: number;
-  totalCost: number;
-  queuedTasks: number;
-}
+export type { FleetSummaryResponse };
 
 // GET /api/fleet/summary — compute real aggregate stats from the database
 export async function GET(): Promise<NextResponse> {

@@ -5,6 +5,7 @@ import { Loader2, FolderOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useConfig } from "@/hooks/use-config";
+import { apiFetch } from "@/lib/api-client";
 
 interface VersionInfo {
   version: string;
@@ -19,7 +20,7 @@ export function AboutTab() {
   const [versionLoading, setVersionLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/version")
+    apiFetch("/api/version")
       .then((res) => res.json())
       .then(setVersionInfo)
       .catch(() => {})

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 interface InstalledSkill {
   name: string;
@@ -42,7 +43,7 @@ export function useConfig() {
     try {
       setIsLoading(true);
       setError(null);
-      const res = await fetch("/api/config");
+      const res = await apiFetch("/api/config");
       if (!res.ok) {
         throw new Error(`Failed to fetch config: ${res.status}`);
       }
@@ -63,7 +64,7 @@ export function useConfig() {
     async (config: WeaveConfig) => {
       try {
         setError(null);
-        const res = await fetch("/api/config", {
+        const res = await apiFetch("/api/config", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(config),

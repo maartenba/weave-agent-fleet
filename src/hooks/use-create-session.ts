@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { CreateSessionRequest, CreateSessionResponse } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface CreateSessionOptions {
   title?: string;
@@ -34,7 +35,7 @@ export function useCreateSession(): UseCreateSessionResult {
           branch: opts?.branch,
         };
 
-        const response = await fetch("/api/sessions", {
+        const response = await apiFetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

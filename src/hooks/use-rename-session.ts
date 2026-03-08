@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseRenameSessionResult {
   renameSession: (
@@ -25,7 +26,7 @@ export function useRenameSession(): UseRenameSessionResult {
     setError(undefined);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/sessions/${encodeURIComponent(sessionId)}`,
         {
           method: "PATCH",

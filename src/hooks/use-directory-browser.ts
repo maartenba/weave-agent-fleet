@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { DirectoryEntry, DirectoryListResponse } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseDirectoryBrowserResult {
   /** The path currently being browsed (null = showing roots) */
@@ -68,7 +69,7 @@ export function useDirectoryBrowser(enabled = false): UseDirectoryBrowserResult 
 
         const url = `/api/directories${params.toString() ? `?${params.toString()}` : ""}`;
 
-        fetch(url, { signal: controller.signal })
+        apiFetch(url, { signal: controller.signal })
           .then(async (response) => {
             if (!response.ok) {
               const data = await response.json().catch(() => ({}));

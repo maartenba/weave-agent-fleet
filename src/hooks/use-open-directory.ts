@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { usePersistedState } from "./use-persisted-state";
+import { apiFetch } from "@/lib/api-client";
 
 export type OpenTool = "vscode" | "cursor" | "terminal" | "explorer";
 
@@ -21,7 +22,7 @@ export function useOpenDirectory(): UseOpenDirectoryResult {
       setError(undefined);
 
       try {
-        const response = await fetch("/api/open-directory", {
+        const response = await apiFetch("/api/open-directory", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ directory, tool }),

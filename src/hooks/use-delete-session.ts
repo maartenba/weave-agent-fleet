@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseDeleteSessionResult {
   deleteSession: (sessionId: string, instanceId: string) => Promise<void>;
@@ -22,7 +23,7 @@ export function useDeleteSession(): UseDeleteSessionResult {
     try {
       const params = new URLSearchParams({ instanceId, permanent: "true" });
 
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/sessions/${encodeURIComponent(sessionId)}?${params.toString()}`,
         { method: "DELETE" }
       );

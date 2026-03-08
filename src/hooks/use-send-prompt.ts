@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { parseSlashCommand } from "@/lib/slash-command-utils";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseSendPromptResult {
   sendPrompt: (
@@ -30,7 +31,7 @@ export function useSendPrompt(): UseSendPromptResult {
           // command() without awaiting it (fire-and-forget, matching the
           // OpenCode TUI pattern).  The SSE event stream delivers session
           // status changes and streamed messages back to the frontend.
-          const response = await fetch(
+          const response = await apiFetch(
             `/api/sessions/${encodeURIComponent(sessionId)}/command`,
             {
               method: "POST",
@@ -51,7 +52,7 @@ export function useSendPrompt(): UseSendPromptResult {
           }
         } else {
           // Regular prompt — route to promptAsync endpoint.
-          const response = await fetch(
+          const response = await apiFetch(
             `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
             {
               method: "POST",

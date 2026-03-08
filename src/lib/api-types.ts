@@ -209,6 +209,29 @@ export interface DirectoryListResponse {
   roots: string[];
 }
 
+// ─── Fleet Summary ──────────────────────────────────────────────────────────
+
+export interface FleetSummaryResponse {
+  activeSessions: number;
+  idleSessions: number;
+  totalTokens: number;
+  totalCost: number;
+  queuedTasks: number;
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+export interface DbNotification {
+  id: string;
+  type: string;
+  session_id: string | null;
+  instance_id: string | null;
+  pipeline_id: string | null;
+  message: string;
+  read: number; // 0 | 1 (SQLite INTEGER)
+  created_at: string;
+}
+
 // ─── Diff Types ─────────────────────────────────────────────────────────────
 
 /** Mirrors the SDK's FileDiff shape for frontend consumption (decouples frontend from SDK types) */

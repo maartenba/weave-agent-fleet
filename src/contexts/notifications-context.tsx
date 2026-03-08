@@ -10,10 +10,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { DbNotification } from "@/lib/server/db-repository";
+import type { DbNotification } from "@/lib/api-types";
 import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { useGlobalSSE } from "@/hooks/use-global-sse";
+import { apiFetch } from "@/lib/api-client";
 
 export type { DbNotification };
 
@@ -68,7 +69,7 @@ export function NotificationsProvider({
 
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const response = await fetch("/api/notifications/unread-count");
+      const response = await apiFetch("/api/notifications/unread-count");
       if (!response.ok) return;
       const data = (await response.json()) as { count: number };
       if (isMounted.current) setUnreadCount(data.count);
@@ -80,7 +81,7 @@ export function NotificationsProvider({
   const fetchNotifications = useCallback(async (limit: number = 10) => {
     if (isMounted.current) setIsLoading(true);
     try {
-      const response = await fetch(`/api/notifications?limit=${limit}`);
+      const response = await apiFetch(`/api/notifications?limit=${limit}`);
       if (!response.ok) return;
       const data = (await response.json()) as DbNotification[];
       if (isMounted.current) {
@@ -96,7 +97,7 @@ export function NotificationsProvider({
 
   const markAsRead = useCallback(async (id: string) => {
     try {
-      await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+      await apiFetch(`/api/notifications/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ read: true }),
@@ -114,7 +115,7 @@ export function NotificationsProvider({
 
   const markAllAsRead = useCallback(async () => {
     try {
-      await fetch("/api/notifications/all", {
+      await apiFetch("/api/notifications/all", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ read: true }),
@@ -131,7 +132,7 @@ export function NotificationsProvider({
   const clearAll = useCallback(async () => {
     clearingRef.current = true;
     try {
-      await fetch("/api/notifications", { method: "DELETE" });
+      await apiFetch("/api/notifications", { method: "DELETE" });
       if (isMounted.current) {
         setNotifications([]);
         setUnreadCount(0);

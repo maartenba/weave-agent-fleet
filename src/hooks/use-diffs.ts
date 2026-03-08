@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { FileDiffItem } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseDiffsResult {
   diffs: FileDiffItem[];
@@ -27,7 +28,7 @@ export function useDiffs(sessionId: string, instanceId: string): UseDiffsResult 
 
     try {
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/diffs?instanceId=${encodeURIComponent(instanceId)}`;
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

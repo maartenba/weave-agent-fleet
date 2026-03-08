@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseRenameWorkspaceResult {
   renameWorkspace: (
@@ -25,7 +26,7 @@ export function useRenameWorkspace(): UseRenameWorkspaceResult {
     setError(undefined);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}`,
         {
           method: "PATCH",

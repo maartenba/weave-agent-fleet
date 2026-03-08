@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface TerminateSessionOptions {
   cleanupWorkspace?: boolean;
@@ -34,7 +35,7 @@ export function useTerminateSession(): UseTerminateSessionResult {
         params.set("cleanupWorkspace", "true");
       }
 
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/sessions/${encodeURIComponent(sessionId)}?${params.toString()}`,
         { method: "DELETE" }
       );

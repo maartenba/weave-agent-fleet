@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { HistorySession, HistoryResponse } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseSessionHistoryFilters {
   search: string;
@@ -40,7 +41,7 @@ export function useSessionHistory(filters: UseSessionHistoryFilters): UseSession
 
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/sessions/history?${params.toString()}`);
+      const response = await apiFetch(`/api/sessions/history?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

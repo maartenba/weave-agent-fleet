@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseAbortSessionResult {
   abortSession: (
@@ -25,7 +26,7 @@ export function useAbortSession(): UseAbortSessionResult {
     try {
       const params = new URLSearchParams({ instanceId });
 
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/sessions/${encodeURIComponent(sessionId)}/abort?${params.toString()}`,
         { method: "POST" }
       );

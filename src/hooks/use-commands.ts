@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { AutocompleteCommand } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseCommandsResult {
   commands: AutocompleteCommand[];
@@ -37,7 +38,7 @@ export function useCommands(instanceId: string): UseCommandsResult {
 
     async function fetchCommands() {
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/instances/${encodeURIComponent(instanceId)}/commands`,
           { signal: controller.signal }
         );

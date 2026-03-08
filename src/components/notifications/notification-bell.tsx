@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/contexts/notifications-context";
 import { formatRelativeTime } from "@/lib/format-utils";
-import type { DbNotification } from "@/lib/server/db-repository";
+import type { DbNotification } from "@/lib/api-types";
 
 function getNotificationIcon(type: string) {
   switch (type) {

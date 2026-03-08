@@ -12,6 +12,7 @@ import { useSendPrompt } from "@/hooks/use-send-prompt";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAgents } from "@/hooks/use-agents";
 import { useDiffs } from "@/hooks/use-diffs";
+import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Square, RotateCcw, Trash2, ExternalLink, MessageSquare, OctagonX, AlertTriangle, RefreshCw } from "lucide-react";
@@ -118,7 +119,7 @@ export default function SessionDetailPage() {
   useEffect(() => {
     if (!sessionId || !instanceId) return;
     const url = `/api/sessions/${encodeURIComponent(sessionId)}?instanceId=${encodeURIComponent(instanceId)}`;
-    fetch(url)
+    apiFetch(url)
       .then((r) => {
         if (!r.ok) {
           // Instance dead — show resume banner

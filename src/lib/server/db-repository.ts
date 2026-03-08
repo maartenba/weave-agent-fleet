@@ -435,16 +435,10 @@ export function deleteSession(id: string): boolean {
 
 // ─── Notifications ────────────────────────────────────────────────────────────
 
-export interface DbNotification {
-  id: string;
-  type: string;
-  session_id: string | null;
-  instance_id: string | null;
-  pipeline_id: string | null;
-  message: string;
-  read: number; // 0 | 1 (SQLite INTEGER)
-  created_at: string;
-}
+// DbNotification is defined in api-types.ts (shared with frontend).
+// Re-export here so server-side consumers keep working unchanged.
+export type { DbNotification } from "@/lib/api-types";
+import type { DbNotification } from "@/lib/api-types";
 
 export type InsertNotification = Pick<DbNotification, "id" | "type" | "message"> &
   Partial<Pick<DbNotification, "session_id" | "instance_id" | "pipeline_id">>;

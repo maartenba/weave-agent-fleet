@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { FleetSummaryResponse } from "@/app/api/fleet/summary/route";
+import type { FleetSummaryResponse } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export type { FleetSummaryResponse };
 
@@ -23,7 +24,7 @@ export function useFleetSummary(
 
   const fetchSummary = useCallback(async () => {
     try {
-      const response = await fetch("/api/fleet/summary");
+      const response = await apiFetch("/api/fleet/summary");
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

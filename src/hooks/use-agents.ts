@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { AutocompleteAgent } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseAgentsResult {
   agents: AutocompleteAgent[];
@@ -37,7 +38,7 @@ export function useAgents(instanceId: string): UseAgentsResult {
 
     async function fetchAgents() {
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/instances/${encodeURIComponent(instanceId)}/agents`,
           { signal: controller.signal }
         );

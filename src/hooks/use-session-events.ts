@@ -5,6 +5,7 @@ import type {
   AccumulatedMessage,
   SSEEvent,
 } from "@/lib/api-types";
+import { apiFetch, sseUrl } from "@/lib/api-client";
 import {
   ensureMessage,
   mergeMessageUpdate,
@@ -92,7 +93,7 @@ export function useSessionEvents(
     if (!sessionId || !instanceId) return;
     try {
       const url = `/api/sessions/${encodeURIComponent(sessionId)}?instanceId=${encodeURIComponent(instanceId)}`;
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (!response.ok) return;
       const data = await response.json() as {
         messages?: SDKMessage[];
@@ -124,7 +125,7 @@ export function useSessionEvents(
     }
     try {
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages?instanceId=${encodeURIComponent(instanceId)}&after=${encodeURIComponent(afterId)}`;
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (!response.ok) return loadAllMessages(); // fallback
       const data = await response.json() as { messages?: SDKMessage[] };
       if (!data.messages?.length) return; // no gap
@@ -164,7 +165,7 @@ export function useSessionEvents(
   const connect = useCallback(() => {
     if (!isMounted.current) return;
 
-    const url = `/api/sessions/${encodeURIComponent(sessionId)}/events?instanceId=${encodeURIComponent(instanceId)}`;
+    const url = sseUrl(`/api/sessions/${encodeURIComponent(sessionId)}/events?instanceId=${encodeURIComponent(instanceId)}`);
     const es = new EventSource(url);
     eventSourceRef.current = es;
     setStatus("connecting");

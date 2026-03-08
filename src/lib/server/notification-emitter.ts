@@ -10,7 +10,7 @@
  */
 
 import { EventEmitter } from "events";
-import type { DbNotification } from "./db-repository";
+import type { DbNotification } from "@/lib/api-types";
 import type { SessionActivityStatus } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

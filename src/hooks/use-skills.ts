@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 interface InstalledSkill {
   name: string;
@@ -18,7 +19,7 @@ export function useSkills() {
     try {
       setIsLoading(true);
       setError(null);
-      const res = await fetch("/api/skills");
+      const res = await apiFetch("/api/skills");
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
       }
@@ -39,7 +40,7 @@ export function useSkills() {
     async (options: { url?: string; content?: string; agents?: string[] }) => {
       try {
         setError(null);
-        const res = await fetch("/api/skills", {
+        const res = await apiFetch("/api/skills", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(options),
@@ -62,7 +63,7 @@ export function useSkills() {
     async (name: string) => {
       try {
         setError(null);
-        const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
+        const res = await apiFetch(`/api/skills/${encodeURIComponent(name)}`, {
           method: "DELETE",
         });
         if (!res.ok) {

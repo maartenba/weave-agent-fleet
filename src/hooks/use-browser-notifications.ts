@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { usePersistedState } from "./use-persisted-state";
-import type { DbNotification } from "@/lib/server/db-repository";
+import type { DbNotification } from "@/lib/api-types";
 
 export type NotificationPermissionState = "default" | "granted" | "denied";
 

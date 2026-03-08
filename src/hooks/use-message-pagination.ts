@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import type { AccumulatedMessage } from "@/lib/api-types";
 import { convertSDKMessageToAccumulated } from "@/lib/pagination-utils";
 import type { SDKMessage } from "@/lib/pagination-utils";
+import { apiFetch } from "@/lib/api-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ export function useMessagePagination(): UseMessagePaginationReturn {
     ): Promise<AccumulatedMessage[]> => {
       try {
         const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages?instanceId=${encodeURIComponent(instanceId)}&limit=${DEFAULT_PAGE_SIZE}`;
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         if (!response.ok) {
           setLoadError("Failed to load initial messages");
           return [];
@@ -111,7 +112,7 @@ export function useMessagePagination(): UseMessagePaginationReturn {
         }
 
         const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages?${params.toString()}`;
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         if (!response.ok) {
           // Don't change hasMore on error — allow retry
           setLoadError("Failed to load older messages");

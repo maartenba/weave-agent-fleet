@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { ResumeSessionResponse } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseResumeSessionResult {
   resumeSession: (sessionId: string) => Promise<ResumeSessionResponse>;
@@ -21,7 +22,7 @@ export function useResumeSession(): UseResumeSessionResult {
     setError(undefined);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/sessions/${encodeURIComponent(sessionId)}/resume`,
         { method: "POST" }
       );

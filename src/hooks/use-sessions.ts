@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SessionListItem } from "@/lib/api-types";
+import { apiFetch } from "@/lib/api-client";
 import { sessionsChanged } from "@/lib/session-utils";
 
 export interface UseSessionsResult {
@@ -23,7 +24,7 @@ export function useSessions(
 
   const fetchSessions = useCallback(async () => {
     try {
-      const response = await fetch("/api/sessions");
+      const response = await apiFetch("/api/sessions");
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

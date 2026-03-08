@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface UseFindFilesResult {
   files: string[];
@@ -45,7 +46,7 @@ export function useFindFiles(instanceId: string, query: string): UseFindFilesRes
       setError(undefined);
 
       const url = `/api/instances/${encodeURIComponent(instanceId)}/find/files?query=${encodeURIComponent(trimmedQuery)}`;
-      fetch(url, { signal: controller.signal })
+      apiFetch(url, { signal: controller.signal })
         .then(async (response) => {
           if (!response.ok) {
             const data = await response.json().catch(() => ({}));
