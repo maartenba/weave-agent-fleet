@@ -110,6 +110,7 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
   const handleResume = useCallback(async () => {
     try {
       const result = await resumeSession(session.id);
+      refetch();
       router.push(
         `/sessions/${encodeURIComponent(result.session.id)}?instanceId=${encodeURIComponent(result.instanceId)}`
       );
@@ -145,7 +146,7 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
             {isChild && <span className="text-muted-foreground/50 text-[10px] shrink-0">↳</span>}
             <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sessionStatusDot}`} />
             {ConnectionIcon && (
-              <span title={connectionTooltip ?? undefined} className="text-muted-foreground shrink-0">
+              <span title={connectionTooltip ?? undefined} className="text-muted-foreground shrink-0 pointer-events-none">
                 <ConnectionIcon className="h-2.5 w-2.5" />
               </span>
             )}
