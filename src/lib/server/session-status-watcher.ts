@@ -23,7 +23,10 @@
 import {
   getSessionByOpencodeId,
   updateSessionStatus,
+  getSession,
+  getActiveChildSessions,
 } from "./db-repository";
+import type { DbSession } from "./db-repository";
 import { getInstance } from "./process-manager";
 import { getClientForInstance } from "./opencode-client";
 import { emitActivityStatus } from "./notification-emitter";
@@ -50,6 +53,60 @@ function getWatchers(): Map<string, InstanceWatcher> {
   return _g.__weaveSessionStatusWatchers;
 }
 
+// ─── Parent Status Propagation ────────────────────────────────────────────────
+
+const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
+
+/**
+ * After a child session changes status, propagate the effect to the parent.
+ * - Child became busy → parent should be busy (it's waiting on a child)
+ * - Child became idle → check if parent has other active children; if none, parent is idle
+ */
+function propagateToParent(
+  childDbSession: DbSession,
+  childNewStatus: "busy" | "idle",
+): void {
+  if (!childDbSession.parent_session_id) return;
+
+  try {
+    const parentDbSession = getSession(childDbSession.parent_session_id);
+    if (!parentDbSession || TERMINAL_STATUSES.includes(parentDbSession.status)) return;
+
+    if (childNewStatus === "busy") {
+      // Child is busy → parent should show as busy (waiting on child)
+      if (parentDbSession.status !== "active") {
+        updateSessionStatus(parentDbSession.id, "active");
+        emitActivityStatus({
+          sessionId: parentDbSession.opencode_session_id,
+          instanceId: parentDbSession.instance_id,
+          activityStatus: "busy",
+        });
+      }
+    } else {
+      // Child went idle — check if parent has OTHER active children
+      const activeChildren = getActiveChildSessions(parentDbSession.id);
+      if (activeChildren.length === 0) {
+        // No more active children — parent can go idle
+        if (parentDbSession.status !== "idle") {
+          updateSessionStatus(parentDbSession.id, "idle");
+          emitActivityStatus({
+            sessionId: parentDbSession.opencode_session_id,
+            instanceId: parentDbSession.instance_id,
+            activityStatus: "idle",
+          });
+        }
+      }
+      // If there are still active children, parent stays busy — no action needed
+    }
+  } catch (err) {
+    log.warn("session-status-watcher", "Failed to propagate status to parent", {
+      childSessionId: childDbSession.id,
+      parentSessionId: childDbSession.parent_session_id,
+      err,
+    });
+  }
+}
+
 // ─── Event Stream Processing ──────────────────────────────────────────────────
 
 /**
@@ -71,8 +128,6 @@ async function processEventStream(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const properties: Record<string, any> = event?.properties ?? event ?? {};
 
-      const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
-
       if (type === "session.status") {
         const statusType: string = properties?.status?.type ?? "";
         const eventSessionId: string =
@@ -90,6 +145,7 @@ async function processEventStream(
                 instanceId,
                 activityStatus: "idle",
               });
+              propagateToParent(dbSession, "idle");
             }
           } catch (err) {
             log.warn("session-status-watcher", "Failed to persist idle status", {
@@ -108,6 +164,7 @@ async function processEventStream(
                 instanceId,
                 activityStatus: "busy",
               });
+              propagateToParent(dbSession, "busy");
             }
           } catch (err) {
             log.warn("session-status-watcher", "Failed to persist active status", {
@@ -132,6 +189,7 @@ async function processEventStream(
               instanceId,
               activityStatus: "idle",
             });
+            propagateToParent(dbSession, "idle");
           }
         } catch (err) {
           log.warn("session-status-watcher", "Failed to persist idle status (session.idle event)", {

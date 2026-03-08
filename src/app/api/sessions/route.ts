@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
-import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback } from "@/lib/server/db-repository";
+import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
@@ -206,6 +206,15 @@ export async function GET(): Promise<NextResponse> {
       })
   );
 
+  // Batch-fetch which sessions have active children (for parent status override)
+  let parentIdsWithActiveChildren: Set<string>;
+  try {
+    parentIdsWithActiveChildren = getSessionIdsWithActiveChildren();
+  } catch (err) {
+    log.warn("sessions-route", "Failed to query active children — skipping parent override", { err });
+    parentIdsWithActiveChildren = new Set();
+  }
+
   // ── Pass 1: Synchronous status/workspace determination ──────────────────
   // Collects sessions that need a live session.get() call into pendingFetches,
   // and pushes stub items for everything else. This avoids sequential awaits.
@@ -259,6 +268,15 @@ export async function GET(): Promise<NextResponse> {
           } else {
             // Respect persisted idle status from the SSE stream
             sessionStatus = dbSession.status === "idle" ? "idle" : "active";
+          }
+
+          // Override idle parents to active if they have busy children
+          if (
+            sessionStatus === "idle" &&
+            dbSession.id &&
+            parentIdsWithActiveChildren.has(dbSession.id)
+          ) {
+            sessionStatus = "active";
           }
         }
       } else {

@@ -25,6 +25,8 @@ vi.mock("@/lib/server/opencode-client", () => ({
 vi.mock("@/lib/server/db-repository", () => ({
   getSessionByOpencodeId: vi.fn(() => undefined),
   updateSessionStatus: vi.fn(),
+  getSession: vi.fn(() => undefined),
+  getActiveChildSessions: vi.fn(() => []),
 }));
 
 // Mock notification-emitter
@@ -339,6 +341,250 @@ describe("session-status-watcher", () => {
 
       expect(notificationEmitter.emitActivityStatus).not.toHaveBeenCalled();
       expect(dbRepository.updateSessionStatus).not.toHaveBeenCalled();
+
+      mock.end();
+    });
+  });
+
+  describe("parent status propagation", () => {
+    const instanceId = "inst-test";
+
+    function setupWatchingWithStream(mockStream: AsyncIterable<unknown>) {
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
+        event: {
+          subscribe: vi.fn().mockResolvedValue({ stream: mockStream }),
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      ensureWatching(instanceId);
+    }
+
+    it("PropagatesBusyToParentWhenChildBecomesBusy", async () => {
+      const mock = createMockEventStream();
+      setupWatchingWithStream(mock.stream);
+
+      vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+        id: "child-db-1",
+        status: "idle",
+        parent_session_id: "parent-db-1",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      vi.mocked(dbRepository.getSession).mockReturnValue({
+        id: "parent-db-1",
+        status: "idle",
+        opencode_session_id: "oc-parent-1",
+        instance_id: "inst-parent",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      mock.push({
+        type: "session.status",
+        properties: {
+          sessionID: "oc-child-1",
+          status: { type: "busy" },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
+      });
+
+      // Child gets busy
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-child-1",
+        instanceId,
+        activityStatus: "busy",
+      });
+      // Parent also gets busy (with parent's own IDs)
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-parent-1",
+        instanceId: "inst-parent",
+        activityStatus: "busy",
+      });
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("child-db-1", "active");
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("parent-db-1", "active");
+
+      mock.end();
+    });
+
+    it("PropagatesIdleToParentWhenLastChildGoesIdle", async () => {
+      const mock = createMockEventStream();
+      setupWatchingWithStream(mock.stream);
+
+      vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+        id: "child-db-2",
+        status: "active",
+        parent_session_id: "parent-db-2",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      vi.mocked(dbRepository.getSession).mockReturnValue({
+        id: "parent-db-2",
+        status: "active",
+        opencode_session_id: "oc-parent-2",
+        instance_id: "inst-parent",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // No remaining active children
+      vi.mocked(dbRepository.getActiveChildSessions).mockReturnValue([]);
+
+      mock.push({
+        type: "session.status",
+        properties: {
+          sessionID: "oc-child-2",
+          status: { type: "idle" },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
+      });
+
+      // Child goes idle
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-child-2",
+        instanceId,
+        activityStatus: "idle",
+      });
+      // Parent also goes idle
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-parent-2",
+        instanceId: "inst-parent",
+        activityStatus: "idle",
+      });
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("parent-db-2", "idle");
+
+      mock.end();
+    });
+
+    it("DoesNotPropagateIdleToParentWhenOtherChildrenStillActive", async () => {
+      const mock = createMockEventStream();
+      setupWatchingWithStream(mock.stream);
+
+      vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+        id: "child-db-3",
+        status: "active",
+        parent_session_id: "parent-db-3",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      vi.mocked(dbRepository.getSession).mockReturnValue({
+        id: "parent-db-3",
+        status: "active",
+        opencode_session_id: "oc-parent-3",
+        instance_id: "inst-parent",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // Another sibling is still active
+      vi.mocked(dbRepository.getActiveChildSessions).mockReturnValue([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { id: "sibling-db-1", status: "active" } as any,
+      ]);
+
+      mock.push({
+        type: "session.status",
+        properties: {
+          sessionID: "oc-child-3",
+          status: { type: "idle" },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(notificationEmitter.emitActivityStatus).toHaveBeenCalled();
+      });
+
+      // Only child gets idle event — parent stays busy
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-child-3",
+        instanceId,
+        activityStatus: "idle",
+      });
+
+      mock.end();
+    });
+
+    it("DoesNotPropagateToTerminalParent", async () => {
+      const mock = createMockEventStream();
+      setupWatchingWithStream(mock.stream);
+
+      vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+        id: "child-db-4",
+        status: "idle",
+        parent_session_id: "parent-db-4",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // Parent is in terminal state
+      vi.mocked(dbRepository.getSession).mockReturnValue({
+        id: "parent-db-4",
+        status: "stopped",
+        opencode_session_id: "oc-parent-4",
+        instance_id: "inst-parent",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      mock.push({
+        type: "session.status",
+        properties: {
+          sessionID: "oc-child-4",
+          status: { type: "busy" },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(notificationEmitter.emitActivityStatus).toHaveBeenCalled();
+      });
+
+      // Only child gets the event — terminal parent is not touched
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledWith({
+        sessionId: "oc-child-4",
+        instanceId,
+        activityStatus: "busy",
+      });
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledTimes(1);
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("child-db-4", "active");
+
+      mock.end();
+    });
+
+    it("DoesNotPropagateWhenChildHasNoParent", async () => {
+      const mock = createMockEventStream();
+      setupWatchingWithStream(mock.stream);
+
+      vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+        id: "child-db-5",
+        status: "idle",
+        parent_session_id: null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      mock.push({
+        type: "session.status",
+        properties: {
+          sessionID: "oc-child-5",
+          status: { type: "busy" },
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(notificationEmitter.emitActivityStatus).toHaveBeenCalled();
+      });
+
+      // Only child event — no parent lookup
+      expect(notificationEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
+      expect(dbRepository.getSession).not.toHaveBeenCalled();
 
       mock.end();
     });

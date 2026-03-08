@@ -26,6 +26,8 @@ vi.mock("@/lib/server/db-repository", () => ({
   updateSessionStatus: vi.fn(),
   updateSessionTitle: vi.fn(),
   getSessionsForInstance: vi.fn(() => []),
+  getSessionIdsWithActiveChildren: vi.fn(() => new Set()),
+  insertSessionCallback: vi.fn(),
 }));
 
 vi.mock("@/lib/server/opencode-client", () => ({
@@ -65,6 +67,7 @@ const mockGetSessionByOpencodeId = vi.mocked(dbRepository.getSessionByOpencodeId
 const mockUpdateSessionStatus = vi.mocked(dbRepository.updateSessionStatus);
 const mockGetSessionsForInstance = vi.mocked(dbRepository.getSessionsForInstance);
 const mockUpdateSessionTitle = vi.mocked(dbRepository.updateSessionTitle);
+const mockGetSessionIdsWithActiveChildren = vi.mocked(dbRepository.getSessionIdsWithActiveChildren);
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -349,6 +352,7 @@ describe("GET /api/sessions", () => {
     mockListSessions.mockReturnValue([]);
     mockGetWorkspace.mockReturnValue(undefined as never);
     mockGetInstance.mockReturnValue(undefined as never);
+    mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set());
   });
 
   it("ReturnsEmptyArrayWhenNoSessionsExist", async () => {
@@ -539,6 +543,109 @@ describe("GET /api/sessions", () => {
     expect(body[0].session.id).toBe("oc-session-abc");
     expect(body[0].session.title).toBe("Stub Session");
     expect(body[0].session.directory).toBe("/home/user/project");
+  });
+
+  // ─── Parent status override tests ───────────────────────────────────────────
+
+  it("OverridesIdleParentToBusyWhenChildIsActive", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ id: "db-parent-1", status: "idle" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+    mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-1"]));
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("active");
+    expect(body[0].activityStatus).toBe("busy");
+  });
+
+  it("DoesNotOverrideActiveParent", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ id: "db-parent-2", status: "active" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+    mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-2"]));
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("active");
+    expect(body[0].activityStatus).toBe("busy");
+  });
+
+  it("DoesNotOverrideTerminalParent", async () => {
+    const dbSession = makeDbSession({ id: "db-parent-3", status: "stopped" });
+    const instance = makeManagedInstance();
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+    mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-3"]));
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    // Terminal status is checked first — override never applies
+    expect(body[0].sessionStatus).toBe("stopped");
+  });
+
+  it("IdleParentStaysIdleWhenNoActiveChildren", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ id: "db-parent-4", status: "idle" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+    mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set());
+
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("idle");
+    expect(body[0].activityStatus).toBe("idle");
+  });
+
+  it("HandlesActiveChildrenDbQueryFailureGracefully", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ id: "db-parent-5", status: "idle" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+    mockGetSessionIdsWithActiveChildren.mockImplementation(() => {
+      throw new Error("DB query failed");
+    });
+
+    const res = await GET();
+    const body = await res.json();
+
+    // Should still return 200 — fallback to empty set, no override
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].sessionStatus).toBe("idle");
+    expect(body[0].activityStatus).toBe("idle");
   });
 });
 

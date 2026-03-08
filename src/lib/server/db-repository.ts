@@ -420,6 +420,29 @@ export function searchSessions(opts: {
   return { sessions, total: countRow.count };
 }
 
+/**
+ * Get all active (non-idle, non-terminal) child sessions for a parent.
+ * Used by session-status-watcher to check if a parent has remaining busy children.
+ */
+export function getActiveChildSessions(parentDbId: string): DbSession[] {
+  return getDb()
+    .prepare("SELECT * FROM sessions WHERE parent_session_id = ? AND status IN ('active', 'waiting_input')")
+    .all(parentDbId) as DbSession[];
+}
+
+/**
+ * Batch query: returns all parent session IDs that have at least one active child.
+ * Called once per GET /api/sessions poll to avoid N+1 queries.
+ */
+export function getSessionIdsWithActiveChildren(): Set<string> {
+  const rows = getDb()
+    .prepare(
+      "SELECT DISTINCT parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL AND status IN ('active', 'waiting_input')"
+    )
+    .all() as Array<{ parent_session_id: string }>;
+  return new Set(rows.map(r => r.parent_session_id));
+}
+
 export function getSessionsForWorkspace(workspaceId: string): DbSession[] {
   return getDb()
     .prepare("SELECT * FROM sessions WHERE workspace_id = ?")

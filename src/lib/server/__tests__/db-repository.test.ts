@@ -39,6 +39,8 @@ import {
   deleteWorkspaceRoot,
   getWorkspaceRootByPath,
   getSessionStatusCounts,
+  getActiveChildSessions,
+  getSessionIdsWithActiveChildren,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -917,5 +919,124 @@ describe("workspace root repository", () => {
     expect(() => {
       insertWorkspaceRoot({ id: randomUUID(), path: "/unique/path" });
     }).toThrow();
+  });
+});
+
+// ─── Child Session Queries ────────────────────────────────────────────────────
+
+describe("child session queries", () => {
+  function setup() {
+    const wsId = mkWorkspaceId();
+    const instId = mkInstanceId();
+    insertWorkspace({ id: wsId, directory: "/tmp/proj", isolation_strategy: "existing" });
+    insertInstance({ id: instId, port: 4700, directory: "/tmp/proj", url: "http://localhost:4700" });
+    return { wsId, instId };
+  }
+
+  // ─── getActiveChildSessions ───────────────────────────────────────────────
+
+  it("GetActiveChildSessionsReturnsActiveChildren", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    const childId = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: childId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+
+    const children = getActiveChildSessions(parentId);
+    expect(children.length).toBe(1);
+    expect(children[0]?.id).toBe(childId);
+  });
+
+  it("GetActiveChildSessionsIncludesWaitingInputChildren", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    const childId = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: childId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    updateSessionStatus(childId, "waiting_input");
+
+    const children = getActiveChildSessions(parentId);
+    expect(children.length).toBe(1);
+    expect(children[0]?.id).toBe(childId);
+  });
+
+  it("GetActiveChildSessionsExcludesIdleAndTerminalChildren", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    const idleChild = mkSessionId();
+    const stoppedChild = mkSessionId();
+    const completedChild = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: idleChild, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    insertSession({ id: stoppedChild, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    insertSession({ id: completedChild, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    updateSessionStatus(idleChild, "idle");
+    updateSessionStatus(stoppedChild, "stopped");
+    updateSessionStatus(completedChild, "completed");
+
+    const children = getActiveChildSessions(parentId);
+    expect(children.length).toBe(0);
+  });
+
+  it("GetActiveChildSessionsReturnsEmptyWhenNoChildren", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+
+    const children = getActiveChildSessions(parentId);
+    expect(children.length).toBe(0);
+  });
+
+  // ─── getSessionIdsWithActiveChildren ──────────────────────────────────────
+
+  it("GetSessionIdsWithActiveChildrenReturnsParentIds", () => {
+    const { wsId, instId } = setup();
+    const parent1 = mkSessionId();
+    const parent2 = mkSessionId();
+    const child1 = mkSessionId();
+    const child2 = mkSessionId();
+    insertSession({ id: parent1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: parent2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: child1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parent1 });
+    insertSession({ id: child2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parent2 });
+
+    const result = getSessionIdsWithActiveChildren();
+    expect(result.size).toBe(2);
+    expect(result.has(parent1)).toBe(true);
+    expect(result.has(parent2)).toBe(true);
+  });
+
+  it("GetSessionIdsWithActiveChildrenExcludesIdleAndTerminalChildren", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    const idleChild = mkSessionId();
+    const stoppedChild = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: idleChild, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    insertSession({ id: stoppedChild, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    updateSessionStatus(idleChild, "idle");
+    updateSessionStatus(stoppedChild, "stopped");
+
+    const result = getSessionIdsWithActiveChildren();
+    expect(result.size).toBe(0);
+  });
+
+  it("GetSessionIdsWithActiveChildrenReturnsEmptySetWhenNone", () => {
+    const result = getSessionIdsWithActiveChildren();
+    expect(result.size).toBe(0);
+  });
+
+  it("GetSessionIdsWithActiveChildrenDeduplicatesParentIds", () => {
+    const { wsId, instId } = setup();
+    const parentId = mkSessionId();
+    const child1 = mkSessionId();
+    const child2 = mkSessionId();
+    insertSession({ id: parentId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: child1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+    insertSession({ id: child2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj", parent_session_id: parentId });
+
+    const result = getSessionIdsWithActiveChildren();
+    expect(result.size).toBe(1);
+    expect(result.has(parentId)).toBe(true);
   });
 });

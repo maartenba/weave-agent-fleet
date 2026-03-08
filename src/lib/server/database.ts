@@ -136,6 +136,9 @@ export function getDb(): Database.Database {
   // Add index on sessions.status for efficient status-based queries
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
 
+  // Add index on sessions.parent_session_id for efficient child lookups
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)`);
+
   _db = db;
   return db;
 }
