@@ -58,7 +58,7 @@
     "updater": {
       "pubkey": "",
       "endpoints": [
-        "https://github.com/pgermishuys/weave-agent-fleet/releases/download/desktop-v__VERSION__/latest.json"
+        "https://github.com/pgermishuys/weave-agent-fleet/releases/download/v__VERSION__/latest.json"
       ]
     }
   }
