@@ -316,6 +316,8 @@ jobs:
 
       - name: Run Tauri pre-build
         run: node scripts/tauri-prebuild.mjs
+        env:
+          TAURI_TARGET_TRIPLE: ${{ matrix.rust_target }}
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

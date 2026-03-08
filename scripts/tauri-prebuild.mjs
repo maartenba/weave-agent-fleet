@@ -115,10 +115,12 @@ async function sha256File(filePath) {
 const nodeVersion = readFileSync(join(PROJECT_ROOT, ".node-version"), "utf-8").trim();
 const pkg = JSON.parse(readFileSync(join(PROJECT_ROOT, "package.json"), "utf-8"));
 
-// Get Rust target triple
-const targetTriple = execFileSync("rustc", ["--print", "host-tuple"], {
-  encoding: "utf-8",
-}).trim();
+// Get Rust target triple – honour TAURI_TARGET_TRIPLE when cross-compiling
+// (e.g. building x86_64-apple-darwin on an ARM64 runner).
+const targetTriple = (
+  process.env.TAURI_TARGET_TRIPLE ||
+  execFileSync("rustc", ["--print", "host-tuple"], { encoding: "utf-8" })
+).trim();
 
 log(`Node.js version: v${nodeVersion}`);
 log(`Rust target triple: ${targetTriple}`);
