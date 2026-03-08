@@ -323,6 +323,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPIMAGE_EXTRACT_AND_RUN: 1
         with:
           releaseId: ${{ needs.release.outputs.release_id }}
           tagName: ${{ github.ref_name }}
