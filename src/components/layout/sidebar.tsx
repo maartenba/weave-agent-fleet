@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ import {
 } from "@/contexts/sidebar-context";
 import { useSidebarResize } from "@/hooks/use-sidebar-resize";
 import { SidebarWorkspaceItem } from "@/components/layout/sidebar-workspace-item";
+import { NewSessionDialog } from "@/components/session/new-session-dialog";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -188,23 +190,41 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto p-2 space-y-1">
         {/* Fleet */}
         {collapsed ? (
-          /* Collapsed: icon-only link with tooltip */
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/"
-                className={cn(
-                  "flex items-center justify-center rounded-md py-2 text-sm font-medium transition-colors",
-                  isFleetActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
-                )}
-              >
-                <LayoutGrid className="h-4 w-4 shrink-0" />
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">Fleet</TooltipContent>
-          </Tooltip>
+          /* Collapsed: icon-only link with tooltip + new session button */
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/"
+                  className={cn(
+                    "flex items-center justify-center rounded-md py-2 text-sm font-medium transition-colors",
+                    isFleetActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <LayoutGrid className="h-4 w-4 shrink-0" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">Fleet</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <NewSessionDialog
+                    trigger={
+                      <button
+                        className="flex w-full items-center justify-center rounded-md py-2 text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+                      >
+                        <Plus className="h-4 w-4 shrink-0" />
+                      </button>
+                    }
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right">New Session</TooltipContent>
+            </Tooltip>
+          </>
         ) : (
           /* Expanded: static Fleet heading + workspace tree */
           <>
@@ -236,6 +256,23 @@ export function Sidebar() {
                   </Badge>
                 )}
               </Link>
+              {/* New Session button */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="shrink-0">
+                    <NewSessionDialog
+                      trigger={
+                        <button
+                          className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      }
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right">New Session</TooltipContent>
+              </Tooltip>
             </div>
 
             {/* Workspace tree */}
