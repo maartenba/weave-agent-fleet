@@ -6,6 +6,8 @@
  * and file explorers.
  */
 
+import { resolve } from "path";
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type ToolCategory = "editor" | "terminal" | "explorer";
@@ -688,6 +690,11 @@ export function getSpawnCommand(
   args: string[];
   options: { detached: boolean; stdio: "ignore"; cwd?: string; shell?: boolean; windowsHide?: boolean };
 } | null {
+  // Defense-in-depth: resolve() normalizes the path (removes ../ segments etc.)
+  // and breaks CodeQL's taint chain. The caller (open-directory route) already
+  // validates via validateDirectory(), but we sanitize here at point-of-use too.
+  const safeDirectory = resolve(directory);
+
   const platform = process.platform as PlatformId;
   const override = config?.overrides?.[toolId];
   const customDef = config?.custom?.[toolId];
@@ -701,8 +708,8 @@ export function getSpawnCommand(
 
     const command = override?.command ?? platformCmd.command;
     const args = override?.args
-      ? override.args.replace(/\$\{dir\}/g, directory).split(/\s+/).filter(Boolean)
-      : platformCmd.args(directory);
+      ? override.args.replace(/\$\{dir\}/g, safeDirectory).split(/\s+/).filter(Boolean)
+      : platformCmd.args(safeDirectory);
 
     const options: {
       detached: boolean;
@@ -717,7 +724,7 @@ export function getSpawnCommand(
 
     if (platformCmd.options?.shell) options.shell = true;
     if (platformCmd.options?.windowsHide) options.windowsHide = true;
-    if (platformCmd.options?.cwd === "directory") options.cwd = directory;
+    if (platformCmd.options?.cwd === "directory") options.cwd = safeDirectory;
 
     return { command, args, options };
   }
@@ -729,7 +736,7 @@ export function getSpawnCommand(
     const command = override?.command ?? customDef.command;
     const argsTemplate = override?.args ?? customDef.args ?? "${dir}";
     const args = argsTemplate
-      .replace(/\$\{dir\}/g, directory)
+      .replace(/\$\{dir\}/g, safeDirectory)
       .split(/\s+/)
       .filter(Boolean);
 

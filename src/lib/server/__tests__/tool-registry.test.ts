@@ -1,3 +1,4 @@
+import { resolve } from "path";
 import {
   BUILTIN_TOOLS,
   getToolById,
@@ -340,7 +341,7 @@ describe("getSpawnCommand", () => {
     };
     const result = getSpawnCommand("explorer", "/test/dir", config);
     expect(result).not.toBeNull();
-    expect(result!.args).toEqual(["--path", "/test/dir", "--flag"]);
+    expect(result!.args).toEqual(["--path", resolve("/test/dir"), "--flag"]);
   });
 
   it("ReturnsSpawnConfigForCustomToolFromConfig", () => {
@@ -358,7 +359,7 @@ describe("getSpawnCommand", () => {
     const result = getSpawnCommand("my-editor", "/test/dir", config);
     expect(result).not.toBeNull();
     expect(result!.command).toBe("my-editor-bin");
-    expect(result!.args).toEqual(["/test/dir"]);
+    expect(result!.args).toEqual([resolve("/test/dir")]);
   });
 
   it("ReturnsNullForCustomToolOnWrongPlatform", () => {
@@ -390,7 +391,7 @@ describe("getSpawnCommand", () => {
     const result = getSpawnCommand("simple-tool", "/my/dir", config);
     expect(result).not.toBeNull();
     // Default args template is "${dir}" → just the directory
-    expect(result!.args).toEqual(["/my/dir"]);
+    expect(result!.args).toEqual([resolve("/my/dir")]);
   });
 
   it("PrefersBuiltinOverCustomWhenBothExist", () => {
@@ -415,7 +416,7 @@ describe("getSpawnCommand", () => {
     // "terminal" has options.cwd = "directory"
     const result = getSpawnCommand("terminal", "/test/dir", undefined);
     expect(result).not.toBeNull();
-    expect(result!.options.cwd).toBe("/test/dir");
+    expect(result!.options.cwd).toBe(resolve("/test/dir"));
   });
 
   it("AppliesOverrideCommandToCustomTool", () => {
