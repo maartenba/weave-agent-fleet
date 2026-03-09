@@ -237,7 +237,7 @@ A build script downloads the correct Node.js binary and renames it before `cargo
     },
     "plugins": {
       "updater": {
-        "pubkey": "",
+        "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRCRTMwMjEzOUNBODkzQkUKUldTK2s2aWNFd0xqUzloNHJWMytRQ0hLaWJ5SDRjM2pLRTNoNnJscU9zRmczU1d4MFVaTEgvbE4K",
         "endpoints": [
           "https://github.com/pgermishuys/weave-agent-fleet/releases/download/desktop-v__VERSION__/latest.json"
         ]

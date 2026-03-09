@@ -12,6 +12,7 @@ import { NavigationCommands } from "@/components/commands/navigation-commands";
 import { ViewCommands } from "@/components/commands/view-commands";
 import { SessionCommands } from "@/components/commands/session-commands";
 import { CommandPalette } from "@/components/command-palette";
+import { TauriUpdateDialog } from "@/components/tauri-update-dialog";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -31,6 +32,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 <ViewCommands />
                 <SessionCommands />
                 <CommandPalette />
+                <TauriUpdateDialog />
               </CommandRegistryProvider>
             </KeybindingsProvider>
           </SidebarProvider>

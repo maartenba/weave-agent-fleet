@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": false,
+    "createUpdaterArtifacts": "v2",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -56,7 +56,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRCRTMwMjEzOUNBODkzQkUKUldTK2s2aWNFd0xqUzloNHJWMytRQ0hLaWJ5SDRjM2pLRTNoNnJscU9zRmczU1d4MFVaTEgvbE4K",
       "endpoints": [
         "https://github.com/pgermishuys/weave-agent-fleet/releases/download/v__VERSION__/latest.json"
       ]

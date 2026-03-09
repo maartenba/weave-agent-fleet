@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
-use tauri::Manager;
+use serde::Serialize;
+use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 #[cfg(not(debug_assertions))]
@@ -19,6 +20,82 @@ struct SidecarState {
 /// Managed state holding tray menu item handles for dynamic updates.
 struct TrayState {
     agent_count_item: MenuItem<tauri::Wry>,
+}
+
+/// Managed state holding a pending update payload so the frontend can retrieve
+/// it even if the Rust event fires before the JS listener is registered.
+struct PendingUpdateState {
+    payload: Mutex<Option<UpdateAvailablePayload>>,
+}
+
+/// Payload emitted to the frontend when an update is available.
+#[derive(Clone, Serialize)]
+struct UpdateAvailablePayload {
+    version: String,
+    current_version: String,
+}
+
+/// Payload emitted to the frontend during update download progress.
+#[derive(Clone, Serialize)]
+struct UpdateProgressPayload {
+    /// Accumulated bytes downloaded so far.
+    downloaded: u64,
+    /// Total bytes (if known).
+    total: Option<u64>,
+}
+
+/// Tauri command: returns any pending update that was discovered at startup.
+/// The frontend calls this on mount to avoid the event-delivery race condition.
+#[tauri::command]
+fn check_for_update(state: tauri::State<'_, PendingUpdateState>) -> Option<UpdateAvailablePayload> {
+    state.payload.lock().unwrap().clone()
+}
+
+/// Tauri command: download + install the available update, then restart.
+/// The frontend invokes this when the user clicks "Install Update".
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Update check failed: {}", e))?;
+
+    let update = match update {
+        Some(u) => u,
+        None => return Err("No update available".into()),
+    };
+
+    println!("[weave-fleet] Downloading update {}", update.version);
+
+    let progress_handle = app.clone();
+    let restart_handle = app.clone();
+    let mut bytes_downloaded: u64 = 0;
+
+    update
+        .download_and_install(
+            move |chunk_size, total| {
+                bytes_downloaded += chunk_size as u64;
+                let _ = progress_handle.emit(
+                    "update-download-progress",
+                    UpdateProgressPayload {
+                        downloaded: bytes_downloaded,
+                        total,
+                    },
+                );
+            },
+            move || {
+                println!("[weave-fleet] Update installed, restarting...");
+                restart_handle.restart();
+            },
+        )
+        .await
+        .map_err(|e| format!("Update install failed: {}", e))?;
+
+    // The on_download_finish closure calls restart() which diverges, so this
+    // line is only reached if the platform defers the restart. Return Ok to
+    // keep the type system happy.
+    Ok(())
 }
 
 /// Find a free TCP port by binding to port 0.
@@ -40,6 +117,8 @@ fn check_opencode_available() -> bool {
 
 pub fn run() {
     tauri::Builder::default()
+        // --- Tauri commands ---
+        .invoke_handler(tauri::generate_handler![check_for_update, install_update])
         // --- Plugins (must be registered before setup) ---
         .plugin(
             tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -62,6 +141,11 @@ pub fn run() {
                      Agent sessions will not be able to spawn."
                 );
             }
+
+            // Manage pending update state (for frontend pull-based check)
+            app.manage(PendingUpdateState {
+                payload: Mutex::new(None),
+            });
 
             // (b) Find free port
             let port = find_free_port();
@@ -267,6 +351,16 @@ pub fn run() {
                                 "[weave-fleet] Update available: {}",
                                 update.version
                             );
+                            let payload = UpdateAvailablePayload {
+                                version: update.version.clone(),
+                                current_version: update.current_version.clone(),
+                            };
+                            // Store for pull-based retrieval by the frontend
+                            if let Some(state) = update_handle.try_state::<PendingUpdateState>() {
+                                *state.payload.lock().unwrap() = Some(payload.clone());
+                            }
+                            // Also emit for any already-registered listeners
+                            let _ = update_handle.emit("update-available", payload);
                         }
                         Ok(None) => {
                             println!("[weave-fleet] No update available");
