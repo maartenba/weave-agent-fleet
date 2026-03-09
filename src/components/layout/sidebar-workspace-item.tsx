@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -142,14 +141,6 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
                 {group.workspaceDirectory}
               </TooltipContent>
             </Tooltip>
-
-            {/* Session count badge */}
-            <Badge
-              variant="secondary"
-              className="h-4 min-w-4 justify-center px-1 text-[10px] shrink-0"
-            >
-              {group.sessionCount}
-            </Badge>
 
             {/* Hidden trigger for F2 rename via keyboard navigation */}
             <button

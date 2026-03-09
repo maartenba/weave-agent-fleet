@@ -249,15 +249,6 @@ export function Sidebar() {
               >
                 <LayoutGrid className="h-4 w-4 shrink-0" />
                 <span className="flex-1 whitespace-nowrap">Fleet</span>
-                {/* Total session count badge */}
-                {sessions.length > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="h-5 min-w-5 justify-center px-1.5 text-xs shrink-0"
-                  >
-                    {sessions.length}
-                  </Badge>
-                )}
               </Link>
               {/* New Session button */}
               <Tooltip>
