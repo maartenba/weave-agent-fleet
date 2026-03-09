@@ -18,7 +18,7 @@
     "tauri:build": "node scripts/tauri-prebuild.mjs && npx tauri build"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.2.17",
+    "@opencode-ai/sdk": "^1.2.24",
     "@tauri-apps/api": "^2.10.1",
     "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
