@@ -45,6 +45,7 @@ export interface SendPromptRequest {
   instanceId: string;
   text: string;
   agent?: string;
+  model?: { providerID: string; modelID: string };
 }
 
 export interface SendCommandRequest {
@@ -159,6 +160,21 @@ export interface AutocompleteAgent {
   color?: string;
   model?: { modelID: string; providerID: string };
   hidden?: boolean;
+}
+
+// ─── Model Picker Types ────────────────────────────────────────────────────
+
+/** A single model within a connected provider */
+export interface AvailableModel {
+  id: string;    // e.g. "claude-sonnet-4-5"
+  name: string;  // e.g. "Claude Sonnet 4.5"
+}
+
+/** A connected provider with its available models — returned by GET /api/instances/[id]/models */
+export interface AvailableProvider {
+  id: string;      // e.g. "anthropic"
+  name: string;    // e.g. "Anthropic"
+  models: AvailableModel[];
 }
 
 // ─── Task Tool Call Helpers ─────────────────────────────────────────────────

@@ -20,7 +20,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { instanceId, text, agent } = body;
+  const { instanceId, text, agent, model } = body;
 
   if (!instanceId || typeof instanceId !== "string") {
     return NextResponse.json(
@@ -51,6 +51,7 @@ export async function POST(
       sessionID: sessionId,
       parts: [{ type: "text", text: text.trim() }],
       ...(agent ? { agent } : {}),
+      ...(model ? { model } : {}),
     });
     return new NextResponse(null, { status: 204 });
   } catch (err) {

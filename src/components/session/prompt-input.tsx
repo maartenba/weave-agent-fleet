@@ -7,16 +7,21 @@ import { Send, Loader2, AlertCircle } from "lucide-react";
 import { useAutocomplete } from "@/hooks/use-autocomplete";
 import { AutocompletePopup } from "@/components/session/autocomplete-popup";
 import { AgentSelector } from "@/components/session/agent-selector";
-import type { AutocompleteAgent } from "@/lib/api-types";
+import { ModelSelector } from "@/components/session/model-selector";
+import type { AutocompleteAgent, AvailableProvider } from "@/lib/api-types";
+import type { SelectedModel } from "@/components/session/model-selector";
 
 interface PromptInputProps {
-  onSend?: (text: string, agent?: string) => Promise<void>;
+  onSend?: (text: string, agent?: string, model?: SelectedModel) => Promise<void>;
   disabled?: boolean;
   sendError?: string;
   instanceId?: string;
   agents?: AutocompleteAgent[];
   selectedAgent?: string | null;
   onAgentChange?: (agent: string | null) => void;
+  providers?: AvailableProvider[];
+  selectedModel?: SelectedModel | null;
+  onModelChange?: (model: SelectedModel | null) => void;
   onFocusRequest?: (focus: () => void) => void;
 }
 
@@ -28,6 +33,9 @@ export function PromptInput({
   agents = [],
   selectedAgent = null,
   onAgentChange,
+  providers = [],
+  selectedModel = null,
+  onModelChange,
   onFocusRequest,
 }: PromptInputProps) {
   const [value, setValue] = useState("");
@@ -92,7 +100,7 @@ export function PromptInput({
     setValue("");
     setIsSending(true);
     try {
-      await onSend?.(text, selectedAgent ?? undefined);
+      await onSend?.(text, selectedAgent ?? undefined, selectedModel ?? undefined);
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
@@ -172,6 +180,14 @@ export function PromptInput({
             agents={agents}
             selectedAgent={selectedAgent}
             onSelect={onAgentChange ?? (() => {})}
+            disabled={isDisabled}
+          />
+        )}
+        {providers.length > 0 && (
+          <ModelSelector
+            providers={providers}
+            selectedModel={selectedModel}
+            onSelect={onModelChange ?? (() => {})}
             disabled={isDisabled}
           />
         )}

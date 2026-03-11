@@ -11,6 +11,7 @@ import { useSessionEvents } from "@/hooks/use-session-events";
 import { useSendPrompt } from "@/hooks/use-send-prompt";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAgents } from "@/hooks/use-agents";
+import { useModels } from "@/hooks/use-models";
 import { useDiffs } from "@/hooks/use-diffs";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,8 @@ import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
 import { useCommandRegistry } from "@/contexts/command-registry-context";
 import { useKeybindings } from "@/contexts/keybindings-context";
+import { usePersistedState } from "@/hooks/use-persisted-state";
+import type { SelectedModel } from "@/components/session/model-selector";
 import Link from "next/link";
 
 interface AncestorInfo {
@@ -53,6 +56,11 @@ export default function SessionDetailPage() {
   const { sendPrompt, isSending, error: sendError } = useSendPrompt();
   const { agents } = useAgents(instanceId);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const { providers } = useModels(instanceId);
+  const [selectedModel, setSelectedModel] = usePersistedState<SelectedModel | null>(
+    `model-override:${sessionId}`,
+    null
+  );
 
   const { messages, status, sessionStatus, error, forceIdle, reconnect, reconnectAttempt, hasMoreMessages, isLoadingOlder, loadOlderMessages, totalMessageCount, loadOlderError } = useSessionEvents(
     sessionId,
@@ -231,8 +239,8 @@ export default function SessionDetailPage() {
   })();
 
   const handleSend = useCallback(
-    async (text: string, agent?: string) => {
-      await sendPrompt(sessionId, instanceId, text, agent);
+    async (text: string, agent?: string, model?: SelectedModel) => {
+      await sendPrompt(sessionId, instanceId, text, agent, model ?? undefined);
     },
     [sendPrompt, sessionId, instanceId]
   );
@@ -483,6 +491,9 @@ export default function SessionDetailPage() {
                 agents={agents}
                 selectedAgent={selectedAgent}
                 onAgentChange={setSelectedAgent}
+                providers={providers}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
                 onFocusRequest={(focus) => {
                   promptFocusRef.current = focus;
                 }}
