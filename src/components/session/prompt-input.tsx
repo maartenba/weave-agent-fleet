@@ -13,6 +13,7 @@ import { useMessageQueue } from "@/hooks/use-message-queue";
 import { ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES } from "@/lib/image-validation";
 import type { AutocompleteAgent, AvailableProvider, ImageAttachment } from "@/lib/api-types";
 import type { SelectedModel } from "@/components/session/model-selector";
+import { useDraftState } from "@/hooks/use-draft-state";
 
 // ─── Pending Attachment (client-side, with preview URL) ────────────────────
 
@@ -37,6 +38,7 @@ interface PromptInputProps {
   ) => Promise<void>;
   disabled?: boolean;
   sendError?: string;
+  sessionId?: string;
   instanceId?: string;
   agents?: AutocompleteAgent[];
   selectedAgent?: string | null;
@@ -55,6 +57,7 @@ export function PromptInput({
   onSend,
   disabled,
   sendError,
+  sessionId = "",
   instanceId = "",
   agents = [],
   selectedAgent = null,
@@ -65,7 +68,8 @@ export function PromptInput({
   onFocusRequest,
   sessionStatus = "idle",
 }: PromptInputProps) {
-  const [value, setValue] = useState("");
+  const { text: persistedDraft, setText: persistDraft, clearDraft } = useDraftState(sessionId);
+  const [value, setValue] = useState(persistedDraft);
   const [isSending, setIsSending] = useState(false);
   const [cursorPos, setCursorPos] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -77,6 +81,24 @@ export function PromptInput({
 
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number>(-1);
+
+  // Wrapper that updates both local state and debounced persistence
+  const setValueAndPersist = useCallback(
+    (v: string) => {
+      setValue(v);
+      persistDraft(v);
+    },
+    [persistDraft],
+  );
+
+  // When sessionId changes, sync the local value from the new session's persisted draft
+  const prevSessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    if (prevSessionIdRef.current !== sessionId) {
+      prevSessionIdRef.current = sessionId;
+      setValue(persistedDraft);
+    }
+  }, [sessionId, persistedDraft]);
 
   const isDisabled = disabled || isSending;
 
@@ -113,7 +135,7 @@ export function PromptInput({
 
   const autocomplete = useAutocomplete({
     value,
-    setValue,
+    setValue: setValueAndPersist,
     instanceId,
     inputRef,
     cursorPosition: cursorPos,
@@ -287,6 +309,7 @@ export function PromptInput({
 
     // Clear state before send
     setValue("");
+    clearDraft();
     setPendingAttachments((prev) => {
       prev.forEach((a) => URL.revokeObjectURL(a.previewUrl));
       return [];
@@ -321,7 +344,7 @@ export function PromptInput({
           ? history.length - 1
           : Math.max(0, historyIndexRef.current - 1);
       historyIndexRef.current = newIndex;
-      setValue(history[newIndex]);
+      setValueAndPersist(history[newIndex]);
       return;
     }
 
@@ -332,10 +355,10 @@ export function PromptInput({
       const newIndex = historyIndexRef.current + 1;
       if (newIndex >= history.length) {
         historyIndexRef.current = -1;
-        setValue("");
+        setValueAndPersist("");
       } else {
         historyIndexRef.current = newIndex;
-        setValue(history[newIndex]);
+        setValueAndPersist(history[newIndex]);
       }
       return;
     }
@@ -440,7 +463,7 @@ export function PromptInput({
           rows={1}
           value={value}
           onChange={(e) => {
-            setValue(e.target.value);
+            setValueAndPersist(e.target.value);
             setCursorPos(e.target.selectionStart ?? 0);
             historyIndexRef.current = -1;
           }}

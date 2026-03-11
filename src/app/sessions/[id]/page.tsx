@@ -684,6 +684,7 @@ export default function SessionDetailPage() {
                 />
               </div>
               <PromptInput
+                sessionId={sessionId}
                 instanceId={instanceId}
                 onSend={handleSend}
                 disabled={isStopped || isResumable || status === "error"}
