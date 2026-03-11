@@ -28,6 +28,7 @@ import type { OpenTool } from "@/hooks/use-open-directory";
 import { OpenToolContextSubmenu } from "@/components/ui/open-tool-menu";
 import type { WorkspaceGroup } from "@/hooks/use-workspaces";
 import { nestSessions } from "@/lib/session-utils";
+import { useSessionsContext } from "@/contexts/sessions-context";
 
 const PINNED_KEY = "weave:sidebar:pinned";
 
@@ -49,6 +50,7 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
     : false;
 
   const { renameWorkspace } = useRenameWorkspace();
+  const { patchWorkspaceDisplayName } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
   const { openDirectory } = useOpenDirectory();
 
@@ -61,12 +63,14 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
   const handleRename = useCallback(
     async (newName: string) => {
       try {
+        // Optimistically update the display name in the sidebar immediately
+        patchWorkspaceDisplayName(group.workspaceId, newName);
         await renameWorkspace(group.workspaceId, newName, refetch);
       } catch {
         // error surfaced inside useRenameWorkspace
       }
     },
-    [group.workspaceId, renameWorkspace, refetch]
+    [group.workspaceId, renameWorkspace, refetch, patchWorkspaceDisplayName]
   );
 
   const handleTogglePin = useCallback(() => {

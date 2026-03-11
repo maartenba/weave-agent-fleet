@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSessions } from "@/hooks/use-sessions";
 import { useFleetSummary } from "@/hooks/use-fleet-summary";
 import { useGlobalSSE } from "@/hooks/use-global-sse";
@@ -14,6 +14,10 @@ export interface SessionsContextValue {
   error?: string;
   refetch: () => void;
   summary: FleetSummaryResponse | null;
+  /** Optimistically update a session's title before the next poll arrives. */
+  patchSessionTitle: (sessionId: string, title: string) => void;
+  /** Optimistically update a workspace's display name before the next poll arrives. */
+  patchWorkspaceDisplayName: (workspaceId: string, displayName: string) => void;
 }
 
 const defaultValue: SessionsContextValue = {
@@ -22,6 +26,8 @@ const defaultValue: SessionsContextValue = {
   error: undefined,
   refetch: () => {},
   summary: null,
+  patchSessionTitle: () => {},
+  patchWorkspaceDisplayName: () => {},
 };
 
 const SessionsContext = createContext<SessionsContextValue>(defaultValue);
@@ -104,6 +110,11 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const [sseGeneration, setSseGeneration] = useState(0);
   const rafRef = useRef<number | null>(null);
 
+  // Optimistic rename patches — cleared per-entry when the poll catches up.
+  const titlePatchesRef = useRef<Map<string, string>>(new Map());
+  const displayNamePatchesRef = useRef<Map<string, string>>(new Map());
+  const [renameGeneration, setRenameGeneration] = useState(0);
+
   // Subscribe to the shared SSE singleton for activity_status events
   const sse = useGlobalSSE();
 
@@ -145,23 +156,69 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       lastPolledRef.current = polledSessions;
       // Smart pruning: only drop patches where the poll has caught up
       ssePatchesRef.current = pruneStalePatches(ssePatchesRef.current, polledSessions);
+
+      // Prune title patches whose value now matches what the poll returned
+      for (const [sessionId, patchedTitle] of titlePatchesRef.current) {
+        const polled = polledSessions.find((s) => s.session.id === sessionId);
+        if (!polled || polled.session.title === patchedTitle) {
+          titlePatchesRef.current.delete(sessionId);
+        }
+      }
+
+      // Prune displayName patches whose value now matches what the poll returned
+      for (const [workspaceId, patchedName] of displayNamePatchesRef.current) {
+        const polled = polledSessions.find((s) => s.workspaceId === workspaceId);
+        if (!polled || polled.workspaceDisplayName === patchedName) {
+          displayNamePatchesRef.current.delete(workspaceId);
+        }
+      }
     }
 
     const patches = ssePatchesRef.current;
-    if (patches.size === 0) return polledSessions;
+    const titlePatches = titlePatchesRef.current;
+    const displayNamePatches = displayNamePatchesRef.current;
 
     let result = polledSessions;
-    for (const [sessionId, activityStatus] of patches) {
-      result = patchActivityStatus(result, sessionId, activityStatus);
+
+    if (patches.size > 0) {
+      for (const [sessionId, activityStatus] of patches) {
+        result = patchActivityStatus(result, sessionId, activityStatus);
+      }
     }
+
+    if (titlePatches.size > 0 || displayNamePatches.size > 0) {
+      result = result.map((item) => {
+        const newTitle = titlePatches.get(item.session.id);
+        const newDisplayName = displayNamePatches.get(item.workspaceId);
+        if (newTitle === undefined && newDisplayName === undefined) return item;
+        return {
+          ...item,
+          ...(newTitle !== undefined ? { session: { ...item.session, title: newTitle } } : {}),
+          ...(newDisplayName !== undefined ? { workspaceDisplayName: newDisplayName } : {}),
+        };
+      });
+    }
+
     return result;
-    // sseGeneration counter triggers re-evaluation when SSE patches arrive
+    // sseGeneration + renameGeneration counters trigger re-evaluation when patches arrive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polledSessions, sseGeneration]);
+  }, [polledSessions, sseGeneration, renameGeneration]);
+
+  const patchSessionTitle = useCallback((sessionId: string, title: string) => {
+    titlePatchesRef.current = new Map(titlePatchesRef.current);
+    titlePatchesRef.current.set(sessionId, title);
+    setRenameGeneration((n) => n + 1);
+  }, []);
+
+  const patchWorkspaceDisplayName = useCallback((workspaceId: string, displayName: string) => {
+    displayNamePatchesRef.current = new Map(displayNamePatchesRef.current);
+    displayNamePatchesRef.current.set(workspaceId, displayName);
+    setRenameGeneration((n) => n + 1);
+  }, []);
 
   const contextValue = useMemo(
-    () => ({ sessions, isLoading, error, refetch, summary }),
-    [sessions, isLoading, error, refetch, summary]
+    () => ({ sessions, isLoading, error, refetch, summary, patchSessionTitle, patchWorkspaceDisplayName }),
+    [sessions, isLoading, error, refetch, summary, patchSessionTitle, patchWorkspaceDisplayName]
   );
 
   return (
