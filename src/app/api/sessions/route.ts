@@ -166,6 +166,7 @@ export async function GET(): Promise<NextResponse> {
               workspaceDisplayName: null,
               isolationStrategy: "existing",
               sourceDirectory: null,
+              branch: null,
               sessionStatus: legacyStatus,
               session,
               instanceStatus: instance.status,
@@ -227,6 +228,7 @@ export async function GET(): Promise<NextResponse> {
     workspaceDisplayName: string | null;
     isolationStrategy: string;
     sourceDirectory: string | null;
+    branch: string | null;
   }
   const pendingFetches: PendingFetch[] = [];
 
@@ -328,6 +330,7 @@ export async function GET(): Promise<NextResponse> {
     let isolationStrategy: string = "existing";
     let workspaceDisplayName: string | null = null;
     let sourceDirectory: string | null = null;
+    let branch: string | null = null;
     try {
       const ws = getWorkspace(dbSession.workspace_id);
       if (ws) {
@@ -335,6 +338,7 @@ export async function GET(): Promise<NextResponse> {
         isolationStrategy = ws.isolation_strategy;
         workspaceDisplayName = ws.display_name;
         sourceDirectory = ws.source_directory;
+        branch = ws.branch;
       }
     } catch (err) {
       log.warn("sessions-route", "Failed to fetch workspace info from DB", { workspaceId: dbSession.workspace_id, err });
@@ -351,6 +355,7 @@ export async function GET(): Promise<NextResponse> {
         workspaceDisplayName,
         isolationStrategy,
         sourceDirectory,
+        branch,
       });
     } else {
       // For disconnected/stopped sessions, synthesize a stub session object
@@ -361,6 +366,7 @@ export async function GET(): Promise<NextResponse> {
         workspaceDisplayName,
         isolationStrategy,
         sourceDirectory,
+        branch,
         sessionStatus,
         session: {
           id: dbSession.opencode_session_id,
@@ -398,7 +404,7 @@ export async function GET(): Promise<NextResponse> {
 
     for (let i = 0; i < chunk.length; i++) {
       const pending = chunk[i]!;
-      const { dbSession, sessionStatus, instanceStatus, workspaceDirectory, workspaceDisplayName, isolationStrategy, sourceDirectory } = pending;
+      const { dbSession, sessionStatus, instanceStatus, workspaceDirectory, workspaceDisplayName, isolationStrategy, sourceDirectory, branch } = pending;
       const fetchResult = fetchResults[i]!;
 
       if (fetchResult.status === "fulfilled" && fetchResult.value) {
@@ -414,6 +420,7 @@ export async function GET(): Promise<NextResponse> {
           workspaceDisplayName,
           isolationStrategy,
           sourceDirectory,
+          branch,
           sessionStatus,
           session: sessionData,
           instanceStatus,
@@ -435,6 +442,7 @@ export async function GET(): Promise<NextResponse> {
           workspaceDisplayName,
           isolationStrategy,
           sourceDirectory,
+          branch,
           sessionStatus,
           session: {
             id: dbSession.opencode_session_id,

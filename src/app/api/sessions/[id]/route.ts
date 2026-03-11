@@ -155,6 +155,7 @@ export async function GET(
     let workspaceId: string | null = null;
     let workspaceDirectory: string | null = null;
     let isolationStrategy: string | null = null;
+    let branch: string | null = null;
     const ancestors: AncestorInfo[] = [];
 
     try {
@@ -165,6 +166,7 @@ export async function GET(
         if (ws) {
           workspaceDirectory = ws.directory;
           isolationStrategy = ws.isolation_strategy;
+          branch = ws.branch;
         }
 
         // Walk parent chain to build ancestors array (root-first)
@@ -198,6 +200,7 @@ export async function GET(
             workspaceId = directParent.workspace_id;
             workspaceDirectory = parentWs.directory;
             isolationStrategy = parentWs.isolation_strategy;
+            branch = parentWs.branch;
           }
         }
       }
@@ -213,6 +216,7 @@ export async function GET(
         workspaceId,
         workspaceDirectory,
         isolationStrategy,
+        branch,
         ancestors,
       },
       { status: 200 }

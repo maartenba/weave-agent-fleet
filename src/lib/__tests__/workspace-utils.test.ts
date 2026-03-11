@@ -28,6 +28,7 @@ function makeSession(overrides: Partial<SessionListItem> = {}): SessionListItem 
     workspaceDisplayName: null,
     isolationStrategy: "existing",
     sourceDirectory: null,
+    branch: null,
     sessionStatus: "active",
     instanceStatus: "running",
     session: makeSDKSession(),

@@ -41,6 +41,19 @@ export interface ResumeSessionResponse {
   session: Session;
 }
 
+export interface ForkSessionRequest {
+  /** Optional title for the forked session. Defaults to "New Session". */
+  title?: string;
+}
+
+export interface ForkSessionResponse {
+  instanceId: string;
+  workspaceId: string;
+  session: Session;
+  /** The source session ID that was forked (Fleet DB id or opencode session id) */
+  forkedFromSessionId: string;
+}
+
 export interface SendPromptRequest {
   instanceId: string;
   text: string;
@@ -81,6 +94,11 @@ export interface SessionListItem {
    * For "existing" sessions or when DB is unavailable, this is null.
    */
   sourceDirectory: string | null;
+  /**
+   * The git branch this session's workspace was created on (worktree/clone isolation only).
+   * Null for "existing" isolation or when workspace metadata is unavailable.
+   */
+  branch: string | null;
   /**
    * Activity status — what the session's agent is currently doing.
    * Only meaningful while lifecycleStatus is "running".

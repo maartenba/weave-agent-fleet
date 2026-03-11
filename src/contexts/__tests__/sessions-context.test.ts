@@ -13,6 +13,7 @@ function makeSession(id: string, overrides: Partial<SessionListItem> = {}): Sess
     workspaceDisplayName: null,
     isolationStrategy: "existing",
     sourceDirectory: null,
+    branch: null,
     sessionStatus: "idle",
     instanceStatus: "running",
     session: { id } as SessionListItem["session"],
