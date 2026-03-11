@@ -23,6 +23,7 @@ import { useResumeSession } from "@/hooks/use-resume-session";
 import { useOpenDirectory } from "@/hooks/use-open-directory";
 import type { OpenTool } from "@/hooks/use-open-directory";
 import type { SessionListItem } from "@/lib/api-types";
+import { useSessionsContext } from "@/contexts/sessions-context";
 
 interface SidebarSessionItemProps {
   item: SessionListItem;
@@ -35,6 +36,7 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
   const { instanceId, session, activityStatus, lifecycleStatus } = item;
   const router = useRouter();
   const { renameSession } = useRenameSession();
+  const { patchSessionTitle } = useSessionsContext();
   const { terminateSession } = useTerminateSession();
   const { abortSession } = useAbortSession();
   const { deleteSession, isDeleting } = useDeleteSession();
@@ -75,12 +77,14 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
     async (newTitle: string) => {
       try {
         const dbId = item.dbId ?? item.session.id;
+        // Optimistically update the title in the sidebar immediately
+        patchSessionTitle(item.session.id, newTitle);
         await renameSession(dbId, newTitle, refetch);
       } catch {
         // error surfaced inside useRenameSession
       }
     },
-    [item.dbId, item.session.id, renameSession, refetch]
+    [item.dbId, item.session.id, renameSession, refetch, patchSessionTitle]
   );
 
   const handleStop = useCallback(async () => {
