@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,16 +69,17 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
   const [internalOpen, setInternalOpen] = useState(false);
   const [directory, setDirectory] = usePersistedState("weave:new-session:lastDirectory", "");
 
-  // When a defaultDirectory is provided and the dialog opens, pre-fill the directory
   const open = controlledOpen ?? internalOpen;
-  const [lastDefaultDir, setLastDefaultDir] = useState<string | undefined>(undefined);
-  if (open && defaultDirectory && defaultDirectory !== lastDefaultDir) {
-    setDirectory(defaultDirectory);
-    setLastDefaultDir(defaultDirectory);
-  }
-  if (!open && lastDefaultDir !== undefined) {
-    setLastDefaultDir(undefined);
-  }
+
+  // When the dialog opens with a defaultDirectory, pre-fill the directory field.
+  // This must live in an effect — calling setDirectory during render triggers
+  // useSyncExternalStore listeners synchronously, which causes React to warn about
+  // updating a component while rendering a different component.
+  useEffect(() => {
+    if (open && defaultDirectory) {
+      setDirectory(defaultDirectory);
+    }
+  }, [open, defaultDirectory, setDirectory]);
   const [title, setTitle] = useState("");
   const [isolationStrategy, setIsolationStrategy] = useState<IsolationStrategy>("existing");
   const [branch, setBranch] = useState("");

@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, OctagonX, Pencil, Play, Square, StopCircle, Trash2, WifiOff } from "lucide-react";
+import { Copy, GitFork, OctagonX, Pencil, Play, Square, StopCircle, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/context-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-session-dialog";
+import { ForkSessionDialog } from "@/components/session/fork-session-dialog";
 import { OpenToolContextSubmenu } from "@/components/ui/open-tool-menu";
 import { useRenameSession } from "@/hooks/use-rename-session";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
@@ -44,6 +45,7 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
   const { openDirectory } = useOpenDirectory();
   const [isRenaming, setIsRenaming] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showForkDialog, setShowForkDialog] = useState(false);
 
   const isDisconnected = lifecycleStatus === "disconnected";
   const isStopped = lifecycleStatus === "stopped";
@@ -213,6 +215,14 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
 
           <ContextMenuSeparator />
 
+          {/* New context window */}
+          <ContextMenuItem onClick={() => setShowForkDialog(true)} className="gap-2 text-xs">
+            <GitFork className="h-3.5 w-3.5" />
+            New context window
+          </ContextMenuItem>
+
+          <ContextMenuSeparator />
+
           {/* Utility */}
           <ContextMenuItem onClick={handleCopyId} className="gap-2 text-xs">
             <Copy className="h-3.5 w-3.5" />
@@ -247,6 +257,13 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
         sessionTitle={title}
         onConfirm={handleDeleteConfirm}
         isDeleting={isDeleting}
+      />
+
+      <ForkSessionDialog
+        sourceSessionId={item.dbId ?? item.session.id}
+        sourceSessionTitle={title}
+        open={showForkDialog}
+        onOpenChange={setShowForkDialog}
       />
     </>
   );

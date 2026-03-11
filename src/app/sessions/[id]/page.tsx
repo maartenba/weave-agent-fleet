@@ -16,12 +16,13 @@ import { useDiffs } from "@/hooks/use-diffs";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
 import { useDeleteSession } from "@/hooks/use-delete-session";
 import { ConfirmDeleteSessionDialog } from "@/components/fleet/confirm-delete-session-dialog";
+import { ForkSessionDialog } from "@/components/session/fork-session-dialog";
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
@@ -42,6 +43,7 @@ interface SessionMetadata {
   workspaceId: string | null;
   workspaceDirectory: string | null;
   isolationStrategy: string | null;
+  title?: string;
   createdAt?: number;
   ancestors?: AncestorInfo[];
 }
@@ -78,6 +80,7 @@ export default function SessionDetailPage() {
   const [abortConfirm, setAbortConfirm] = useState(false);
   const [isResumable, setIsResumable] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showForkDialog, setShowForkDialog] = useState(false);
 
   const promptFocusRef = useRef<(() => void) | null>(null);
   const { registerCommand, unregisterCommand } = useCommandRegistry();
@@ -147,13 +150,14 @@ export default function SessionDetailPage() {
         }
         return r.json();
       })
-      .then((data: { workspaceId?: string; workspaceDirectory?: string; isolationStrategy?: string; session?: { time?: { created?: number } }; ancestors?: AncestorInfo[] } | null) => {
+      .then((data: { workspaceId?: string; workspaceDirectory?: string; isolationStrategy?: string; session?: { title?: string; time?: { created?: number } }; ancestors?: AncestorInfo[] } | null) => {
         if (!data) return;
         metadataFetchedRef.current = true;
         setMetadata({
           workspaceId: data.workspaceId ?? null,
           workspaceDirectory: data.workspaceDirectory ?? null,
           isolationStrategy: data.isolationStrategy ?? null,
+          title: data.session?.title,
           createdAt: data.session?.time?.created,
           ancestors: data.ancestors,
         });
@@ -338,6 +342,16 @@ export default function SessionDetailPage() {
                 {activeAgentName.charAt(0).toUpperCase() + activeAgentName.slice(1)}
               </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() => setShowForkDialog(true)}
+              title="New context window — start a fresh session in the same workspace"
+            >
+              <GitFork className="h-3 w-3" />
+              New context window
+            </Button>
             {!isStopped && sessionStatus === "busy" && (
               <Button
                 variant={abortConfirm ? "destructive" : "outline"}
@@ -685,6 +699,13 @@ export default function SessionDetailPage() {
         sessionTitle={sessionId.slice(0, 12)}
         onConfirm={handlePermanentDelete}
         isDeleting={isDeleting}
+      />
+
+      <ForkSessionDialog
+        sourceSessionId={sessionId}
+        sourceSessionTitle={metadata.title}
+        open={showForkDialog}
+        onOpenChange={setShowForkDialog}
       />
     </div>
   );

@@ -6,17 +6,11 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// POST /api/sessions/[id]/command — execute a slash command via session.command()
+// POST /api/sessions/[id]/command — execute a slash command via session.promptAsync()
 //
-// Uses the SDK's `client.session.command()` which performs template expansion
-// and creates SubtaskParts with the command description — producing cleaner
-// activity stream entries instead of raw "/{command}" text.
-//
-// The command() endpoint is blocking (returns the full result in its HTTP
-// response), but we fire-and-forget it: we kick off the call without awaiting
-// the result and return 200 immediately.  The frontend still receives live
-// updates because the opencode server publishes events on its internal SSE bus
-// independently of whether the HTTP response is consumed.
+// Sends the command as a text prompt prefixed with "/" (e.g. "/compact args").
+// Uses promptAsync so the call is awaited and errors are surfaced as 500 responses.
+// The frontend receives live updates via the opencode SSE event bus regardless.
 export async function POST(
   request: NextRequest,
   context: RouteContext
@@ -56,21 +50,21 @@ export async function POST(
     );
   }
 
-  // Fire-and-forget: kick off the command without awaiting the blocking
-  // response.  SSE events flow independently via the opencode event bus,
-  // so the frontend picks up progress in real time.
-  client.session
-    .command({
+  const trimmedCommand = command.trim();
+  const text = args ? `/${trimmedCommand} ${args}` : `/${trimmedCommand}`;
+
+  try {
+    await client.session.promptAsync({
       sessionID: sessionId,
-      command: command.trim(),
-      arguments: args || "",
-    })
-    .catch((err: unknown) => {
-      console.error(
-        `[POST /api/sessions/${sessionId}/command] Async error:`,
-        err
-      );
+      parts: [{ type: "text", text }],
     });
+  } catch (err) {
+    console.error(`[POST /api/sessions/${sessionId}/command] Error:`, err);
+    return NextResponse.json(
+      { error: "Failed to execute command" },
+      { status: 500 }
+    );
+  }
 
   const responseBody: SendCommandResponse = { success: true, sessionId };
   return NextResponse.json(responseBody, { status: 200 });

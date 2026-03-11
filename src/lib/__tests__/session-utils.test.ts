@@ -14,6 +14,7 @@ function makeItem(overrides: Partial<SessionListItem> & { sessionId?: string } =
     workspaceDisplayName: null,
     isolationStrategy: "existing",
     sourceDirectory: null,
+    branch: null,
     sessionStatus: "active",
     instanceStatus: "running",
     session: { id, title: "Test Session", ...overrides.session } as SessionListItem["session"],
