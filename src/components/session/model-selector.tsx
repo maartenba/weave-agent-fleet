@@ -96,7 +96,7 @@ export function ModelSelector({
                 <DropdownMenuRadioItem
                   key={model.id}
                   value={modelValue(provider.id, model.id)}
-                  className="text-xs pl-4"
+                  className="text-xs"
                 >
                   {model.name}
                 </DropdownMenuRadioItem>
