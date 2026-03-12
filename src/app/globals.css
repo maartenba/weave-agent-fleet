@@ -242,6 +242,11 @@
 
 /* ─── Markdown prose (Weave dark theme) ─────────────────────────────────── */
 
+.prose-weave {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
 .prose-weave pre code.hljs {
   background: transparent;
   padding: 0;

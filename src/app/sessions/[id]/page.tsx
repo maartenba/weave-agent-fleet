@@ -520,7 +520,7 @@ export default function SessionDetailPage() {
         </div>
 
         {/* Sidebar — real session metadata */}
-        <aside className="w-72 border-l overflow-auto">
+        <aside className="w-72 border-l overflow-auto flex-shrink-0">
           <ScrollArea className="h-full">
             <div className="p-4 space-y-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
