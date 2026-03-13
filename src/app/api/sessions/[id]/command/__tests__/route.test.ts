@@ -43,7 +43,7 @@ function makeInvalidJsonRequest() {
 function makeMockClient() {
   return {
     session: {
-      promptAsync: vi.fn().mockResolvedValue(undefined),
+      command: vi.fn().mockResolvedValue(undefined),
     },
   };
 }
@@ -135,20 +135,21 @@ describe("POST /api/sessions/[id]/command", () => {
     expect(body.sessionId).toBe("sess-1");
   });
 
-  it("calls promptAsync with slash command text (no args)", async () => {
+  it("calls session.command() with command name and empty arguments when no args provided", async () => {
     const client = makeMockClient();
     mockGetClientForInstance.mockReturnValue(client as never);
 
     const req = makeRequest({ instanceId: "inst-1", command: "compact" });
     await POST(req, makeContext());
 
-    expect(client.session.promptAsync).toHaveBeenCalledWith({
+    expect(client.session.command).toHaveBeenCalledWith({
       sessionID: "sess-1",
-      parts: [{ type: "text", text: "/compact" }],
+      command: "compact",
+      arguments: "",
     });
   });
 
-  it("calls promptAsync with slash command text including args", async () => {
+  it("calls session.command() with command name and arguments", async () => {
     const client = makeMockClient();
     mockGetClientForInstance.mockReturnValue(client as never);
 
@@ -159,9 +160,10 @@ describe("POST /api/sessions/[id]/command", () => {
     });
     await POST(req, makeContext());
 
-    expect(client.session.promptAsync).toHaveBeenCalledWith({
+    expect(client.session.command).toHaveBeenCalledWith({
       sessionID: "sess-1",
-      parts: [{ type: "text", text: "/plan build a widget" }],
+      command: "plan",
+      arguments: "build a widget",
     });
   });
 
@@ -172,34 +174,77 @@ describe("POST /api/sessions/[id]/command", () => {
     const req = makeRequest({ instanceId: "inst-1", command: "  compact  " });
     await POST(req, makeContext());
 
-    expect(client.session.promptAsync).toHaveBeenCalledWith({
+    expect(client.session.command).toHaveBeenCalledWith({
       sessionID: "sess-1",
-      parts: [{ type: "text", text: "/compact" }],
+      command: "compact",
+      arguments: "",
     });
   });
 
-  it("returns 500 when promptAsync throws", async () => {
-    const client = {
-      session: {
-        promptAsync: vi.fn().mockRejectedValue(new Error("SDK error")),
-      },
-    };
+  it("passes agent through to session.command()", async () => {
+    const client = makeMockClient();
     mockGetClientForInstance.mockReturnValue(client as never);
 
-    const req = makeRequest({ instanceId: "inst-1", command: "compact" });
-    const res = await POST(req, makeContext());
-    const body = await res.json();
+    const req = makeRequest({
+      instanceId: "inst-1",
+      command: "compact",
+      agent: "code",
+    });
+    await POST(req, makeContext());
 
-    expect(res.status).toBe(500);
-    expect(body.error).toMatch(/failed to execute command/i);
+    expect(client.session.command).toHaveBeenCalledWith({
+      sessionID: "sess-1",
+      command: "compact",
+      arguments: "",
+      agent: "code",
+    });
   });
 
-  it("returns 500 when promptAsync throws synchronously", async () => {
+  it("passes model as providerID/modelID string to session.command()", async () => {
+    const client = makeMockClient();
+    mockGetClientForInstance.mockReturnValue(client as never);
+
+    const req = makeRequest({
+      instanceId: "inst-1",
+      command: "compact",
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4-5" },
+    });
+    await POST(req, makeContext());
+
+    expect(client.session.command).toHaveBeenCalledWith({
+      sessionID: "sess-1",
+      command: "compact",
+      arguments: "",
+      model: "anthropic/claude-sonnet-4-5",
+    });
+  });
+
+  it("passes both agent and model together", async () => {
+    const client = makeMockClient();
+    mockGetClientForInstance.mockReturnValue(client as never);
+
+    const req = makeRequest({
+      instanceId: "inst-1",
+      command: "plan",
+      args: "build widget",
+      agent: "code",
+      model: { providerID: "openai", modelID: "gpt-4o" },
+    });
+    await POST(req, makeContext());
+
+    expect(client.session.command).toHaveBeenCalledWith({
+      sessionID: "sess-1",
+      command: "plan",
+      arguments: "build widget",
+      agent: "code",
+      model: "openai/gpt-4o",
+    });
+  });
+
+  it("returns 200 even when session.command() rejects (fire-and-forget)", async () => {
     const client = {
       session: {
-        promptAsync: vi.fn().mockImplementation(() => {
-          throw new Error("Unexpected sync error");
-        }),
+        command: vi.fn().mockRejectedValue(new Error("SDK error")),
       },
     };
     mockGetClientForInstance.mockReturnValue(client as never);
@@ -208,8 +253,10 @@ describe("POST /api/sessions/[id]/command", () => {
     const res = await POST(req, makeContext());
     const body = await res.json();
 
-    expect(res.status).toBe(500);
-    expect(body.error).toMatch(/failed to execute command/i);
+    // Fire-and-forget: the route returns 200 immediately;
+    // the rejection is caught by .catch() and logged, not surfaced.
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
   });
 
   it("uses session ID from route params, not request body", async () => {
@@ -219,7 +266,7 @@ describe("POST /api/sessions/[id]/command", () => {
     const req = makeRequest({ instanceId: "inst-1", command: "compact" });
     await POST(req, makeContext("custom-session-id"));
 
-    expect(client.session.promptAsync).toHaveBeenCalledWith(
+    expect(client.session.command).toHaveBeenCalledWith(
       expect.objectContaining({ sessionID: "custom-session-id" }),
     );
   });

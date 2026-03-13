@@ -41,6 +41,8 @@ export function useSendPrompt(): UseSendPromptResult {
                 instanceId,
                 command: parsed.command,
                 ...(parsed.args ? { args: parsed.args } : {}),
+                ...(agent ? { agent } : {}),
+                ...(model ? { model } : {}),
               }),
             }
           );

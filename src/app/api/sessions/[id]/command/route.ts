@@ -6,10 +6,11 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// POST /api/sessions/[id]/command — execute a slash command via session.promptAsync()
+// POST /api/sessions/[id]/command — execute a slash command via session.command()
 //
-// Sends the command as a text prompt prefixed with "/" (e.g. "/compact args").
-// Uses promptAsync so the call is awaited and errors are surfaced as 500 responses.
+// Invokes the command through the dedicated SDK method (fire-and-forget).
+// session.command() is BLOCKING on the server (it awaits the full LLM response),
+// so we intentionally do NOT await it — we fire it and return 200 immediately.
 // The frontend receives live updates via the opencode SSE event bus regardless.
 export async function POST(
   request: NextRequest,
@@ -24,7 +25,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { instanceId, command, args } = body;
+  const { instanceId, command, args, agent, model } = body;
 
   if (!instanceId || typeof instanceId !== "string") {
     return NextResponse.json(
@@ -50,21 +51,24 @@ export async function POST(
     );
   }
 
-  const trimmedCommand = command.trim();
-  const text = args ? `/${trimmedCommand} ${args}` : `/${trimmedCommand}`;
+  // Fire-and-forget: session.command() blocks until the full LLM response
+  // completes (unlike promptAsync which returns immediately). We fire it
+  // without awaiting so the HTTP response returns instantly. Errors are
+  // logged but cannot be surfaced to the caller.
+  const modelString =
+    model ? `${model.providerID}/${model.modelID}` : undefined;
 
-  try {
-    await client.session.promptAsync({
+  client.session
+    .command({
       sessionID: sessionId,
-      parts: [{ type: "text", text }],
+      command: command.trim(),
+      arguments: args ?? "",
+      ...(agent ? { agent } : {}),
+      ...(modelString ? { model: modelString } : {}),
+    })
+    .catch((err: unknown) => {
+      console.error(`[POST /api/sessions/${sessionId}/command] Error:`, err);
     });
-  } catch (err) {
-    console.error(`[POST /api/sessions/${sessionId}/command] Error:`, err);
-    return NextResponse.json(
-      { error: "Failed to execute command" },
-      { status: 500 }
-    );
-  }
 
   const responseBody: SendCommandResponse = { success: true, sessionId };
   return NextResponse.json(responseBody, { status: 200 });

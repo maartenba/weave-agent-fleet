@@ -65,6 +65,8 @@ export interface SendCommandRequest {
   instanceId: string;
   command: string;
   args?: string;
+  agent?: string;
+  model?: { providerID: string; modelID: string };
 }
 
 export interface SendCommandResponse {
