@@ -70,6 +70,7 @@ export function patchActivityStatus(
     ...existing,
     activityStatus,
     sessionStatus: activityToSessionStatus(activityStatus),
+    lifecycleStatus: "running",
   };
   return updated;
 }
