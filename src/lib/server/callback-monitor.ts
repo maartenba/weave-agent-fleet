@@ -26,6 +26,7 @@ import {
   fireSessionCallbacks,
   fireSessionErrorCallbacks,
 } from "./callback-service";
+import { withTimeout } from "./async-utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -288,9 +289,13 @@ export function startMonitoring(
     void (async () => {
       try {
         const client = getClientForInstance(instanceId);
-        const subscribeResult = await client.event.subscribe({
-          directory: instance.directory,
-        });
+        const subscribeTimeoutMs =
+          parseInt(process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS ?? "", 10) || 30_000;
+        const subscribeResult = await withTimeout(
+          client.event.subscribe({ directory: instance.directory }),
+          subscribeTimeoutMs,
+          `event.subscribe for instance ${instanceId}`,
+        );
 
         const eventStream =
           "stream" in subscribeResult
@@ -303,7 +308,7 @@ export function startMonitoring(
           `[callback-monitor] Failed to subscribe to instance ${instanceId}:`,
           err
         );
-        // Clean up on failure — polling will catch the session
+        // Clean up on failure (including timeout) — polling will catch the session
         const currentSub = instanceSubscriptions.get(instanceId);
         if (currentSub) {
           instanceSubscriptions.delete(instanceId);

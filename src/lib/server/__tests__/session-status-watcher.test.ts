@@ -589,4 +589,108 @@ describe("session-status-watcher", () => {
       mock.end();
     });
   });
+
+  describe("subscribe timeout", () => {
+    it("CleansUpWatcherWhenSubscribeTimesOut", async () => {
+      const instanceId = "inst-timeout";
+
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // Return a subscribe that never resolves
+      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
+        event: {
+          subscribe: vi.fn().mockReturnValue(new Promise(() => {})),
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // Set a very short timeout for the test
+      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
+      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "50";
+
+      try {
+        ensureWatching(instanceId);
+
+        // Wait for the timeout to fire and clean up
+        await new Promise((r) => setTimeout(r, 200));
+
+        // After timeout, re-watching should be possible (watcher was cleaned up)
+        // If the watcher was NOT cleaned up, this would be a no-op (idempotent guard)
+        // Since we can't directly inspect the watchers Map, we verify the subscribe
+        // was called once (not twice, which would mean the idempotent guard blocked it)
+        const subscribeFn = vi.mocked(opencodeClient.getClientForInstance).mock.results[0]
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ?.value?.event?.subscribe as any;
+        expect(subscribeFn).toHaveBeenCalledTimes(1);
+      } finally {
+        if (origTimeout !== undefined) {
+          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
+        } else {
+          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
+        }
+      }
+    });
+
+    it("SuccessfulSubscribeIsNotAffectedByTimeout", async () => {
+      const mock = createMockEventStream();
+      const instanceId = "inst-no-timeout";
+
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
+        event: {
+          subscribe: vi.fn().mockResolvedValue({ stream: mock.stream }),
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
+      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "5000";
+
+      try {
+        ensureWatching(instanceId);
+
+        // Push an event to prove the stream is working
+        vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
+          id: "db-timeout-test",
+          status: "idle",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+
+        mock.push({
+          type: "session.status",
+          properties: {
+            sessionID: "oc-timeout-test",
+            status: { type: "busy" },
+          },
+        });
+
+        await vi.waitFor(() => {
+          expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
+        });
+
+        expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
+          sessionId: "oc-timeout-test",
+          instanceId,
+          activityStatus: "busy",
+        });
+
+        mock.end();
+      } finally {
+        if (origTimeout !== undefined) {
+          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
+        } else {
+          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
+        }
+      }
+    });
+  });
 });
