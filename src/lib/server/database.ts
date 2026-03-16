@@ -120,6 +120,18 @@ export function getDb(): Database.Database {
     // Column already exists — ignore
   }
 
+  // Phase 5: add total_tokens and total_cost columns for per-session token tracking
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists — ignore
+  }
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN total_cost REAL NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists — ignore
+  }
+
   // Add index on sessions.status for efficient status-based queries
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
 

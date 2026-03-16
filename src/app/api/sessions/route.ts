@@ -385,6 +385,8 @@ export async function GET(): Promise<NextResponse> {
         activityStatus: deriveActivityStatus(sessionStatus),
         lifecycleStatus: deriveLifecycleStatus(sessionStatus),
         typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+        totalTokens: dbSession.total_tokens || undefined,
+        totalCost: dbSession.total_cost || undefined,
       });
     }
   }
@@ -429,6 +431,8 @@ export async function GET(): Promise<NextResponse> {
           activityStatus: deriveActivityStatus(sessionStatus),
           lifecycleStatus: deriveLifecycleStatus(sessionStatus),
           typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+          totalTokens: dbSession.total_tokens || undefined,
+          totalCost: dbSession.total_cost || undefined,
         });
       } else {
         // SDK call failed — fall back to stub
@@ -461,6 +465,8 @@ export async function GET(): Promise<NextResponse> {
           activityStatus: deriveActivityStatus(sessionStatus),
           lifecycleStatus: deriveLifecycleStatus(sessionStatus),
           typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+          totalTokens: dbSession.total_tokens || undefined,
+          totalCost: dbSession.total_cost || undefined,
         });
       }
     }

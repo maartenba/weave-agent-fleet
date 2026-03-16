@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
-import { getSessionStatusCounts } from "@/lib/server/db-repository";
+import { getSessionStatusCounts, getFleetTokenTotals } from "@/lib/server/db-repository";
 import type { FleetSummaryResponse } from "@/lib/api-types";
 
 export type { FleetSummaryResponse };
@@ -11,6 +11,7 @@ export async function GET(): Promise<NextResponse> {
 
   try {
     const counts = getSessionStatusCounts();
+    const tokenTotals = getFleetTokenTotals();
 
     const activeSessions = counts.active;
     const idleSessions = counts.idle;
@@ -18,9 +19,8 @@ export async function GET(): Promise<NextResponse> {
     const summary: FleetSummaryResponse = {
       activeSessions,
       idleSessions,
-      // Tokens/cost not yet tracked per-session in DB — default to 0
-      totalTokens: 0,
-      totalCost: 0,
+      totalTokens: tokenTotals.totalTokens,
+      totalCost: tokenTotals.totalCost,
       // Queue not implemented in V2
       queuedTasks: 0,
     };

@@ -18,6 +18,7 @@ import { OpenToolContextSubmenu } from "@/components/ui/open-tool-menu";
 import type { OpenTool } from "@/hooks/use-open-directory";
 import type { SessionListItem } from "@/lib/api-types";
 import { formatRelativeTime } from "@/lib/format-utils";
+import { TokenCostBreakdown } from "@/components/session/token-cost-breakdown";
 
 export const LiveSessionCard = React.memo(function LiveSessionCard({
   item,
@@ -130,6 +131,14 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
               <span>{formatRelativeTime(session.time.created)}</span>
+              {item.totalTokens != null && item.totalTokens > 0 && (
+                <TokenCostBreakdown
+                  tokens={{ input: 0, output: 0, reasoning: 0 }}
+                  totalOverride={item.totalTokens}
+                  cost={item.totalCost ?? 0}
+                  variant="compact"
+                />
+              )}
               <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">
                 {session.id.slice(0, 8)}…
               </span>

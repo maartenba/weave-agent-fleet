@@ -50,6 +50,10 @@ export interface DbSession {
   activity_status: SessionActivityStatus | null;
   /** Lifecycle status — overall terminal/non-terminal state (null until first write) */
   lifecycle_status: SessionLifecycleStatus | null;
+  /** Accumulated total tokens across all messages */
+  total_tokens: number;
+  /** Accumulated total cost in USD across all messages */
+  total_cost: number;
 }
 
 // ─── Insert input types (id + timestamps are required on insert) ──────────────
@@ -492,6 +496,42 @@ export function deleteCallbacksForSession(sessionId: string): number {
     .prepare("DELETE FROM session_callbacks WHERE source_session_id = ? OR target_session_id = ?")
     .run(sessionId, sessionId);
   return result.changes;
+}
+
+// ─── Token Tracking ───────────────────────────────────────────────────────────
+
+/**
+ * Atomically increment a session's accumulated tokens and cost.
+ * Called from the session-status-watcher when step-finish events arrive.
+ * Returns the new totals.
+ */
+export function incrementSessionTokens(
+  id: string,
+  tokens: number,
+  cost: number
+): { totalTokens: number; totalCost: number } | undefined {
+  const db = getDb();
+  db.prepare(
+    `UPDATE sessions
+     SET total_tokens = total_tokens + @tokens,
+         total_cost = total_cost + @cost
+     WHERE id = @id`
+  ).run({ id, tokens, cost });
+  const row = db
+    .prepare("SELECT total_tokens, total_cost FROM sessions WHERE id = ?")
+    .get(id) as { total_tokens: number; total_cost: number } | undefined;
+  if (!row) return undefined;
+  return { totalTokens: row.total_tokens, totalCost: row.total_cost };
+}
+
+/**
+ * Get fleet-wide token and cost aggregates from all sessions.
+ */
+export function getFleetTokenTotals(): { totalTokens: number; totalCost: number } {
+  const row = getDb()
+    .prepare("SELECT COALESCE(SUM(total_tokens), 0) as total_tokens, COALESCE(SUM(total_cost), 0) as total_cost FROM sessions")
+    .get() as { total_tokens: number; total_cost: number };
+  return { totalTokens: row.total_tokens, totalCost: row.total_cost };
 }
 
 // ─── Workspace Roots ──────────────────────────────────────────────────────────

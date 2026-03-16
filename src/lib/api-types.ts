@@ -59,6 +59,17 @@ export interface SendPromptRequest {
   text: string;
   agent?: string;
   model?: { providerID: string; modelID: string };
+  attachments?: ImageAttachment[];
+}
+
+/** An image attachment sent alongside a prompt (base64-encoded). */
+export interface ImageAttachment {
+  /** MIME type: image/png, image/jpeg, image/gif, image/webp */
+  mime: string;
+  /** Optional filename for display */
+  filename?: string;
+  /** Base64-encoded image data (NOT the full data URI — just the base64 payload) */
+  data: string;
 }
 
 export interface SendCommandRequest {
@@ -114,6 +125,14 @@ export interface SessionListItem {
    * Instance status — whether the OpenCode process backing this session is healthy.
    */
   typedInstanceStatus: InstanceStatus;
+  /**
+   * Total token count across all messages (populated when available from SSE aggregation or DB).
+   */
+  totalTokens?: number;
+  /**
+   * Total cost in USD across all messages (populated when available).
+   */
+  totalCost?: number;
 }
 
 // ─── Streamed Event Model ──────────────────────────────────────────────────
@@ -145,7 +164,16 @@ export interface AccumulatedToolPart {
   state: Part extends { type: "tool"; state: infer S } ? S : unknown;
 }
 
-export type AccumulatedPart = AccumulatedTextPart | AccumulatedToolPart;
+export interface AccumulatedFilePart {
+  partId: string;
+  type: "file";
+  mime: string;
+  filename?: string;
+  /** Full data URI or URL for rendering */
+  url: string;
+}
+
+export type AccumulatedPart = AccumulatedTextPart | AccumulatedToolPart | AccumulatedFilePart;
 
 export interface AccumulatedMessage {
   messageId: string;

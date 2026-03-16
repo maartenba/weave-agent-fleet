@@ -55,6 +55,9 @@ export function getPartSearchableText(part: AccumulatedPart): string {
   if (part.type === "text") {
     return part.text;
   }
+  if (part.type === "file") {
+    return part.filename ?? "";
+  }
   // Tool part: match tool name and output
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const state = part.state as any;

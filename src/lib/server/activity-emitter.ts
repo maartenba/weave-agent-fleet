@@ -52,16 +52,39 @@ export function onActivityStatus(
   };
 }
 
+// ─── Token update events (ephemeral — DB is the source of truth) ──────────────
+
+export interface TokenUpdatePayload {
+  sessionId: string;
+  totalTokens: number;
+  totalCost: number;
+}
+
+export function emitTokenUpdate(payload: TokenUpdatePayload): void {
+  getEmitter().emit("token_update", payload);
+}
+
+export function onTokenUpdate(
+  callback: (payload: TokenUpdatePayload) => void
+): () => void {
+  const emitter = getEmitter();
+  emitter.on("token_update", callback);
+  return () => {
+    emitter.off("token_update", callback);
+  };
+}
+
 // ─── Listener monitoring ──────────────────────────────────────────────────────
 
 const LISTENER_WARN_THRESHOLD = 50;
 const LISTENER_MONITOR_INTERVAL_MS = 60_000;
 
 /** Get current listener counts by event type. */
-export function getListenerCounts(): { activity_status: number } {
+export function getListenerCounts(): { activity_status: number; token_update: number } {
   const emitter = getEmitter();
   return {
     activity_status: emitter.listenerCount("activity_status"),
+    token_update: emitter.listenerCount("token_update"),
   };
 }
 
@@ -74,10 +97,10 @@ export function startListenerMonitoring(): void {
   if (_g.__weaveActivityListenerMonitorInterval) return;
   _g.__weaveActivityListenerMonitorInterval = setInterval(() => {
     const counts = getListenerCounts();
-    const total = counts.activity_status;
+    const total = counts.activity_status + counts.token_update;
     if (total > LISTENER_WARN_THRESHOLD) {
       console.warn(
-        `[activity-emitter] High listener count: ${total} (activity_status: ${counts.activity_status}). Possible leak.`
+        `[activity-emitter] High listener count: ${total} (activity_status: ${counts.activity_status}, token_update: ${counts.token_update}). Possible leak.`
       );
     }
   }, LISTENER_MONITOR_INTERVAL_MS);

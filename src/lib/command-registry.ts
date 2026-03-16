@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type CommandCategory = "Session" | "Navigation" | "View";
+export type CommandCategory = "Session" | "Navigation" | "View" | "Fleet";
 
 export interface GlobalShortcut {
   key: string;
@@ -20,6 +20,10 @@ export interface Command {
   action: () => void;
   keywords?: string[];
   disabled?: boolean;
+  /** Sub-commands shown when this command is selected (drills into a nested level) */
+  subCommands?: Command[];
+  /** Dynamic sub-command generator — called when selected if subCommands is not set */
+  getSubCommands?: () => Command[];
 }
 
 export interface CommandRegistryValue {

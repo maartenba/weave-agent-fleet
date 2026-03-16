@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { _recoveryComplete } from "@/lib/server/process-manager";
-import { onActivityStatus } from "@/lib/server/activity-emitter";
+import { onActivityStatus, onTokenUpdate } from "@/lib/server/activity-emitter";
 
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
@@ -48,10 +48,17 @@ export async function GET(request: NextRequest): Promise<Response> {
         send({ type: "activity_status", payload });
       });
 
+      // Subscribe to token update events
+      const unsubscribeTokens = onTokenUpdate((payload) => {
+        if (abortController.signal.aborted) return;
+        send({ type: "token_update", payload });
+      });
+
       // Cleanup on abort
       abortController.signal.addEventListener("abort", () => {
         clearInterval(keepalive);
         unsubscribeActivity();
+        unsubscribeTokens();
         try {
           controller.close();
         } catch {

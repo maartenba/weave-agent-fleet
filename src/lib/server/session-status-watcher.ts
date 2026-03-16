@@ -25,11 +25,12 @@ import {
   updateSessionStatus,
   getSession,
   getActiveChildSessions,
+  incrementSessionTokens,
 } from "./db-repository";
 import type { DbSession } from "./db-repository";
 import { getInstance } from "./process-manager";
 import { getClientForInstance } from "./opencode-client";
-import { emitActivityStatus } from "./activity-emitter";
+import { emitActivityStatus, emitTokenUpdate } from "./activity-emitter";
 import { log } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -216,6 +217,36 @@ async function processEventStream(
           }
         } catch (err) {
           log.warn("session-status-watcher", "Failed to persist waiting_input status", {
+            sessionId: eventSessionId,
+            instanceId,
+            err,
+          });
+        }
+      } else if (type === "message.part.updated") {
+        // Capture step-finish events to accumulate per-session token/cost data
+        const part = properties?.part;
+        if (!part || part.type !== "step-finish") continue;
+
+        const eventSessionId: string = part.sessionID ?? "";
+        const tokensDelta = (part.tokens?.input ?? 0) + (part.tokens?.output ?? 0) + (part.tokens?.reasoning ?? 0);
+        const costDelta: number = part.cost ?? 0;
+
+        if (!eventSessionId || (tokensDelta === 0 && costDelta === 0)) continue;
+
+        try {
+          const dbSession = getSessionByOpencodeId(eventSessionId);
+          if (dbSession) {
+            const totals = incrementSessionTokens(dbSession.id, tokensDelta, costDelta);
+            if (totals) {
+              emitTokenUpdate({
+                sessionId: eventSessionId,
+                totalTokens: totals.totalTokens,
+                totalCost: totals.totalCost,
+              });
+            }
+          }
+        } catch (err) {
+          log.warn("session-status-watcher", "Failed to persist token data", {
             sessionId: eventSessionId,
             instanceId,
             err,

@@ -9,14 +9,14 @@ import { Bot, User, SquareTerminal, Loader2, AlertCircle, RefreshCw, ChevronDown
 import { useScrollAnchor } from "@/hooks/use-scroll-anchor";
 import { useActivityFilter } from "@/hooks/use-activity-filter";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
-import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AutocompleteAgent } from "@/lib/api-types";
+import type { AccumulatedMessage, AccumulatedPart, AccumulatedToolPart, AccumulatedFilePart, AutocompleteAgent } from "@/lib/api-types";
 import { isTaskToolCall, getTaskToolInput, getTaskToolSessionId } from "@/lib/api-types";
 import Link from "next/link";
 import type { SessionConnectionStatus } from "@/hooks/use-session-events";
 import { isTodoWriteTool, parseTodoOutput } from "@/lib/todo-utils";
 import { resolveAgentColor } from "@/lib/agent-colors";
 import { TodoListInline } from "./todo-list-inline";
-import { CollapsibleToolCall } from "./collapsible-tool-call";
+import { ToolCardRouter } from "./tool-cards/tool-card-router";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { RelativeTimestamp } from "./relative-timestamp";
 import { ActivityStreamToolbar } from "./activity-stream-toolbar";
@@ -43,6 +43,7 @@ interface ActivityStreamV1Props {
   loadOlderError?: string | null;
   /** The current page's OpenCode session ID — threaded to TaskDelegationItem for parent breadcrumbs. */
   currentSessionId?: string;
+
   /**
    * Ref written by the calling component with the current scroll position.
    * ActivityStreamV1 keeps this up to date on every scroll so that the parent
@@ -190,7 +191,7 @@ function ToolCallItem({ part, currentSessionId }: { part: AccumulatedPart & { ty
     }
   }
 
-  return <CollapsibleToolCall part={part} />;
+  return <ToolCardRouter part={part} />;
 }
 
 // ─── Message Item ───────────────────────────────────────────────────────────
@@ -215,6 +216,9 @@ const MessageItem = memo(function MessageItem({
   const textParts = message.parts.filter((p) => p.type === "text");
   const toolParts = message.parts.filter(
     (p): p is AccumulatedPart & { type: "tool" } => p.type === "tool"
+  );
+  const fileParts = message.parts.filter(
+    (p): p is AccumulatedFilePart => p.type === "file"
   );
 
   const fullText = textParts
@@ -290,13 +294,35 @@ const MessageItem = memo(function MessageItem({
           </div>
         )}
 
+        {/* Image attachments */}
+        {fileParts.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {fileParts.map((part) => (
+              <a
+                key={part.partId}
+                href={part.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={part.url}
+                  alt={part.filename ?? "Image attachment"}
+                  className="max-h-48 max-w-xs rounded-md border border-border object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                />
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* Text content */}
         {fullText && (
           <MarkdownRenderer content={fullText} />
         )}
 
         {/* Empty state for assistant — still streaming */}
-        {!isUser && !fullText && toolParts.length === 0 && (
+        {!isUser && !fullText && toolParts.length === 0 && fileParts.length === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>

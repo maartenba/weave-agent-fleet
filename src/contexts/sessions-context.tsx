@@ -98,6 +98,32 @@ export function pruneStalePatches(
   return remaining;
 }
 
+/**
+ * Patch a single session's token/cost data in the sessions array.
+ * Returns a new array only if a matching session was found and changed.
+ */
+export function patchTokenData(
+  sessions: SessionListItem[],
+  sessionId: string,
+  totalTokens: number,
+  totalCost: number
+): SessionListItem[] {
+  const index = sessions.findIndex((s) => s.session.id === sessionId);
+  if (index === -1) return sessions;
+
+  const existing = sessions[index];
+  // Skip patch if already the same
+  if (existing.totalTokens === totalTokens && existing.totalCost === totalCost) return sessions;
+
+  const updated = sessions.slice();
+  updated[index] = {
+    ...existing,
+    totalTokens,
+    totalCost,
+  };
+  return updated;
+}
+
 export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const { sessions: polledSessions, isLoading, error, refetch } = useSessions(5000);
   const { summary } = useFleetSummary(10000);
@@ -107,6 +133,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   // When polledSessions changes (new poll arrived), we clear patches because
   // the poll is the source of truth.
   const ssePatchesRef = useRef<Map<string, SessionActivityStatus>>(new Map());
+  const tokenPatchesRef = useRef<Map<string, { totalTokens: number; totalCost: number }>>(new Map());
   const lastPolledRef = useRef(polledSessions);
   const [sseGeneration, setSseGeneration] = useState(0);
   const rafRef = useRef<number | null>(null);
@@ -140,9 +167,35 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    function handleTokenUpdate(payload: unknown) {
+      const msg = payload as {
+        type: string;
+        payload?: {
+          sessionId: string;
+          totalTokens: number;
+          totalCost: number;
+        };
+      };
+      if (!msg.payload) return;
+      tokenPatchesRef.current = new Map(tokenPatchesRef.current);
+      tokenPatchesRef.current.set(msg.payload.sessionId, {
+        totalTokens: msg.payload.totalTokens,
+        totalCost: msg.payload.totalCost,
+      });
+      // rAF batching
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          setSseGeneration((n) => n + 1);
+        });
+      }
+    }
+
     sse.on("activity_status", handleActivityStatus);
+    sse.on("token_update", handleTokenUpdate);
     return () => {
       sse.off("activity_status", handleActivityStatus);
+      sse.off("token_update", handleTokenUpdate);
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -157,6 +210,14 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       lastPolledRef.current = polledSessions;
       // Smart pruning: only drop patches where the poll has caught up
       ssePatchesRef.current = pruneStalePatches(ssePatchesRef.current, polledSessions);
+
+      // Prune token patches whose values now match what the poll returned
+      for (const [sessionId, patchedTokens] of tokenPatchesRef.current) {
+        const polled = polledSessions.find((s) => s.session.id === sessionId);
+        if (!polled || (polled.totalTokens === patchedTokens.totalTokens && polled.totalCost === patchedTokens.totalCost)) {
+          tokenPatchesRef.current.delete(sessionId);
+        }
+      }
 
       // Prune title patches whose value now matches what the poll returned
       for (const [sessionId, patchedTitle] of titlePatchesRef.current) {
@@ -176,6 +237,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     }
 
     const patches = ssePatchesRef.current;
+    const tokenPatches = tokenPatchesRef.current;
     const titlePatches = titlePatchesRef.current;
     const displayNamePatches = displayNamePatchesRef.current;
 
@@ -184,6 +246,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     if (patches.size > 0) {
       for (const [sessionId, activityStatus] of patches) {
         result = patchActivityStatus(result, sessionId, activityStatus);
+      }
+    }
+
+    if (tokenPatches.size > 0) {
+      for (const [sessionId, { totalTokens, totalCost }] of tokenPatches) {
+        result = patchTokenData(result, sessionId, totalTokens, totalCost);
       }
     }
 

@@ -113,6 +113,7 @@ export function CommandRegistryProvider({ children }: CommandRegistryProviderPro
       Session: 0,
       Navigation: 1,
       View: 2,
+      Fleet: 3,
     };
     return Array.from(commandsMapRef.current.values()).sort((a, b) => {
       const catDiff =

@@ -7,6 +7,7 @@ import type {
   AccumulatedMessage,
   AccumulatedTextPart,
   AccumulatedToolPart,
+  AccumulatedFilePart,
 } from "@/lib/api-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,15 +44,50 @@ export function ensureMessage(
 export function mergeMessageUpdate(
   prev: AccumulatedMessage[],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  info: { id: string; time?: { completed?: number }; [key: string]: unknown }
+  info: { id: string; time?: { completed?: number }; cost?: number; tokens?: { input: number; output: number; reasoning: number }; [key: string]: unknown }
 ): AccumulatedMessage[] {
   const index = prev.findIndex((m) => m.messageId === info.id);
   if (index === -1) return prev; // message not found, no-op
   const existing = prev[index];
   const completedAt = info.time?.completed;
-  if (!completedAt || existing.completedAt) return prev; // nothing new to merge
+
+  // Merge tokens and cost from the message-level info.
+  // step-finish parts accumulate these during streaming, but if any were
+  // missed (e.g. reconnect gap) the final message.updated carries the totals.
+  // Use the larger value between what we accumulated and what the server reports,
+  // since the server total is authoritative for completed messages.
+  const infoTokens = info.tokens;
+  const infoCost = info.cost ?? 0;
+  const mergedTokens = infoTokens
+    ? {
+        input: Math.max(existing.tokens?.input ?? 0, infoTokens.input ?? 0),
+        output: Math.max(existing.tokens?.output ?? 0, infoTokens.output ?? 0),
+        reasoning: Math.max(existing.tokens?.reasoning ?? 0, infoTokens.reasoning ?? 0),
+      }
+    : existing.tokens;
+  const mergedCost = Math.max(existing.cost ?? 0, infoCost);
+
+  const hasNewCompletedAt = completedAt && !existing.completedAt;
+  const hasNewTokens = mergedTokens && !existing.tokens;
+  const hasUpdatedTokens =
+    mergedTokens &&
+    existing.tokens &&
+    (mergedTokens.input !== existing.tokens.input ||
+      mergedTokens.output !== existing.tokens.output ||
+      mergedTokens.reasoning !== existing.tokens.reasoning);
+  const hasNewCost = mergedCost > (existing.cost ?? 0);
+
+  if (!hasNewCompletedAt && !hasNewTokens && !hasUpdatedTokens && !hasNewCost) {
+    return prev; // nothing new to merge
+  }
+
   const updated = prev.slice();
-  updated[index] = { ...existing, completedAt };
+  updated[index] = {
+    ...existing,
+    ...(hasNewCompletedAt ? { completedAt } : {}),
+    tokens: mergedTokens,
+    cost: mergedCost,
+  };
   return updated;
 }
 
@@ -106,6 +142,24 @@ export function applyPartUpdate(
         tool: part.tool ?? "",
         callId: part.callID ?? "",
         state: part.state,
+      };
+      const existing = msg.parts.find((p) => p.partId === part.id);
+      if (existing) {
+        return {
+          ...msg,
+          parts: msg.parts.map((p) => (p.partId === part.id ? newPart : p)),
+        };
+      }
+      return { ...msg, parts: [...msg.parts, newPart] };
+    }
+
+    if (part.type === "file") {
+      const newPart: AccumulatedFilePart = {
+        partId: part.id,
+        type: "file",
+        mime: part.mime ?? "",
+        filename: part.filename,
+        url: part.url ?? "",
       };
       const existing = msg.parts.find((p) => p.partId === part.id);
       if (existing) {

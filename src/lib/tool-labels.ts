@@ -6,7 +6,7 @@
  */
 
 /** Shorten a file path to `parentDir/filename` when it exceeds `maxLen` chars. */
-function shortenPath(filePath: string, maxLen = 50): string {
+export function shortenPath(filePath: string, maxLen = 50): string {
   if (filePath.length <= maxLen) return filePath;
   const segments = filePath.split("/");
   if (segments.length <= 2) return filePath;

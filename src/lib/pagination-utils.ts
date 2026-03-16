@@ -33,6 +33,10 @@ export interface SDKMessagePart {
   state?: unknown;
   cost?: number;
   tokens?: { input: number; output: number; reasoning: number };
+  // File part fields
+  mime?: string;
+  filename?: string;
+  url?: string;
 }
 
 export interface SDKMessage {
@@ -150,6 +154,14 @@ export function convertSDKMessageToAccumulated(msg: SDKMessage): AccumulatedMess
         tool: part.tool ?? "",
         callId: part.callID ?? "",
         state: part.state,
+      });
+    } else if (part.type === "file") {
+      parts.push({
+        partId: part.id,
+        type: "file",
+        mime: part.mime ?? "",
+        filename: part.filename,
+        url: part.url ?? "",
       });
     } else if (part.type === "step-finish") {
       cost += part.cost ?? 0;

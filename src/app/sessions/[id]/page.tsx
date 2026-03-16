@@ -16,7 +16,7 @@ import { useDiffs } from "@/hooks/use-diffs";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight, ArrowUpToLine, ArrowDownToLine, ListTodo, Eraser, ScrollText } from "lucide-react";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
@@ -26,11 +26,13 @@ import { ForkSessionDialog } from "@/components/session/fork-session-dialog";
 import { extractLatestTodos } from "@/lib/todo-utils";
 import { TodoSidebarPanel } from "@/components/session/todo-sidebar-panel";
 import { DiffViewer } from "@/components/session/diff-viewer";
+import { TokenCostBreakdown } from "@/components/session/token-cost-breakdown";
 import { useCommandRegistry } from "@/contexts/command-registry-context";
 import { useKeybindings } from "@/contexts/keybindings-context";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import type { SelectedModel } from "@/components/session/model-selector";
+import type { ImageAttachment } from "@/lib/api-types";
 import Link from "next/link";
 
 interface AncestorInfo {
@@ -141,6 +143,135 @@ export default function SessionDetailPage() {
     };
   }, [registerCommand, unregisterCommand, bindings, sessionStatus, isStopped, abortSession, sessionId, instanceId]);
 
+  // Register additional session-page commands
+  useEffect(() => {
+    registerCommand({
+      id: "copy-session-id",
+      label: "Copy Session ID",
+      icon: Hash,
+      category: "Session",
+      globalShortcut: bindings["copy-session-id"]?.globalShortcut ?? undefined,
+      keywords: ["clipboard", "id", "copy"],
+      action: () => {
+        navigator.clipboard.writeText(sessionId).catch(() => {});
+      },
+    });
+    registerCommand({
+      id: "copy-session-url",
+      label: "Copy Session URL",
+      icon: Hash,
+      category: "Session",
+      keywords: ["clipboard", "link", "share", "url"],
+      action: () => {
+        navigator.clipboard.writeText(window.location.href).catch(() => {});
+      },
+    });
+    registerCommand({
+      id: "fork-session",
+      label: "Fork Session (New Context Window)",
+      icon: GitFork,
+      category: "Session",
+      keywords: ["branch", "clone", "context", "window"],
+      action: () => setShowForkDialog(true),
+    });
+    registerCommand({
+      id: "toggle-diff-view",
+      label: "Toggle Diff View",
+      icon: GitCompare,
+      category: "Session",
+      globalShortcut: bindings["toggle-diff-view"]?.globalShortcut ?? undefined,
+      keywords: ["changes", "git", "diff", "compare"],
+      action: () => {
+        // Toggle to diffs tab or back to activity
+        const tabList = document.querySelector('[role="tablist"]');
+        const diffsTab = tabList?.querySelector('[value="diffs"]') as HTMLElement | null;
+        const activityTab = tabList?.querySelector('[value="activity"]') as HTMLElement | null;
+        if (diffsTab && activityTab) {
+          // Simple toggle heuristic: if diffs tab is selected, go to activity
+          const isDiffsActive = diffsTab.getAttribute("data-state") === "active";
+          (isDiffsActive ? activityTab : diffsTab).click();
+        }
+      },
+    });
+    registerCommand({
+      id: "scroll-to-top",
+      label: "Scroll to Top",
+      icon: ArrowUpToLine,
+      category: "Session",
+      keywords: ["beginning", "start", "first", "top"],
+      action: () => {
+        const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
+        scrollArea?.scrollTo({ top: 0, behavior: "smooth" });
+      },
+    });
+    registerCommand({
+      id: "scroll-to-bottom",
+      label: "Scroll to Bottom",
+      icon: ArrowDownToLine,
+      category: "Session",
+      keywords: ["end", "latest", "bottom", "last"],
+      action: () => {
+        const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]');
+        if (scrollArea) {
+          scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: "smooth" });
+        }
+      },
+    });
+    registerCommand({
+      id: "clear-conversation",
+      label: "Clear Conversation (Fork Empty)",
+      icon: Eraser,
+      category: "Session",
+      keywords: ["reset", "clear", "clean", "new"],
+      action: () => setShowForkDialog(true),
+    });
+
+    return () => {
+      unregisterCommand("copy-session-id");
+      unregisterCommand("copy-session-url");
+      unregisterCommand("fork-session");
+      unregisterCommand("toggle-diff-view");
+      unregisterCommand("scroll-to-top");
+      unregisterCommand("scroll-to-bottom");
+      unregisterCommand("clear-conversation");
+    };
+  }, [registerCommand, unregisterCommand, bindings, sessionId]);
+
+  // Export conversation command — separate useEffect since it depends on messages
+  useEffect(() => {
+    registerCommand({
+      id: "export-conversation",
+      label: "Export Conversation",
+      icon: ScrollText,
+      category: "Session",
+      keywords: ["download", "save", "export", "json", "markdown"],
+      action: () => {
+        // Export messages as markdown
+        const lines: string[] = [];
+        for (const msg of messages) {
+          const role = msg.role === "user" ? "**You**" : `**${msg.agent ?? "Assistant"}**`;
+          const text = msg.parts
+            .filter((p) => p.type === "text")
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join("");
+          if (text) {
+            lines.push(`${role}:\n${text}\n`);
+          }
+        }
+        const blob = new Blob([lines.join("\n---\n\n")], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `session-${sessionId.slice(0, 8)}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+    return () => {
+      unregisterCommand("export-conversation");
+    };
+  }, [registerCommand, unregisterCommand, sessionId, messages]);
+
   const [metadata, setMetadata] = useState<SessionMetadata>({
     workspaceId: null,
     workspaceDirectory: null,
@@ -222,12 +353,44 @@ export default function SessionDetailPage() {
     }
   }, [status, isResumable, isStopped, fetchMetadata]);
 
-  // Compute aggregate tokens from accumulated messages
-  const totalTokens = messages.reduce(
-    (sum, m) => sum + (m.tokens?.input ?? 0) + (m.tokens?.output ?? 0),
-    0
+  // Compute aggregate tokens by type from accumulated messages
+  const tokenBreakdown = useMemo(() => {
+    let input = 0;
+    let output = 0;
+    let reasoning = 0;
+    for (const m of messages) {
+      input += m.tokens?.input ?? 0;
+      output += m.tokens?.output ?? 0;
+      reasoning += m.tokens?.reasoning ?? 0;
+    }
+    return { input, output, reasoning };
+  }, [messages]);
+  const totalTokens = tokenBreakdown.input + tokenBreakdown.output + tokenBreakdown.reasoning;
+  const totalCost = useMemo(
+    () => messages.reduce((sum, m) => sum + (m.cost ?? 0), 0),
+    [messages]
   );
-  const latestTodos = extractLatestTodos(messages);
+  const latestTodos = useMemo(() => extractLatestTodos(messages), [messages]);
+
+  // Register toggle-todo-panel command (depends on latestTodos)
+  useEffect(() => {
+    registerCommand({
+      id: "toggle-todo-panel",
+      label: "Toggle Todo Panel",
+      icon: ListTodo,
+      category: "Session",
+      globalShortcut: bindings["toggle-todo-panel"]?.globalShortcut ?? undefined,
+      keywords: ["tasks", "checklist", "todos", "panel"],
+      disabled: !latestTodos || latestTodos.length === 0,
+      action: () => {
+        const todoPanel = document.querySelector('[data-testid="todo-sidebar-panel"]');
+        todoPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+    });
+    return () => {
+      unregisterCommand("toggle-todo-panel");
+    };
+  }, [registerCommand, unregisterCommand, bindings, latestTodos]);
 
   // Aggregate diff stats for sidebar
   const { totalDiffAdditions, totalDiffDeletions } = useMemo(() => {
@@ -262,8 +425,8 @@ export default function SessionDetailPage() {
   })();
 
   const handleSend = useCallback(
-    async (text: string, agent?: string, model?: SelectedModel) => {
-      await sendPrompt(sessionId, instanceId, text, agent, model ?? undefined);
+    async (text: string, agent?: string, model?: SelectedModel, attachments?: ImageAttachment[]) => {
+      await sendPrompt(sessionId, instanceId, text, agent, model ?? undefined, attachments);
     },
     [sendPrompt, sessionId, instanceId]
   );
@@ -531,6 +694,7 @@ export default function SessionDetailPage() {
                 providers={providers}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
+                sessionStatus={sessionStatus}
                 onFocusRequest={(focus) => {
                   promptFocusRef.current = focus;
                 }}
@@ -549,23 +713,6 @@ export default function SessionDetailPage() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Session Info
               </p>
-
-              {/* Session ID */}
-              <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Session ID</p>
-                <p className="text-xs font-mono break-all">{sessionId}</p>
-              </div>
-
-              {/* Instance ID */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <Server className="h-3 w-3 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Instance</p>
-                </div>
-                <p className="text-xs font-mono truncate">{instanceId.slice(0, 16)}…</p>
-              </div>
-
-              <Separator />
 
               {/* Workspace */}
               {metadata.workspaceDirectory && (
@@ -604,13 +751,13 @@ export default function SessionDetailPage() {
 
               <Separator />
 
-              {/* Tokens */}
+              {/* Tokens & Cost */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
                   <Hash className="h-3 w-3 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokens</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokens & Cost</p>
                 </div>
-                <p className="text-xs font-mono">{totalTokens.toLocaleString()}</p>
+                <TokenCostBreakdown tokens={tokenBreakdown} cost={totalCost} variant="sidebar" />
               </div>
 
               {/* Changes summary */}
