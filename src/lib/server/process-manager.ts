@@ -63,7 +63,7 @@ interface SpawnServerOptions {
 
 async function spawnOpencodeServer(
   options: SpawnServerOptions
-): Promise<{ url: string; pid: number | undefined; close: () => void }> {
+): Promise<{ url: string; pid: number | undefined; close: (force?: boolean) => void }> {
   const hostname = options.hostname ?? "127.0.0.1";
   const port = options.port ?? 4096;
   const timeout = options.timeout ?? 5000;
@@ -144,11 +144,57 @@ async function spawnOpencodeServer(
     }
   });
 
+  const KILL_GRACE_MS =
+    parseInt(process.env.WEAVE_KILL_GRACE_MS ?? "", 10) || 5000;
+
   return {
     url,
     pid: proc.pid,
-    close() {
-      proc.kill();
+    close(force?: boolean) {
+      // No-op if process never spawned or already exited
+      if (proc.pid === undefined || proc.exitCode !== null) return;
+
+      if (force) {
+        // Synchronous SIGKILL — used during process.on('exit') where no async work runs
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+          // Process already dead — ignore ESRCH
+        }
+        return;
+      }
+
+      // Graceful: SIGTERM → timeout → SIGKILL
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        // Process already dead — no escalation needed
+        return;
+      }
+
+      const killTimer = setTimeout(() => {
+        if (proc.exitCode === null) {
+          log.warn("process-manager", "Process did not exit after SIGTERM grace period — sending SIGKILL", {
+            pid: proc.pid,
+            graceMs: KILL_GRACE_MS,
+          });
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            // Process died between check and kill — ignore
+          }
+        }
+      }, KILL_GRACE_MS);
+
+      // If the process exits within the grace period, clear the timer
+      proc.once("exit", () => {
+        clearTimeout(killTimer);
+      });
+
+      // Ensure the timer doesn't prevent Node.js from exiting
+      if (killTimer.unref) {
+        killTimer.unref();
+      }
     },
   };
 }
@@ -162,7 +208,7 @@ export interface ManagedInstance {
   url: string;
   directory: string;
   client: OpencodeClient;
-  close: () => void;
+  close: (force?: boolean) => void;
   status: "running" | "dead";
   createdAt: Date;
   /** True if this instance was recovered from DB on startup (not freshly spawned) */
@@ -198,6 +244,7 @@ const _g = globalThis as unknown as {
   __weaveInstances?: Map<string, ManagedInstance>;
   __weaveUsedPorts?: Set<number>;
   __weaveDirToInstance?: Map<string, string>;
+  __weaveInflightSpawns?: Map<string, Promise<ManagedInstance>>;
   __weaveRecoveryResolve?: (() => void) | null;
   __weaveRecoveryPromise?: Promise<void>;
   __weaveCleanupRun?: boolean;
@@ -213,6 +260,8 @@ const instances: Map<string, ManagedInstance> = (_g.__weaveInstances ??= new Map
 const usedPorts: Set<number> = (_g.__weaveUsedPorts ??= new Set());
 // Track which directories already have an instance
 const directoryToInstanceId: Map<string, string> = (_g.__weaveDirToInstance ??= new Map());
+// Track in-flight spawn promises to prevent duplicate concurrent spawns for the same directory
+const inflightSpawns: Map<string, Promise<ManagedInstance>> = (_g.__weaveInflightSpawns ??= new Map());
 
 // Recovery state — resolved once startup recovery is complete
 if (!_g.__weaveRecoveryPromise) {
@@ -334,6 +383,7 @@ export function _resetForTests(): void {
   _g.__weaveCleanupRun = false;
   usedPorts.clear();
   directoryToInstanceId.clear();
+  inflightSpawns.clear();
   _healthFailCounts.clear();
   _respawnAttempts.clear();
 }
@@ -472,84 +522,100 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
     instances.delete(existingId);
   }
 
-  const instanceId = randomUUID();
+  // Coalesce concurrent spawns for the same directory — if a spawn is already
+  // in flight, return the same promise instead of spawning a second instance.
+  const inflight = inflightSpawns.get(directory);
+  if (inflight) {
+    return inflight;
+  }
 
-  // Retry loop: allocate a port, verify it's available on the OS, then spawn.
-  // If the port is held by a zombie process, release it and try the next one.
-  let server: { url: string; pid: number | undefined; close: () => void };
-  let port: number | undefined;
-  let lastError: unknown;
+  const spawnPromise = (async (): Promise<ManagedInstance> => {
+    const instanceId = randomUUID();
 
-  for (let attempt = 0; attempt < MAX_PORT_RETRIES; attempt++) {
-    port = allocatePort();
+    // Retry loop: allocate a port, verify it's available on the OS, then spawn.
+    // If the port is held by a zombie process, release it and try the next one.
+    let server: { url: string; pid: number | undefined; close: (force?: boolean) => void };
+    let port: number | undefined;
+    let lastError: unknown;
 
-    // Pre-check: is the OS port actually free?
-    const available = await isPortAvailable(port);
-    if (!available) {
-      log.warn("process-manager", `Port ${port} allocated but OS reports it in use — skipping`, { port });
-      // Don't release: keep it marked as used so we don't retry it.
-      // The health check loop or a restart will eventually clear it.
-      continue;
+    for (let attempt = 0; attempt < MAX_PORT_RETRIES; attempt++) {
+      port = allocatePort();
+
+      // Pre-check: is the OS port actually free?
+      const available = await isPortAvailable(port);
+      if (!available) {
+        log.warn("process-manager", `Port ${port} allocated but OS reports it in use — skipping`, { port });
+        // Don't release: keep it marked as used so we don't retry it.
+        // The health check loop or a restart will eventually clear it.
+        continue;
+      }
+
+      try {
+        server = await spawnOpencodeServer({
+          port,
+          timeout: SPAWN_TIMEOUT_MS,
+          config: {
+            plugin: [],
+            permission: { edit: "allow", bash: "allow", external_directory: "allow" },
+            ...buildAgentModelConfig(directory),
+          },
+        });
+        // Success — break out of retry loop
+        break;
+      } catch (err) {
+        lastError = err;
+        // Release the port so it can be reclaimed later if the issue was transient
+        releasePort(port);
+        log.warn("process-manager", `Failed to spawn on port ${port} (attempt ${attempt + 1}/${MAX_PORT_RETRIES})`, { port, attempt: attempt + 1, err });
+      }
     }
 
+    if (!server! || port === undefined) {
+      throw lastError ?? new Error("Failed to spawn OpenCode server: all port attempts exhausted");
+    }
+
+    // Persist to DB for recovery across restarts
     try {
-      server = await spawnOpencodeServer({
+      insertInstance({
+        id: instanceId,
         port,
-        timeout: SPAWN_TIMEOUT_MS,
-        config: {
-          plugin: [],
-          permission: { edit: "allow", bash: "allow", external_directory: "allow" },
-          ...buildAgentModelConfig(directory),
-        },
+        directory,
+        url: server.url,
+        pid: server.pid ?? null,
       });
-      // Success — break out of retry loop
-      break;
     } catch (err) {
-      lastError = err;
-      // Release the port so it can be reclaimed later if the issue was transient
-      releasePort(port);
-      log.warn("process-manager", `Failed to spawn on port ${port} (attempt ${attempt + 1}/${MAX_PORT_RETRIES})`, { port, attempt: attempt + 1, err });
+      log.warn("process-manager", "Failed to persist instance to DB — running in-memory only", { instanceId, err });
     }
-  }
 
-  if (!server! || port === undefined) {
-    throw lastError ?? new Error("Failed to spawn OpenCode server: all port attempts exhausted");
-  }
+    const client = createOpencodeClient({ baseUrl: server.url, directory });
 
-  // Persist to DB for recovery across restarts
-  try {
-    insertInstance({
+    const instance: ManagedInstance = {
       id: instanceId,
       port,
-      directory,
       url: server.url,
-      pid: server.pid ?? null,
-    });
-  } catch (err) {
-    log.warn("process-manager", "Failed to persist instance to DB — running in-memory only", { instanceId, err });
+      directory,
+      client,
+      close: server.close,
+      status: "running",
+      createdAt: new Date(),
+      recovered: false,
+    };
+
+    instances.set(instanceId, instance);
+    directoryToInstanceId.set(directory, instanceId);
+
+    // Start watching session status events for this instance
+    ensureWatching(instanceId);
+
+    return instance;
+  })();
+
+  inflightSpawns.set(directory, spawnPromise);
+  try {
+    return await spawnPromise;
+  } finally {
+    inflightSpawns.delete(directory);
   }
-
-  const client = createOpencodeClient({ baseUrl: server.url, directory });
-
-  const instance: ManagedInstance = {
-    id: instanceId,
-    port,
-    url: server.url,
-    directory,
-    client,
-    close: server.close,
-    status: "running",
-    createdAt: new Date(),
-    recovered: false,
-  };
-
-  instances.set(instanceId, instance);
-  directoryToInstanceId.set(directory, instanceId);
-
-  // Start watching session status events for this instance
-  ensureWatching(instanceId);
-
-  return instance;
 }
 
 export function getInstance(id: string): ManagedInstance | undefined {
@@ -560,7 +626,7 @@ export function listInstances(): ManagedInstance[] {
   return Array.from(instances.values());
 }
 
-export function destroyInstance(id: string): void {
+export function destroyInstance(id: string, force?: boolean): void {
   // Stop watching session status events before tearing down
   stopWatching(id);
 
@@ -585,7 +651,7 @@ export function destroyInstance(id: string): void {
   }
 
   try {
-    instance.close();
+    instance.close(force);
   } catch (err) {
     log.warn("process-manager", "Error while closing instance process", { instanceId: id, err });
   }
@@ -601,7 +667,7 @@ export function destroyAll(): void {
   _g.__weaveCleanupRun = true;
 
   for (const id of [...instances.keys()]) {
-    destroyInstance(id);
+    destroyInstance(id, true);
   }
 }
 

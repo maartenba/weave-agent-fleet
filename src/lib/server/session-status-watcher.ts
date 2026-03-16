@@ -32,6 +32,7 @@ import { getInstance } from "./process-manager";
 import { getClientForInstance } from "./opencode-client";
 import { emitActivityStatus, emitTokenUpdate } from "./activity-emitter";
 import { log } from "./logger";
+import { withTimeout } from "./async-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -296,9 +297,13 @@ export function ensureWatching(instanceId: string): void {
   void (async () => {
     try {
       const client = getClientForInstance(instanceId);
-      const subscribeResult = await client.event.subscribe({
-        directory: instance.directory,
-      });
+      const subscribeTimeoutMs =
+        parseInt(process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS ?? "", 10) || 30_000;
+      const subscribeResult = await withTimeout(
+        client.event.subscribe({ directory: instance.directory }),
+        subscribeTimeoutMs,
+        `event.subscribe for instance ${instanceId}`,
+      );
 
       const eventStream =
         "stream" in subscribeResult
@@ -311,7 +316,8 @@ export function ensureWatching(instanceId: string): void {
         instanceId,
         err,
       });
-      // Clean up on failure
+      // Clean up on failure (including timeout) — abort the controller and remove watcher
+      abort.abort();
       watchers.delete(instanceId);
     }
   })();
