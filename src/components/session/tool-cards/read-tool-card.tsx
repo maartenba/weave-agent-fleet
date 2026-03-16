@@ -48,7 +48,7 @@ export function ReadToolCard({ part }: ReadToolCardProps) {
       return `${lineCount} line${lineCount !== 1 ? "s" : ""}`;
     }
     return null;
-  }, [input?.offset, input?.limit, lineCount]);
+  }, [input, lineCount]);
 
   const hasExpandableContent = !isRunning && (output || error);
 
