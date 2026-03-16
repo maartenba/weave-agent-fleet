@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
-import { insertSession, listSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
+import { insertSession, listSessions, countSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
@@ -137,17 +137,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 // GET /api/sessions — list all sessions (DB + live state merged)
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   // Wait for startup recovery before serving
   await _recoveryComplete;
+
+  // Parse pagination query parameters
+  const url = request.nextUrl;
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+  const statusParam = url.searchParams.get("status");
+
+  const limit = limitParam !== null ? Math.max(0, parseInt(limitParam, 10) || 100) : 100;
+  const offset = offsetParam !== null ? Math.max(0, parseInt(offsetParam, 10) || 0) : 0;
+  const statuses = statusParam
+    ? statusParam.split(",").filter(Boolean) as ReturnType<typeof listSessions>[number]["status"][]
+    : undefined;
 
   const liveInstances = listInstances();
   const liveInstanceMap = new Map(liveInstances.map((i) => [i.id, i]));
 
-  // Load all sessions from DB
+  // Load sessions from DB with pagination/filtering
   let dbSessions: ReturnType<typeof listSessions>;
   try {
-    dbSessions = listSessions();
+    dbSessions = listSessions({ limit, offset, statuses });
   } catch (err) {
     log.warn("sessions-route", "DB unavailable — falling back to live-only session listing", { err });
     const items: SessionListItem[] = [];
@@ -472,7 +484,12 @@ export async function GET(): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json(items, { status: 200 });
+  const total = countSessions(statuses);
+  const response = NextResponse.json(items, { status: 200 });
+  response.headers.set("X-Total-Count", String(total));
+  response.headers.set("X-Limit", String(limit));
+  response.headers.set("X-Offset", String(offset));
+  return response;
 }
 
 // ─── Status derivation helpers ────────────────────────────────────────────────

@@ -19,6 +19,7 @@ vi.mock("@/lib/server/workspace-manager", () => ({
 vi.mock("@/lib/server/db-repository", () => ({
   insertSession: vi.fn(),
   listSessions: vi.fn(() => []),
+  countSessions: vi.fn(() => 0),
   getWorkspace: vi.fn(),
   getInstance: vi.fn(),
   getSession: vi.fn(),
@@ -60,6 +61,7 @@ const mockCreateWorkspace = vi.mocked(workspaceManager.createWorkspace);
 const mockCleanupWorkspace = vi.mocked(workspaceManager.cleanupWorkspace);
 const mockInsertSession = vi.mocked(dbRepository.insertSession);
 const mockListSessions = vi.mocked(dbRepository.listSessions);
+const mockCountSessions = vi.mocked(dbRepository.countSessions);
 const mockGetWorkspace = vi.mocked(dbRepository.getWorkspace);
 const mockGetInstance = vi.mocked(dbRepository.getInstance);
 const mockGetSession = vi.mocked(dbRepository.getSession);
@@ -359,7 +361,7 @@ describe("GET /api/sessions", () => {
     mockListSessions.mockReturnValue([]);
     mockListInstances.mockReturnValue([]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -376,7 +378,7 @@ describe("GET /api/sessions", () => {
     mockListInstances.mockReturnValue([instance] as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -396,7 +398,7 @@ describe("GET /api/sessions", () => {
     mockGetInstance.mockReturnValue(dbInstance as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -414,7 +416,7 @@ describe("GET /api/sessions", () => {
     mockGetInstance.mockReturnValue(undefined as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -433,7 +435,7 @@ describe("GET /api/sessions", () => {
     });
     mockListInstances.mockReturnValue([instance] as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -459,7 +461,7 @@ describe("GET /api/sessions", () => {
     mockListInstances.mockReturnValue([instance] as never);
     mockGetWorkspace.mockReturnValue(dbWorkspace as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -478,7 +480,7 @@ describe("GET /api/sessions", () => {
     mockListInstances.mockReturnValue([instance] as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -495,7 +497,7 @@ describe("GET /api/sessions", () => {
     mockGetInstance.mockReturnValue(undefined as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -511,7 +513,7 @@ describe("GET /api/sessions", () => {
     mockGetInstance.mockReturnValue(undefined as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -535,7 +537,7 @@ describe("GET /api/sessions", () => {
     mockGetInstance.mockReturnValue(undefined as never);
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -558,7 +560,7 @@ describe("GET /api/sessions", () => {
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
     mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-1"]));
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -578,7 +580,7 @@ describe("GET /api/sessions", () => {
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
     mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-2"]));
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -596,7 +598,7 @@ describe("GET /api/sessions", () => {
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
     mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set(["db-parent-3"]));
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -616,7 +618,7 @@ describe("GET /api/sessions", () => {
     mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
     mockGetSessionIdsWithActiveChildren.mockReturnValue(new Set());
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -638,7 +640,7 @@ describe("GET /api/sessions", () => {
       throw new Error("DB query failed");
     });
 
-    const res = await GET();
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
     const body = await res.json();
 
     // Should still return 200 — fallback to empty set, no override
@@ -646,6 +648,47 @@ describe("GET /api/sessions", () => {
     expect(body).toHaveLength(1);
     expect(body[0].sessionStatus).toBe("idle");
     expect(body[0].activityStatus).toBe("idle");
+  });
+
+  it("PassesPaginationParamsToListSessions", async () => {
+    mockListSessions.mockReturnValue([]);
+    mockListInstances.mockReturnValue([]);
+    mockCountSessions.mockReturnValue(0);
+
+    const res = await GET(new NextRequest("http://localhost/api/sessions?limit=50&offset=10"));
+    expect(res.status).toBe(200);
+    expect(mockListSessions).toHaveBeenCalledWith({ limit: 50, offset: 10, statuses: undefined });
+  });
+
+  it("PassesStatusFilterToListSessions", async () => {
+    mockListSessions.mockReturnValue([]);
+    mockListInstances.mockReturnValue([]);
+    mockCountSessions.mockReturnValue(0);
+
+    const res = await GET(new NextRequest("http://localhost/api/sessions?status=active,idle"));
+    expect(res.status).toBe(200);
+    expect(mockListSessions).toHaveBeenCalledWith({ limit: 100, offset: 0, statuses: ["active", "idle"] });
+  });
+
+  it("IncludesPaginationHeaders", async () => {
+    mockListSessions.mockReturnValue([]);
+    mockListInstances.mockReturnValue([]);
+    mockCountSessions.mockReturnValue(42);
+
+    const res = await GET(new NextRequest("http://localhost/api/sessions?limit=10&offset=5"));
+    expect(res.headers.get("X-Total-Count")).toBe("42");
+    expect(res.headers.get("X-Limit")).toBe("10");
+    expect(res.headers.get("X-Offset")).toBe("5");
+  });
+
+  it("DefaultsTo100LimitWhenNoParamsGiven", async () => {
+    mockListSessions.mockReturnValue([]);
+    mockListInstances.mockReturnValue([]);
+    mockCountSessions.mockReturnValue(0);
+
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
+    expect(res.status).toBe(200);
+    expect(mockListSessions).toHaveBeenCalledWith({ limit: 100, offset: 0, statuses: undefined });
   });
 });
 

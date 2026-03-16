@@ -138,6 +138,9 @@ export function getDb(): Database.Database {
   // Add index on sessions.parent_session_id for efficient child lookups
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)`);
 
+  // Add index on sessions.created_at for efficient paginated queries (ORDER BY created_at DESC)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC)`);
+
   _db = db;
   return db;
 }

@@ -255,10 +255,52 @@ export function getSessionByOpencodeId(opencodeSessionId: string): DbSession | u
     .get(opencodeSessionId) as DbSession | undefined;
 }
 
-export function listSessions(): DbSession[] {
-  return getDb()
-    .prepare("SELECT * FROM sessions ORDER BY created_at DESC")
-    .all() as DbSession[];
+export interface ListSessionsOptions {
+  /** Max rows to return (default: 100, pass 0 for unlimited — use sparingly) */
+  limit?: number;
+  /** Offset for pagination (default: 0) */
+  offset?: number;
+  /** Filter by status values (e.g. ['active', 'idle']) — omit for all statuses */
+  statuses?: DbSession['status'][];
+}
+
+export function listSessions(options?: ListSessionsOptions): DbSession[] {
+  const limit = options?.limit ?? 100;
+  const offset = options?.offset ?? 0;
+  const statuses = options?.statuses;
+
+  let sql = "SELECT * FROM sessions";
+  const params: Record<string, unknown> = {};
+
+  if (statuses && statuses.length > 0) {
+    const placeholders = statuses.map((_, i) => `@status_${i}`).join(", ");
+    sql += ` WHERE status IN (${placeholders})`;
+    statuses.forEach((s, i) => { params[`status_${i}`] = s; });
+  }
+
+  sql += " ORDER BY created_at DESC";
+
+  if (limit > 0) {
+    sql += " LIMIT @limit OFFSET @offset";
+    params.limit = limit;
+    params.offset = offset;
+  }
+
+  return getDb().prepare(sql).all(params) as DbSession[];
+}
+
+export function countSessions(statuses?: DbSession['status'][]): number {
+  let sql = "SELECT COUNT(*) as count FROM sessions";
+  const params: Record<string, unknown> = {};
+
+  if (statuses && statuses.length > 0) {
+    const placeholders = statuses.map((_, i) => `@status_${i}`).join(", ");
+    sql += ` WHERE status IN (${placeholders})`;
+    statuses.forEach((s, i) => { params[`status_${i}`] = s; });
+  }
+
+  const row = getDb().prepare(sql).get(params) as { count: number };
+  return row.count;
 }
 
 /**

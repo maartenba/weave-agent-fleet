@@ -4,7 +4,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { resolve } from "path";
-import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots, buildAgentModelConfig, _tcpPortAliveForTests } from "@/lib/server/process-manager";
+import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots, buildAgentModelConfig, _tcpPortAliveForTests, _cleanupStaleRespawnAttempts, _getRespawnAttemptsForTests } from "@/lib/server/process-manager";
 import { _resetDbForTests } from "@/lib/server/database";
 import { getInstance as getDbInstance, getRunningInstances, insertWorkspaceRoot } from "@/lib/server/db-repository";
 import { createSecureTempDir, writeTempFile } from "./test-temp-utils";
@@ -537,5 +537,74 @@ describe("SIGKILL escalation via close()", () => {
         delete process.env.WEAVE_KILL_GRACE_MS;
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _respawnAttempts cleanup
+// ---------------------------------------------------------------------------
+
+describe("_cleanupStaleRespawnAttempts", () => {
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  it("CleansUpStaleRespawnAttemptKeys", () => {
+    const map = _getRespawnAttemptsForTests();
+    // Add timestamps > 5 min old
+    const staleTimestamp = Date.now() - 6 * 60 * 1000; // 6 minutes ago
+    map.set("/tmp/project-a", [staleTimestamp]);
+    map.set("/tmp/project-b", [staleTimestamp - 1000, staleTimestamp - 2000]);
+
+    _cleanupStaleRespawnAttempts();
+
+    expect(map.size).toBe(0);
+  });
+
+  it("KeepsRecentRespawnAttemptKeys", () => {
+    const map = _getRespawnAttemptsForTests();
+    const now = Date.now();
+    const recentTimestamp = now - 60 * 1000; // 1 minute ago
+    const staleTimestamp = now - 6 * 60 * 1000; // 6 minutes ago
+
+    map.set("/tmp/recent-project", [recentTimestamp, now]);
+    map.set("/tmp/stale-project", [staleTimestamp]);
+
+    _cleanupStaleRespawnAttempts();
+
+    expect(map.size).toBe(1);
+    expect(map.has("/tmp/recent-project")).toBe(true);
+    expect(map.has("/tmp/stale-project")).toBe(false);
+    // Recent entries should only contain valid timestamps
+    const remaining = map.get("/tmp/recent-project")!;
+    expect(remaining.length).toBe(2);
+  });
+
+  it("DeletesKeyWhenAllTimestampsExpire", () => {
+    const map = _getRespawnAttemptsForTests();
+    // Timestamps just over the 5-minute window
+    const justExpired = Date.now() - 5 * 60 * 1000 - 100;
+    map.set("/tmp/expired-project", [justExpired, justExpired - 1000]);
+
+    _cleanupStaleRespawnAttempts();
+
+    expect(map.has("/tmp/expired-project")).toBe(false);
+    expect(map.size).toBe(0);
+  });
+
+  it("PrunesStaleTimestampsFromMixedEntries", () => {
+    const map = _getRespawnAttemptsForTests();
+    const now = Date.now();
+    const recentTimestamp = now - 30 * 1000; // 30 seconds ago
+    const staleTimestamp = now - 6 * 60 * 1000; // 6 minutes ago
+
+    map.set("/tmp/mixed-project", [staleTimestamp, recentTimestamp]);
+
+    _cleanupStaleRespawnAttempts();
+
+    expect(map.has("/tmp/mixed-project")).toBe(true);
+    const remaining = map.get("/tmp/mixed-project")!;
+    expect(remaining.length).toBe(1);
+    expect(remaining[0]).toBe(recentTimestamp);
   });
 });
