@@ -39,6 +39,7 @@ import {
   getSessionStatusCounts,
   getActiveChildSessions,
   getSessionIdsWithActiveChildren,
+  countSessions,
 } from "@/lib/server/db-repository";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -289,6 +290,83 @@ describe("session repository", () => {
     insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
     insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
     expect(listSessions().length).toBe(2);
+  });
+
+  it("ListsSessionsWithDefaultLimit", () => {
+    const { wsId, instId } = setup();
+    for (let i = 0; i < 150; i++) {
+      insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    expect(listSessions().length).toBe(100);
+  });
+
+  it("ListsSessionsWithCustomLimit", () => {
+    const { wsId, instId } = setup();
+    for (let i = 0; i < 20; i++) {
+      insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    expect(listSessions({ limit: 5 }).length).toBe(5);
+  });
+
+  it("ListsSessionsWithOffset", () => {
+    const { wsId, instId } = setup();
+    const ids: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const id = mkSessionId();
+      ids.push(id);
+      insertSession({ id, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    const page = listSessions({ limit: 5, offset: 5 });
+    expect(page.length).toBe(5);
+    // Ensure no overlap with first page
+    const firstPage = listSessions({ limit: 5, offset: 0 });
+    const firstPageIds = new Set(firstPage.map(s => s.id));
+    for (const s of page) {
+      expect(firstPageIds.has(s.id)).toBe(false);
+    }
+  });
+
+  it("ListsSessionsFilteredByStatus", () => {
+    const { wsId, instId } = setup();
+    const activeId = mkSessionId();
+    const stoppedId = mkSessionId();
+    insertSession({ id: activeId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: stoppedId, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(stoppedId, "stopped");
+    const active = listSessions({ statuses: ["active"] });
+    expect(active.length).toBe(1);
+    expect(active[0]?.id).toBe(activeId);
+  });
+
+  it("ListsSessionsWithNoLimit", () => {
+    const { wsId, instId } = setup();
+    for (let i = 0; i < 150; i++) {
+      insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    expect(listSessions({ limit: 0 }).length).toBe(150);
+  });
+
+  it("CountsAllSessions", () => {
+    const { wsId, instId } = setup();
+    for (let i = 0; i < 10; i++) {
+      insertSession({ id: mkSessionId(), workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    }
+    expect(countSessions()).toBe(10);
+  });
+
+  it("CountsSessionsByStatus", () => {
+    const { wsId, instId } = setup();
+    const id1 = mkSessionId();
+    const id2 = mkSessionId();
+    const id3 = mkSessionId();
+    insertSession({ id: id1, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id2, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    insertSession({ id: id3, workspace_id: wsId, instance_id: instId, opencode_session_id: mkOpencodeSessionId(), directory: "/tmp/proj" });
+    updateSessionStatus(id2, "stopped");
+    updateSessionStatus(id3, "stopped");
+    expect(countSessions(["active"])).toBe(1);
+    expect(countSessions(["stopped"])).toBe(2);
+    expect(countSessions(["active", "stopped"])).toBe(3);
   });
 
   it("ListsOnlyActiveSessions", () => {

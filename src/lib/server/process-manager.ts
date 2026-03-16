@@ -727,8 +727,14 @@ async function attemptRespawn(directory: string, deadInstanceId: string): Promis
       directory, recentAttempts: recent.length, maxAttempts: HEALTH_CHECK_MAX_RESPAWNS,
       windowMs: HEALTH_CHECK_RESPAWN_WINDOW_MS,
     });
+    // Store only recent (valid) timestamps — stale ones are already pruned
     _respawnAttempts.set(directory, recent);
     return;
+  }
+
+  // Clean up stale key if all previous timestamps expired
+  if (recent.length === 0 && _respawnAttempts.has(directory)) {
+    _respawnAttempts.delete(directory);
   }
 
   recent.push(now);
@@ -745,6 +751,30 @@ async function attemptRespawn(directory: string, deadInstanceId: string): Promis
   } catch (err) {
     log.error("process-manager", "Auto-respawn failed for directory", { directory, deadInstanceId, err });
   }
+}
+
+/**
+ * Sweep _respawnAttempts and remove entries whose timestamps are all
+ * older than HEALTH_CHECK_RESPAWN_WINDOW_MS. Called periodically from
+ * the health check loop and exposed for testing.
+ */
+export function _cleanupStaleRespawnAttempts(): void {
+  const now = Date.now();
+  for (const [dir, timestamps] of _respawnAttempts) {
+    const recent = timestamps.filter(t => now - t < HEALTH_CHECK_RESPAWN_WINDOW_MS);
+    if (recent.length === 0) {
+      _respawnAttempts.delete(dir);
+    } else {
+      _respawnAttempts.set(dir, recent);
+    }
+  }
+}
+
+/**
+ * Return the _respawnAttempts Map for test assertions.
+ */
+export function _getRespawnAttemptsForTests(): Map<string, number[]> {
+  return _respawnAttempts;
 }
 
 /**
@@ -845,6 +875,9 @@ export function startHealthCheckLoop(): void {
         }
       }
     }
+
+    // Periodic cleanup: remove stale _respawnAttempts entries
+    _cleanupStaleRespawnAttempts();
   }, HEALTH_CHECK_INTERVAL_MS);
 }
 
