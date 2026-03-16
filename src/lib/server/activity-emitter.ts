@@ -12,6 +12,7 @@
 
 import { EventEmitter } from "events";
 import type { SessionActivityStatus } from "@/lib/types";
+import { log } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -99,9 +100,11 @@ export function startListenerMonitoring(): void {
     const counts = getListenerCounts();
     const total = counts.activity_status + counts.token_update;
     if (total > LISTENER_WARN_THRESHOLD) {
-      console.warn(
-        `[activity-emitter] High listener count: ${total} (activity_status: ${counts.activity_status}, token_update: ${counts.token_update}). Possible leak.`
-      );
+      log.warn("activity-emitter", "High listener count — possible leak", {
+        total,
+        activityStatusListeners: counts.activity_status,
+        tokenUpdateListeners: counts.token_update,
+      });
     }
   }, LISTENER_MONITOR_INTERVAL_MS);
 }

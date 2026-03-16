@@ -27,6 +27,7 @@ import {
   fireSessionErrorCallbacks,
 } from "./callback-service";
 import { withTimeout } from "./async-utils";
+import { log } from "./logger";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -122,10 +123,7 @@ async function processEventStream(
                   updateSessionStatus(dbSessionId, "idle");
                   void fireSessionCallbacks(eventSessionId, instanceId);
                 } catch (err) {
-                  console.error(
-                    `[callback-monitor] Failed to fire callback for session ${dbSessionId}:`,
-                    err
-                  );
+                  log.error("callback-monitor", "Failed to fire callback for session", { dbSessionId, err });
                 }
                 stopMonitoringSession(dbSessionId);
                 break;
@@ -151,10 +149,7 @@ async function processEventStream(
                 updateSessionStatus(dbSessionId, "idle");
                 void fireSessionCallbacks(eventSessionId, instanceId);
               } catch (err) {
-                console.error(
-                  `[callback-monitor] Failed to fire callback for session ${dbSessionId}:`,
-                  err
-                );
+                log.error("callback-monitor", "Failed to fire callback for session", { dbSessionId, err });
               }
               stopMonitoringSession(dbSessionId);
               break;
@@ -174,10 +169,7 @@ async function processEventStream(
             try {
               void fireSessionErrorCallbacks(eventSessionId, instanceId);
             } catch (err) {
-              console.error(
-                `[callback-monitor] Failed to fire error callback for session ${dbSessionId}:`,
-                err
-              );
+              log.error("callback-monitor", "Failed to fire error callback for session", { dbSessionId, err });
             }
             stopMonitoringSession(dbSessionId);
             break;
@@ -187,10 +179,7 @@ async function processEventStream(
     }
   } catch (err) {
     if (!abortController.signal.aborted) {
-      console.error(
-        `[callback-monitor] Event stream for instance ${instanceId} errored:`,
-        err
-      );
+      log.error("callback-monitor", "Event stream errored", { instanceId, err });
     }
   } finally {
     // Stream ended — clean up subscription
@@ -268,9 +257,7 @@ export function startMonitoring(
     // Create new subscription for this instance
     const instance = getInstance(instanceId);
     if (!instance || instance.status === "dead") {
-      console.warn(
-        `[callback-monitor] Instance ${instanceId} is dead — cannot monitor session ${dbSessionId}`
-      );
+      log.warn("callback-monitor", "Instance is dead — cannot monitor session", { instanceId, dbSessionId });
       monitoredSessions.delete(dbSessionId);
       return;
     }
@@ -304,10 +291,7 @@ export function startMonitoring(
 
         await processEventStream(instanceId, eventStream, abort);
       } catch (err) {
-        console.error(
-          `[callback-monitor] Failed to subscribe to instance ${instanceId}:`,
-          err
-        );
+        log.error("callback-monitor", "Failed to subscribe to instance", { instanceId, err });
         // Clean up on failure (including timeout) — polling will catch the session
         const currentSub = instanceSubscriptions.get(instanceId);
         if (currentSub) {
@@ -345,10 +329,7 @@ export function startMonitoring(
         }
       }
     } catch (err) {
-      console.error(
-        `[callback-monitor] Initial status poll failed for session ${dbSessionId}:`,
-        err
-      );
+      log.warn("callback-monitor", "Initial status poll failed for session", { dbSessionId, err });
       // Non-fatal — event subscription or polling will catch it
     }
   })();
@@ -450,14 +431,11 @@ export function startCallbackPollingLoop(): void {
             }
           }
         } catch (err) {
-          console.error(
-            `[callback-monitor] Polling status for instance ${instanceId} failed:`,
-            err
-          );
+          log.warn("callback-monitor", "Polling status for instance failed", { instanceId, err });
         }
       }
     } catch (err) {
-      console.error("[callback-monitor] Polling loop error:", err);
+      log.error("callback-monitor", "Polling loop error", { err });
     }
   }, CALLBACK_POLL_INTERVAL_MS);
 }

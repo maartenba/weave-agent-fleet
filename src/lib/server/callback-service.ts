@@ -15,6 +15,7 @@ import {
 } from "./db-repository";
 import { getInstance } from "./process-manager";
 import { getClientForInstance } from "./opencode-client";
+import { log } from "./logger";
 
 // ─── Shared callback delivery ─────────────────────────────────────────────────
 
@@ -61,12 +62,12 @@ async function deliverCallbacks(
         });
       } catch (err) {
         // Individual callback failure — continue with remaining callbacks
-        console.error(`[callback-service] Failed to deliver callback ${callback.id}:`, err);
+        log.error("callback-service", "Failed to deliver callback", { callbackId: callback.id, err });
       }
     }
   } catch (err) {
     // Top-level guard — never throws
-    console.error("[callback-service] deliverCallbacks failed:", err);
+    log.error("callback-service", "deliverCallbacks failed", { err });
   }
 }
 

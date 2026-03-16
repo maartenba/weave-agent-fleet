@@ -252,6 +252,7 @@ const _g = globalThis as unknown as {
   __weaveHealthCheckInterval?: ReturnType<typeof setInterval> | null;
   __weaveRespawnAttempts?: Map<string, number[]>;
   __weaveInitDone?: boolean;
+  __weaveSignalHandlersRegistered?: boolean;
 };
 
 // Module-level singleton map — persists across API route invocations in one Next.js process
@@ -889,19 +890,22 @@ _recoveryComplete.then(() => {
 }).catch((err) => { log.warn("process-manager", "Post-recovery startup tasks failed", { err }); });
 
 // Clean up all instances when the Node.js process exits.
-// Signal handlers are registered every time this module is loaded by a new Turbopack chunk,
-// but destroyAll() has its own _cleanupRun guard, so duplicate invocations are harmless.
-process.on("exit", destroyAll);
-process.on("SIGTERM", () => {
-  destroyAll();
-  process.exit(0);
-});
-process.on("SIGINT", () => {
-  destroyAll();
-  process.exit(0);
-});
-process.on("SIGHUP", () => {
-  destroyAll();
-  process.exit(0);
-});
-process.on("beforeExit", destroyAll);
+// Guard: only register once across Turbopack module re-evaluations to prevent
+// MaxListenersExceededWarning from accumulating duplicate handlers.
+if (!_g.__weaveSignalHandlersRegistered) {
+  _g.__weaveSignalHandlersRegistered = true;
+  process.on("exit", destroyAll);
+  process.on("SIGTERM", () => {
+    destroyAll();
+    process.exit(0);
+  });
+  process.on("SIGINT", () => {
+    destroyAll();
+    process.exit(0);
+  });
+  process.on("SIGHUP", () => {
+    destroyAll();
+    process.exit(0);
+  });
+  process.on("beforeExit", destroyAll);
+}
