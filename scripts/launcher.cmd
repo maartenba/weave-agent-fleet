@@ -106,7 +106,7 @@ echo   help         Show this help message
 echo.
 echo Environment variables:
 echo   PORT             Server port (default: 3000)
-echo   HOSTNAME         Server hostname (default: 0.0.0.0)
+echo   WEAVE_HOSTNAME   Server bind address (default: 0.0.0.0)
 echo   WEAVE_DB_PATH    Database file path (default: %%USERPROFILE%%\.weave\fleet.db)
 echo   OPENCODE_BIN     Full path to opencode binary (if not on PATH)
 exit /b 0
@@ -145,7 +145,11 @@ if %ERRORLEVEL% neq 0 (
 rem Set environment for production
 set "NODE_ENV=production"
 if not defined PORT set "PORT=3000"
-if not defined HOSTNAME set "HOSTNAME=0.0.0.0"
+if defined WEAVE_HOSTNAME (
+    set "HOSTNAME=%WEAVE_HOSTNAME%"
+) else (
+    set "HOSTNAME=0.0.0.0"
+)
 
 rem Ensure data directory exists
 if not exist "%USERPROFILE%\.weave" mkdir "%USERPROFILE%\.weave"

@@ -75,7 +75,7 @@ case "${1:-}" in
     echo ""
     echo "Environment variables:"
     echo "  PORT             Server port (default: 3000)"
-    echo "  HOSTNAME         Server hostname (default: 0.0.0.0)"
+    echo "  WEAVE_HOSTNAME   Server bind address (default: 0.0.0.0)"
     echo "  WEAVE_DB_PATH    Database file path (default: ~/.weave/fleet.db)"
     echo "  OPENCODE_BIN     Full path to opencode binary (if not on PATH)"
     exit 0
@@ -117,7 +117,7 @@ fi
 # Set environment for production
 export NODE_ENV=production
 export PORT="${PORT:-3000}"
-export HOSTNAME="${HOSTNAME:-0.0.0.0}"
+export HOSTNAME="${WEAVE_HOSTNAME:-0.0.0.0}"
 
 # Ensure data directory exists
 mkdir -p "${HOME}/.weave"
