@@ -134,7 +134,7 @@ npm run tauri:build
 | Environment Variable | Default | Description |
 | :--- | :--- | :--- |
 | `PORT` | `3000` | Server port |
-| `HOSTNAME` | `0.0.0.0` | Server hostname |
+| `WEAVE_HOSTNAME` | `0.0.0.0` | Server bind address (replaces `HOSTNAME` to avoid collision with the shell built-in) |
 | `WEAVE_DB_PATH` | `~/.weave/fleet.db` (macOS/Linux), `%USERPROFILE%\.weave\fleet.db` (Windows) | SQLite database path |
 | `WEAVE_INSTALL_DIR` | `~/.weave/fleet` (macOS/Linux), `%LOCALAPPDATA%\weave\fleet` (Windows) | Installation directory (used by installer) |
 
