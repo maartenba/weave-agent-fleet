@@ -98,21 +98,55 @@ type ActivityStreamEntry =
   | { type: "inference-summary"; messages: AccumulatedMessage[] }
   | { type: "thinking"; message: AccumulatedMessage };
 
-function groupMessages(messages: AccumulatedMessage[]): ActivityStreamEntry[] {
+/**
+ * A message is "effectively completed" if it has an explicit completedAt
+ * timestamp, OR if it already carries cost/token data (meaning the LLM
+ * inference step finished and reported usage — the completedAt just wasn't
+ * propagated via SSE).  When the session is idle, ALL collapsible messages
+ * are treated as completed since the LLM is no longer running.
+ */
+function isEffectivelyCompleted(
+  message: AccumulatedMessage,
+  sessionIdle: boolean
+): boolean {
+  if (message.completedAt) return true;
+  if (sessionIdle) return true;
+  // Has cost/token data → inference step finished, completedAt just missing
+  if ((message.cost ?? 0) > 0) return true;
+  if (
+    message.tokens &&
+    (message.tokens.input > 0 ||
+      message.tokens.output > 0 ||
+      message.tokens.reasoning > 0)
+  )
+    return true;
+  return false;
+}
+
+function groupMessages(
+  messages: AccumulatedMessage[],
+  sessionStatus: "idle" | "busy"
+): ActivityStreamEntry[] {
   const entries: ActivityStreamEntry[] = [];
   let run: AccumulatedMessage[] = [];
+  const sessionIdle = sessionStatus === "idle";
 
   const flushRun = () => {
     if (run.length === 0) return;
-    const completed = run.filter((m) => m.completedAt);
-    const incomplete = run.filter((m) => !m.completedAt);
+    const completed = run.filter((m) => isEffectivelyCompleted(m, sessionIdle));
+    const incomplete = run.filter(
+      (m) => !isEffectivelyCompleted(m, sessionIdle)
+    );
 
     if (completed.length > 0) {
       entries.push({ type: "inference-summary", messages: completed });
     }
     // Show thinking for the last incomplete message only
     if (incomplete.length > 0) {
-      entries.push({ type: "thinking", message: incomplete[incomplete.length - 1] });
+      entries.push({
+        type: "thinking",
+        message: incomplete[incomplete.length - 1],
+      });
     }
     run = [];
   };
@@ -563,8 +597,8 @@ export function ActivityStreamV1({
   } = useActivityFilter(messages);
 
   const groupedEntries = useMemo(
-    () => groupMessages(filteredMessages),
-    [filteredMessages]
+    () => groupMessages(filteredMessages, sessionStatus),
+    [filteredMessages, sessionStatus]
   );
 
   const handleOpenToolbar = useCallback(() => setToolbarOpen(true), [setToolbarOpen]);
