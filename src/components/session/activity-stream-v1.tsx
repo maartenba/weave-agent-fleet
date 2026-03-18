@@ -80,6 +80,115 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+// ─── Inference Step Collapsing ──────────────────────────────────────────────
+
+/** A message is collapsible if it's an assistant message with no renderable content. */
+function isCollapsibleMessage(message: AccumulatedMessage): boolean {
+  if (message.role !== "assistant") return false;
+  const hasText = message.parts.some(
+    (p) => p.type === "text" && p.text.trim().length > 0
+  );
+  const hasTool = message.parts.some((p) => p.type === "tool");
+  const hasFile = message.parts.some((p) => p.type === "file");
+  return !hasText && !hasTool && !hasFile;
+}
+
+type ActivityStreamEntry =
+  | { type: "message"; message: AccumulatedMessage }
+  | { type: "inference-summary"; messages: AccumulatedMessage[] }
+  | { type: "thinking"; message: AccumulatedMessage };
+
+function groupMessages(messages: AccumulatedMessage[]): ActivityStreamEntry[] {
+  const entries: ActivityStreamEntry[] = [];
+  let run: AccumulatedMessage[] = [];
+
+  const flushRun = () => {
+    if (run.length === 0) return;
+    const completed = run.filter((m) => m.completedAt);
+    const incomplete = run.filter((m) => !m.completedAt);
+
+    if (completed.length > 0) {
+      entries.push({ type: "inference-summary", messages: completed });
+    }
+    // Show thinking for the last incomplete message only
+    if (incomplete.length > 0) {
+      entries.push({ type: "thinking", message: incomplete[incomplete.length - 1] });
+    }
+    run = [];
+  };
+
+  for (const message of messages) {
+    if (isCollapsibleMessage(message)) {
+      run.push(message);
+    } else {
+      flushRun();
+      entries.push({ type: "message", message });
+    }
+  }
+  flushRun(); // flush any trailing run
+
+  return entries;
+}
+
+const InferenceStepsSummary = memo(function InferenceStepsSummary({
+  messages,
+}: {
+  messages: AccumulatedMessage[];
+}) {
+  const count = messages.length;
+
+  const totalCost = messages.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+
+  const totalTokens = messages.reduce(
+    (sum, m) =>
+      sum + (m.tokens?.input ?? 0) + (m.tokens?.output ?? 0) + (m.tokens?.reasoning ?? 0),
+    0
+  );
+
+  // Duration: from first message's createdAt to last message's completedAt
+  const first = messages[0];
+  const last = messages[messages.length - 1];
+  const durationMs =
+    first?.createdAt && last?.completedAt
+      ? last.completedAt - first.createdAt
+      : null;
+
+  // Build the summary segments
+  const segments: string[] = [];
+  segments.push(`${count} inference step${count !== 1 ? "s" : ""}`);
+  if (totalCost > 0) segments.push(`$${totalCost.toFixed(4)}`);
+  if (totalTokens > 0) {
+    const formatted =
+      totalTokens < 1000
+        ? String(totalTokens)
+        : totalTokens < 1_000_000
+        ? `${(totalTokens / 1000).toFixed(1)}k`
+        : `${(totalTokens / 1_000_000).toFixed(1)}M`;
+    segments.push(`${formatted} tokens`);
+  }
+  if (durationMs != null && durationMs > 0) {
+    segments.push(formatDuration(durationMs));
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-1.5 text-[10px] text-muted-foreground/70">
+      <Bot className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+      <span>{segments.join(" · ")}</span>
+    </div>
+  );
+});
+
+function CollapsedThinkingIndicator({ message }: { message: AccumulatedMessage }) {
+  const agentLabel = message.agent ? `${toTitleCase(message.agent)} thinking…` : "Thinking…";
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
+      <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+      <Loader2 className="h-3 w-3 animate-spin" />
+      <span>{agentLabel}</span>
+    </div>
+  );
+}
+
 // ─── Task Delegation Block ─────────────────────────────────────────────────
 
 function TaskDelegationItem({ part, currentSessionId }: { part: AccumulatedToolPart; currentSessionId?: string }) {
@@ -321,8 +430,8 @@ const MessageItem = memo(function MessageItem({
           <MarkdownRenderer content={fullText} />
         )}
 
-        {/* Empty state for assistant — still streaming */}
-        {!isUser && !fullText && toolParts.length === 0 && fileParts.length === 0 && (
+        {/* Empty state for assistant — still streaming (only show for incomplete messages) */}
+        {!isUser && !message.completedAt && !fullText && toolParts.length === 0 && fileParts.length === 0 && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>
@@ -453,6 +562,11 @@ export function ActivityStreamV1({
     setIsOpen: setToolbarOpen,
   } = useActivityFilter(messages);
 
+  const groupedEntries = useMemo(
+    () => groupMessages(filteredMessages),
+    [filteredMessages]
+  );
+
   const handleOpenToolbar = useCallback(() => setToolbarOpen(true), [setToolbarOpen]);
   useKeyboardShortcut("f", handleOpenToolbar, { platformModifier: true });
 
@@ -553,13 +667,43 @@ export function ActivityStreamV1({
               </div>
             )}
 
-            {filteredMessages.map((message, index) => {
-              const prevMessage = index > 0 ? filteredMessages[index - 1] : null;
+            {groupedEntries.map((entry, index) => {
+              if (entry.type === "inference-summary") {
+                return (
+                  <InferenceStepsSummary
+                    key={`summary-${entry.messages[0].messageId}`}
+                    messages={entry.messages}
+                  />
+                );
+              }
+
+              if (entry.type === "thinking") {
+                return (
+                  <CollapsedThinkingIndicator
+                    key={`thinking-${entry.message.messageId}`}
+                    message={entry.message}
+                  />
+                );
+              }
+
+              // entry.type === "message"
+              const message = entry.message;
+
+              // DurationSeparator: find the previous entry for gap calculation
+              const prevEntry = index > 0 ? groupedEntries[index - 1] : null;
+              const prevMessage = prevEntry
+                ? prevEntry.type === "message"
+                  ? prevEntry.message
+                  : prevEntry.type === "inference-summary"
+                  ? prevEntry.messages[prevEntry.messages.length - 1]
+                  : prevEntry.type === "thinking"
+                  ? prevEntry.message
+                  : null
+                : null;
               const gap = prevMessage && message.createdAt && (prevMessage.completedAt ?? prevMessage.createdAt)
                 ? message.createdAt - (prevMessage.completedAt ?? prevMessage.createdAt!)
                 : 0;
 
-              // A message is highlighted if filtering is active and any of its parts matched
               const isMatchingMessage = isFiltering &&
                 message.parts.some((p) => matchingPartIds.has(p.partId));
 
