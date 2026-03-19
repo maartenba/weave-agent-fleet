@@ -231,6 +231,7 @@ describe("instance-event-hub", () => {
       setupSubscribe(mock.stream);
 
       const listener2 = vi.fn();
+      // eslint-disable-next-line prefer-const -- must be declared before use in listener1 closure
       let unsubscribe1!: () => void;
 
       // listener1 calls its own unsubscribe during handling

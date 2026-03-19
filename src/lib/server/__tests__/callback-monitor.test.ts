@@ -6,6 +6,7 @@
  * tests push events via the captured hub listener.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // Mock process-manager to prevent real instance lookups and recovery
@@ -54,9 +55,7 @@ import * as callbackService from "@/lib/server/callback-service";
 import * as dbRepository from "@/lib/server/db-repository";
 
 // Helper to push an event to the captured listener for a given instance
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function pushEvent(instanceId: string, event: { type: string; properties: Record<string, any> }): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const listeners = (instanceEventHub as any).__listeners as Map<string, (e: typeof event) => void>;
   const listener = listeners.get(instanceId);
   if (!listener) throw new Error(`No listener registered for instance ${instanceId}`);
@@ -64,7 +63,6 @@ function pushEvent(instanceId: string, event: { type: string; properties: Record
 }
 
 function hasListener(instanceId: string): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const listeners = (instanceEventHub as any).__listeners as Map<string, unknown>;
   return listeners.has(instanceId);
 }
@@ -97,7 +95,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
 
@@ -112,7 +109,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
@@ -123,7 +119,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
@@ -137,7 +132,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
@@ -150,7 +144,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
@@ -174,21 +167,18 @@ describe("callback-monitor", () => {
             status: vi.fn().mockReturnValue(new Promise(() => {})),
           },
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       // Provide a pending callback so the polling loop runs
       const { getAllPendingCallbacks, getSession } = await import("@/lib/server/db-repository");
       vi.mocked(getAllPendingCallbacks).mockReturnValue([
         { id: "cb-1", source_session_id: "db-src-1", target_session_id: "db-tgt-1", target_instance_id: instanceId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ] as any);
       vi.mocked(getSession).mockReturnValue({
         id: "db-src-1",
         instance_id: instanceId,
         opencode_session_id: "oc-src-1",
         status: "active",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       const origTimeout = process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
@@ -219,7 +209,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
     }
@@ -264,7 +253,6 @@ describe("callback-monitor", () => {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: { session: { status: vi.fn().mockResolvedValue({ data: { "oc-sess": { type: "busy" } } }) } },
       } as any);
     }
