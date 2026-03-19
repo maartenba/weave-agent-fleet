@@ -785,15 +785,10 @@ describe("GET /api/sessions", () => {
   });
 
   it("DoesNotWriteStatusDuringReadPoll", async () => {
-    // DB has session as "idle", but SDK reports "busy"
-    const sdkSession = makeSdkSession();
+    // GET /api/sessions is read-only: it returns DB status as-is
+    // (session-status-watcher keeps DB in sync via SSE events)
     const dbSession = makeDbSession({ status: "idle" });
     const instance = makeManagedInstance();
-    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
-    // Mock session.status to return busy for this session
-    instance.client.session.status = vi.fn().mockResolvedValue({
-      data: { [dbSession.opencode_session_id]: { type: "busy" } },
-    });
 
     mockListSessions.mockReturnValue([dbSession] as never);
     mockListInstances.mockReturnValue([instance] as never);
@@ -803,9 +798,9 @@ describe("GET /api/sessions", () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    // Response should show the live status (active/busy), not the stale DB status
-    expect(body[0].sessionStatus).toBe("active");
-    // But we must NOT have written to the DB
+    // Response reflects DB status directly (no SDK calls)
+    expect(body[0].sessionStatus).toBe("idle");
+    // Must NOT write to the DB during a read poll
     expect(mockUpdateSessionStatus).not.toHaveBeenCalled();
   });
 });
