@@ -783,6 +783,31 @@ describe("GET /api/sessions", () => {
       }
     }
   });
+
+  it("DoesNotWriteStatusDuringReadPoll", async () => {
+    // DB has session as "idle", but SDK reports "busy"
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ status: "idle" });
+    const instance = makeManagedInstance();
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+    // Mock session.status to return busy for this session
+    instance.client.session.status = vi.fn().mockResolvedValue({
+      data: { [dbSession.opencode_session_id]: { type: "busy" } },
+    });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const res = await GET(new NextRequest("http://localhost/api/sessions"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    // Response should show the live status (active/busy), not the stale DB status
+    expect(body[0].sessionStatus).toBe("active");
+    // But we must NOT have written to the DB
+    expect(mockUpdateSessionStatus).not.toHaveBeenCalled();
+  });
 });
 
 // ─── DELETE /api/sessions/[id] ────────────────────────────────────────────────

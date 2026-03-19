@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } from "@/lib/server/process-manager";
 import { createWorkspace } from "@/lib/server/workspace-manager";
-import { insertSession, listSessions, countSessions, getWorkspace, getInstance, updateSessionStatus, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
+import { insertSession, listSessions, countSessions, getWorkspace, getInstance, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
@@ -270,22 +270,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         if (liveStatus) {
           // SDK reports this session is alive — trust live state over DB
           if (liveStatus.type === "busy") {
-            if (dbSession.status !== "active") {
-              try {
-                updateSessionStatus(dbSession.id, "active");
-              } catch (err) {
-                log.warn("sessions-route", "Failed to correct stale DB status to active", { sessionId: dbSession.id, err });
-              }
-            }
             sessionStatus = "active";
           } else if (liveStatus.type === "idle") {
-            if (dbSession.status !== "idle") {
-              try {
-                updateSessionStatus(dbSession.id, "idle");
-              } catch (err) {
-                log.warn("sessions-route", "Failed to correct stale DB status to idle", { sessionId: dbSession.id, err });
-              }
-            }
             sessionStatus = "idle";
           } else {
             // Unknown live status type — treat as active
