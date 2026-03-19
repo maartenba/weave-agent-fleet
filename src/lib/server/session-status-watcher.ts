@@ -26,13 +26,13 @@ import {
   updateSessionStatus,
   getSession,
   getActiveChildSessions,
-  incrementSessionTokens,
 } from "./db-repository";
 import type { DbSession } from "./db-repository";
 import { getInstance } from "./process-manager";
 import { addListener } from "./instance-event-hub";
 import type { InstanceEventListener } from "./instance-event-hub";
-import { emitActivityStatus, emitTokenUpdate } from "./activity-emitter";
+import { emitActivityStatus } from "./activity-emitter";
+import { recordTokens } from "./analytics-collector";
 import { log } from "./logger";
 
 // ─── globalThis-based singletons ──────────────────────────────────────────────
@@ -206,7 +206,8 @@ function buildHandler(instanceId: string): InstanceEventListener {
         });
       }
     } else if (type === "message.part.updated") {
-      // Capture step-finish events to accumulate per-session token/cost data
+      // Delegate to the analytics collector — O(1) Map write, no DB, no EventEmitter.
+      // The collector flushes accumulated data to DB on a timer (default: 2s).
       const part = properties?.part;
       if (!part || part.type !== "step-finish") return;
 
@@ -216,25 +217,7 @@ function buildHandler(instanceId: string): InstanceEventListener {
 
       if (!eventSessionId || (tokensDelta === 0 && costDelta === 0)) return;
 
-      try {
-        const dbSession = getSessionByOpencodeId(eventSessionId);
-        if (dbSession) {
-          const totals = incrementSessionTokens(dbSession.id, tokensDelta, costDelta);
-          if (totals) {
-            emitTokenUpdate({
-              sessionId: eventSessionId,
-              totalTokens: totals.totalTokens,
-              totalCost: totals.totalCost,
-            });
-          }
-        }
-      } catch (err) {
-        log.warn("session-status-watcher", "Failed to persist token data", {
-          sessionId: eventSessionId,
-          instanceId,
-          err,
-        });
-      }
+      recordTokens(eventSessionId, tokensDelta, costDelta);
     }
   };
 }

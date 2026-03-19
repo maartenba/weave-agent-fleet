@@ -39,13 +39,16 @@ vi.mock("@/lib/server/db-repository", () => ({
   updateSessionStatus: vi.fn(),
   getSession: vi.fn(() => undefined),
   getActiveChildSessions: vi.fn(() => []),
-  incrementSessionTokens: vi.fn(() => undefined),
 }));
 
 // Mock activity-emitter
 vi.mock("@/lib/server/activity-emitter", () => ({
   emitActivityStatus: vi.fn(),
-  emitTokenUpdate: vi.fn(),
+}));
+
+// Mock analytics-collector — message.part.updated events delegate here
+vi.mock("@/lib/server/analytics-collector", () => ({
+  recordTokens: vi.fn(),
 }));
 
 import { ensureWatching, stopWatching, _resetForTests } from "@/lib/server/session-status-watcher";
@@ -53,6 +56,7 @@ import * as processManager from "@/lib/server/process-manager";
 import * as instanceEventHub from "@/lib/server/instance-event-hub";
 import * as dbRepository from "@/lib/server/db-repository";
 import * as activityEmitter from "@/lib/server/activity-emitter";
+import * as analyticsCollector from "@/lib/server/analytics-collector";
 
 // Helper to push an event to the captured listener for a given instance
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,6 +304,62 @@ describe("session-status-watcher", () => {
 
       expect(activityEmitter.emitActivityStatus).not.toHaveBeenCalled();
       expect(dbRepository.updateSessionStatus).not.toHaveBeenCalled();
+    });
+
+    it("MessagePartUpdatedDelegatesToRecordTokens", () => {
+      setupWatching();
+
+      pushEvent(instanceId, {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            type: "step-finish",
+            sessionID: "oc-sess-1",
+            tokens: { input: 50, output: 30, reasoning: 10 },
+            cost: 0.02,
+          },
+        },
+      });
+
+      expect(analyticsCollector.recordTokens).toHaveBeenCalledWith("oc-sess-1", 90, 0.02);
+      // Must NOT do any DB work or emit inline
+      expect(dbRepository.updateSessionStatus).not.toHaveBeenCalled();
+      expect(activityEmitter.emitActivityStatus).not.toHaveBeenCalled();
+    });
+
+    it("MessagePartUpdatedIgnoresNonStepFinishParts", () => {
+      setupWatching();
+
+      pushEvent(instanceId, {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            type: "text",
+            sessionID: "oc-sess-1",
+            tokens: { input: 10, output: 5 },
+          },
+        },
+      });
+
+      expect(analyticsCollector.recordTokens).not.toHaveBeenCalled();
+    });
+
+    it("MessagePartUpdatedIgnoresZeroDeltas", () => {
+      setupWatching();
+
+      pushEvent(instanceId, {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            type: "step-finish",
+            sessionID: "oc-sess-1",
+            tokens: { input: 0, output: 0, reasoning: 0 },
+            cost: 0,
+          },
+        },
+      });
+
+      expect(analyticsCollector.recordTokens).not.toHaveBeenCalled();
     });
   });
 

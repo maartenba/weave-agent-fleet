@@ -31,6 +31,7 @@ import {
 } from "./db-repository";
 import { ensureWatching, stopWatching } from "./session-status-watcher";
 import { removeAllListeners as hubRemoveAllListeners } from "./instance-event-hub";
+import { startCollector, stopCollector, flushNow as flushAnalytics } from "./analytics-collector";
 import { log } from "./logger";
 import { getMergedConfig } from "./config-manager";
 
@@ -712,6 +713,14 @@ export function destroyAll(): void {
   _cleanupRun = true;
   _g.__weaveCleanupRun = true;
 
+  // Flush pending analytics before tearing down instances
+  try {
+    flushAnalytics();
+  } catch {
+    // Ignore errors in shutdown — best effort
+  }
+  stopCollector();
+
   for (const id of [...instances.keys()]) {
     destroyInstance(id, true);
   }
@@ -1007,6 +1016,7 @@ export function startHealthCheckLoop(): void {
 // Start health checks after recovery completes (guarded by startHealthCheckLoop's idempotency)
 _recoveryComplete.then(() => {
   startHealthCheckLoop();
+  startCollector();
   // Ensure callback monitor is loaded — its self-initializing code starts the polling loop
   import("./callback-monitor").catch((err) => { log.warn("process-manager", "Failed to load callback monitor", { err }); });
 }).catch((err) => { log.warn("process-manager", "Post-recovery startup tasks failed", { err }); });
