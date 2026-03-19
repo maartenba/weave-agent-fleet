@@ -12,11 +12,12 @@
  * (WEAVE_WORKSPACE_ROOT env var, default ~/.weave/workspaces/).
  */
 
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
 import { existsSync, mkdirSync, rmSync, statSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join, resolve } from "path";
 import { randomUUID } from "crypto";
+import { promisify } from "util";
 import {
   insertWorkspace,
   getWorkspace,
@@ -24,6 +25,9 @@ import {
   markWorkspaceCleaned,
   type DbWorkspace,
 } from "./db-repository";
+import { withTimeout } from "./async-utils";
+
+const execFileAsync = promisify(execFile);
 
 export type IsolationStrategy = "existing" | "worktree" | "clone";
 
@@ -46,6 +50,43 @@ function getWorkspaceRoot(): string {
   return resolve(homedir(), ".weave", "workspaces");
 }
 
+const DEFAULT_GIT_TIMEOUT_MS = 60_000;
+
+function getGitTimeoutMs(): number {
+  const envVal = parseInt(process.env.WEAVE_GIT_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(envVal) && envVal > 0 ? envVal : DEFAULT_GIT_TIMEOUT_MS;
+}
+
+/**
+ * Run a git command asynchronously with a configurable timeout.
+ * Uses `WEAVE_GIT_TIMEOUT_MS` env var (default 60,000ms).
+ */
+async function execGitAsync(
+  args: string[],
+  options: { cwd?: string } = {}
+): Promise<{ stdout: string; stderr: string }> {
+  const timeoutMs = getGitTimeoutMs();
+  const command = `git ${args.join(" ")}`;
+  try {
+    return await withTimeout(
+      execFileAsync("git", args, {
+        ...options,
+        timeout: timeoutMs,
+      }),
+      timeoutMs,
+      command
+    );
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("timed out")) {
+      throw error;
+    }
+    const err = error as { stderr?: string; code?: number | string };
+    const stderr = err.stderr ?? "";
+    const code = err.code ?? "unknown";
+    throw new Error(`git command failed: ${command} (exit code ${code}): ${stderr.trim()}`);
+  }
+}
+
 /**
  * Validate that a path exists and is a directory.
  */
@@ -61,12 +102,9 @@ function assertDirectory(path: string, label: string): void {
 /**
  * Check whether a directory is inside a git repository.
  */
-function isGitRepo(directory: string): boolean {
+async function isGitRepo(directory: string): Promise<boolean> {
   try {
-    execFileSync("git", ["rev-parse", "--git-dir"], {
-      cwd: directory,
-      stdio: "pipe",
-    });
+    await execGitAsync(["rev-parse", "--git-dir"], { cwd: directory });
     return true;
   } catch {
     return false;
@@ -109,7 +147,7 @@ export async function createWorkspace(
     }
 
     case "worktree": {
-      if (!isGitRepo(sourceDirectory)) {
+      if (!(await isGitRepo(sourceDirectory))) {
         throw new Error(
           `Source directory is not a git repository: ${sourceDirectory}`
         );
@@ -126,9 +164,9 @@ export async function createWorkspace(
       const parentDir = dirname(sourceDirectory);
       const workspaceDir = join(parentDir, worktreeDirName);
 
-      execFileSync(
-        "git", ["worktree", "add", workspaceDir, "-b", branchName],
-        { cwd: sourceDirectory, stdio: "pipe" }
+      await execGitAsync(
+        ["worktree", "add", workspaceDir, "-b", branchName],
+        { cwd: sourceDirectory }
       );
 
       insertWorkspace({
@@ -148,9 +186,9 @@ export async function createWorkspace(
 
       const workspaceDir = join(workspaceRoot, id);
 
-      execFileSync(
-        "git", ["clone", "--depth=1", sourceDirectory, workspaceDir],
-        { stdio: "pipe" }
+      await execGitAsync(
+        ["clone", "--depth=1", sourceDirectory, workspaceDir],
+        {}
       );
 
       insertWorkspace({
@@ -192,9 +230,9 @@ export async function cleanupWorkspace(id: string): Promise<void> {
     case "worktree": {
       if (ws.source_directory && existsSync(ws.directory)) {
         try {
-          execFileSync(
-            "git", ["worktree", "remove", ws.directory, "--force"],
-            { cwd: ws.source_directory, stdio: "pipe" }
+          await execGitAsync(
+            ["worktree", "remove", ws.directory, "--force"],
+            { cwd: ws.source_directory }
           );
         } catch {
           // If git worktree remove fails, fall back to manual directory removal

@@ -234,3 +234,51 @@ describe("getWorkspaceDirectory", () => {
     expect(() => getWorkspaceDirectory("nonexistent")).toThrow("Workspace not found");
   });
 });
+
+// ─── Timeout & error behavior ─────────────────────────────────────────────────
+
+describe("WEAVE_GIT_TIMEOUT_MS env var", () => {
+  it("CustomTimeoutDoesNotBreakWorkspaceCreation", async () => {
+    const originalTimeout = process.env.WEAVE_GIT_TIMEOUT_MS;
+    process.env.WEAVE_GIT_TIMEOUT_MS = "30000";
+    try {
+      const repo = trackDir(makeGitRepo());
+      const info = await createWorkspace({ sourceDirectory: repo, strategy: "clone" });
+      trackDir(info.directory);
+      expect(existsSync(info.directory)).toBe(true);
+    } finally {
+      if (originalTimeout === undefined) {
+        delete process.env.WEAVE_GIT_TIMEOUT_MS;
+      } else {
+        process.env.WEAVE_GIT_TIMEOUT_MS = originalTimeout;
+      }
+    }
+  });
+
+  it("InvalidTimeoutFallsBackToDefault", async () => {
+    const originalTimeout = process.env.WEAVE_GIT_TIMEOUT_MS;
+    process.env.WEAVE_GIT_TIMEOUT_MS = "not-a-number";
+    try {
+      const repo = trackDir(makeGitRepo());
+      const info = await createWorkspace({ sourceDirectory: repo, strategy: "clone" });
+      trackDir(info.directory);
+      // If it completes without error, the fallback to the default timeout worked
+      expect(existsSync(info.directory)).toBe(true);
+    } finally {
+      if (originalTimeout === undefined) {
+        delete process.env.WEAVE_GIT_TIMEOUT_MS;
+      } else {
+        process.env.WEAVE_GIT_TIMEOUT_MS = originalTimeout;
+      }
+    }
+  });
+});
+
+describe("git error messages", () => {
+  it("WorktreeOnNonGitDirGivesDescriptiveError", async () => {
+    const dir = trackDir(makeTempDir());
+    await expect(
+      createWorkspace({ sourceDirectory: dir, strategy: "worktree" })
+    ).rejects.toThrow("not a git repository");
+  });
+});
