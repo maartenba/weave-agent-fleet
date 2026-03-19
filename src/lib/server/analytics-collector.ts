@@ -174,9 +174,16 @@ export function startCollector(intervalMs?: number): void {
     intervalMs ??
     (parseInt(process.env.WEAVE_ANALYTICS_FLUSH_INTERVAL_MS ?? "", 10) || 2_000);
 
-  _g.__weaveAnalyticsFlushTimer = setInterval(() => {
+  const timer = setInterval(() => {
     flush();
   }, resolvedInterval);
+
+  // Ensure the timer doesn't prevent Node.js from exiting
+  if (timer.unref) {
+    timer.unref();
+  }
+
+  _g.__weaveAnalyticsFlushTimer = timer;
 }
 
 /**
