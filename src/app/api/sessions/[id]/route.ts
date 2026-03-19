@@ -15,6 +15,7 @@ import {
 } from "@/lib/server/db-repository";
 import { stopMonitoring } from "@/lib/server/callback-monitor";
 import { cleanupWorkspace } from "@/lib/server/workspace-manager";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -141,9 +142,10 @@ export async function GET(
   }
 
   try {
+    const sdkTimeout = getSDKCallTimeoutMs();
     const [sessionResult, messagesResult] = await Promise.all([
-      client.session.get({ sessionID: sessionId }),
-      client.session.messages({ sessionID: sessionId }),
+      withTimeout(client.session.get({ sessionID: sessionId }), sdkTimeout, `session.get for ${sessionId}`),
+      withTimeout(client.session.messages({ sessionID: sessionId }), sdkTimeout, `session.messages for ${sessionId}`),
     ]);
 
     const session = sessionResult.data;
@@ -305,7 +307,11 @@ export async function DELETE(
   if (!skipAbortAndDestroy) {
     try {
       const sessionClient = getClientForInstance(instanceId);
-      await sessionClient.session.abort({ sessionID: sessionId });
+      await withTimeout(
+        sessionClient.session.abort({ sessionID: sessionId }),
+        getSDKCallTimeoutMs(),
+        `session.abort for ${sessionId}`,
+      );
     } catch {
       // Abort is best-effort — instance may already be dead or session may not be running
     }

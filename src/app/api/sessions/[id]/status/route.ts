@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import { getInstance, _recoveryComplete } from "@/lib/server/process-manager";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -45,9 +46,11 @@ export async function GET(
   }
 
   try {
-    const result = await client.session.status({
-      directory: instance.directory,
-    });
+    const result = await withTimeout(
+      client.session.status({ directory: instance.directory }),
+      getSDKCallTimeoutMs(),
+      `session.status for instance ${instanceId}`,
+    );
 
     const statusMap = (result.data ?? {}) as Record<string, { type: string }>;
     const liveStatus = statusMap[sessionId];

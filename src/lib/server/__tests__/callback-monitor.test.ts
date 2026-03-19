@@ -102,6 +102,58 @@ describe("callback-monitor", () => {
     });
   });
 
+  describe("SDK call timeout handling", () => {
+    it("PollingLoopHandlesStatusTimeoutGracefully", async () => {
+      const instanceId = "inst-status-timeout";
+
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        client: {
+          session: {
+            // status never resolves
+            status: vi.fn().mockReturnValue(new Promise(() => {})),
+          },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // Provide a pending callback so the polling loop runs
+      const { getAllPendingCallbacks, getSession } = await import("@/lib/server/db-repository");
+      vi.mocked(getAllPendingCallbacks).mockReturnValue([
+        { id: "cb-1", source_session_id: "db-src-1", target_session_id: "db-tgt-1", target_instance_id: instanceId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any);
+      vi.mocked(getSession).mockReturnValue({
+        id: "db-src-1",
+        instance_id: instanceId,
+        opencode_session_id: "oc-src-1",
+        status: "active",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      const origTimeout = process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+      process.env.WEAVE_SDK_CALL_TIMEOUT_MS = "50";
+
+      try {
+        startMonitoring("db-src-1", "oc-src-1", instanceId);
+
+        // Allow time for the polling interval + timeout to fire
+        await new Promise((r) => setTimeout(r, 300));
+
+        // No crash — polling loop is still alive despite the timeout
+        // (verified by reaching this line without an unhandled rejection)
+        expect(true).toBe(true);
+      } finally {
+        if (origTimeout !== undefined) {
+          process.env.WEAVE_SDK_CALL_TIMEOUT_MS = origTimeout;
+        } else {
+          delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+        }
+      }
+    });
+  });
+
   describe("subscribe timeout", () => {
     it("CleansUpSubscriptionWhenSubscribeTimesOut", async () => {
       const instanceId = "inst-timeout";

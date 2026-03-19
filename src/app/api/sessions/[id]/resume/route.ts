@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/db-repository";
 import type { ResumeSessionResponse } from "@/lib/api-types";
 import { existsSync } from "fs";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -78,9 +79,11 @@ export async function POST(
   // Step 6: Verify the opencode session still exists in this instance's DB
   let sdkSession;
   try {
-    const result = await instance.client.session.get({
-      sessionID: dbSession.opencode_session_id,
-    });
+    const result = await withTimeout(
+      instance.client.session.get({ sessionID: dbSession.opencode_session_id }),
+      getSDKCallTimeoutMs(),
+      `session.get for ${dbSession.opencode_session_id}`,
+    );
     sdkSession = result.data;
   } catch {
     sdkSession = null;

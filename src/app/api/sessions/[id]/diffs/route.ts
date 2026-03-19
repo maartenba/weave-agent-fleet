@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import type { FileDiffItem } from "@/lib/api-types";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,9 +33,11 @@ export async function GET(
   }
 
   try {
-    const result = await client.session.diff({
-      sessionID: sessionId,
-    });
+    const result = await withTimeout(
+      client.session.diff({ sessionID: sessionId }),
+      getSDKCallTimeoutMs(),
+      `session.diff for ${sessionId}`,
+    );
 
     const sdkDiffs = result.data ?? [];
 

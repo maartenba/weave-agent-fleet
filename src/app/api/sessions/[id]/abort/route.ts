@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import { getSessionByOpencodeId, updateSessionStatus } from "@/lib/server/db-repository";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,7 +33,11 @@ export async function POST(
   }
 
   try {
-    await client.session.abort({ sessionID: sessionId });
+    await withTimeout(
+      client.session.abort({ sessionID: sessionId }),
+      getSDKCallTimeoutMs(),
+      `session.abort for ${sessionId}`,
+    );
 
     try {
       const dbSession = getSessionByOpencodeId(sessionId);

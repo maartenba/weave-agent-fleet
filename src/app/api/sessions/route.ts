@@ -5,6 +5,7 @@ import { insertSession, listSessions, countSessions, getWorkspace, getInstance, 
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
@@ -56,9 +57,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const instance = await spawnInstance(workspace.directory);
 
     // Step 3: Create the session in OpenCode
-    const result = await instance.client.session.create({
-      title: title ?? "New Session",
-    });
+    const result = await withTimeout(
+      instance.client.session.create({ title: title ?? "New Session" }),
+      getSDKCallTimeoutMs(),
+      `session.create for instance ${instance.id}`,
+    );
 
     const session = result.data;
     if (!session) {
@@ -166,7 +169,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await Promise.allSettled(
       liveInstances.map(async (instance) => {
         try {
-          const result = await instance.client.session.list();
+          const result = await withTimeout(
+            instance.client.session.list(),
+            getSDKCallTimeoutMs(),
+            `session.list for instance ${instance.id}`,
+          );
           const sessions = result.data ?? [];
           const isRunning = instance.status === "running";
           for (const session of sessions) {
@@ -207,9 +214,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .filter((i) => i.status === "running")
       .map(async (instance) => {
         try {
-          const result = await instance.client.session.status({
-            directory: instance.directory,
-          });
+          const result = await withTimeout(
+            instance.client.session.status({ directory: instance.directory }),
+            getSDKCallTimeoutMs(),
+            `session.status for instance ${instance.id}`,
+          );
           if (result.data) {
             instanceStatusMaps.set(instance.id, result.data as SessionStatusMap);
           }
@@ -409,9 +418,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const chunk = pendingFetches.slice(offset, offset + PARALLEL_FETCH_LIMIT);
     const fetchResults = await Promise.allSettled(
       chunk.map(async ({ dbSession, liveInstance }) => {
-        const result = await liveInstance.client.session.get({
-          sessionID: dbSession.opencode_session_id,
-        });
+        const result = await withTimeout(
+          liveInstance.client.session.get({ sessionID: dbSession.opencode_session_id }),
+          getSDKCallTimeoutMs(),
+          `session.get for session ${dbSession.opencode_session_id}`,
+        );
         return result.data;
       })
     );

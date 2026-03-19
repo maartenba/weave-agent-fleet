@@ -26,7 +26,7 @@ import {
   fireSessionCallbacks,
   fireSessionErrorCallbacks,
 } from "./callback-service";
-import { withTimeout } from "./async-utils";
+import { withTimeout, getSDKCallTimeoutMs } from "./async-utils";
 import { log } from "./logger";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -307,9 +307,11 @@ export function startMonitoring(
       const instance = getInstance(instanceId);
       if (!instance || instance.status === "dead") return;
 
-      const result = await instance.client.session.status({
-        directory: instance.directory,
-      });
+      const result = await withTimeout(
+        instance.client.session.status({ directory: instance.directory }),
+        getSDKCallTimeoutMs(),
+        `session.status initial poll for instance ${instanceId}`,
+      );
       const statusMap = (result.data ?? {}) as Record<string, { type: string }>;
       const liveStatus = statusMap[opencodeSessionId];
 
@@ -403,9 +405,11 @@ export function startCallbackPollingLoop(): void {
 
         // Poll session statuses
         try {
-          const result = await instance.client.session.status({
-            directory: instance.directory,
-          });
+          const result = await withTimeout(
+            instance.client.session.status({ directory: instance.directory }),
+            getSDKCallTimeoutMs(),
+            `session.status poll for instance ${instanceId}`,
+          );
           const statusMap = (result.data ?? {}) as Record<
             string,
             { type: string }

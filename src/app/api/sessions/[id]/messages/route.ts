@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getClientForInstance } from "@/lib/server/opencode-client";
 import { _recoveryComplete } from "@/lib/server/process-manager";
 import { sliceMessages } from "@/lib/pagination-utils";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -51,7 +52,11 @@ export async function GET(
   }
 
   try {
-    const messagesResult = await client.session.messages({ sessionID: sessionId });
+    const messagesResult = await withTimeout(
+      client.session.messages({ sessionID: sessionId }),
+      getSDKCallTimeoutMs(),
+      `session.messages for ${sessionId}`,
+    );
     const allMessages = messagesResult.data ?? [];
 
     // If `after` is specified, return all messages after the given ID (for incremental reconnect loading)

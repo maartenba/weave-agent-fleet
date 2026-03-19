@@ -110,6 +110,7 @@ function makeManagedInstance(overrides: Record<string, unknown> = {}) {
         get: vi.fn(),
         list: vi.fn(),
         messages: vi.fn(),
+        status: vi.fn(),
       },
     },
     ...overrides,
@@ -689,6 +690,98 @@ describe("GET /api/sessions", () => {
     const res = await GET(new NextRequest("http://localhost/api/sessions"));
     expect(res.status).toBe(200);
     expect(mockListSessions).toHaveBeenCalledWith({ limit: 100, offset: 0, statuses: undefined });
+  });
+
+  // ─── SDK timeout tests ──────────────────────────────────────────────────────
+
+  it("UsesStubSessionWhenSessionGetTimesOut", async () => {
+    const dbSession = makeDbSession({ status: "active" });
+    const instance = makeManagedInstance();
+    // session.get never resolves
+    instance.client.session.get = vi.fn().mockReturnValue(new Promise(() => {}));
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const orig = process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+    process.env.WEAVE_SDK_CALL_TIMEOUT_MS = "50";
+    try {
+      const res = await GET(new NextRequest("http://localhost/api/sessions"));
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body).toHaveLength(1);
+      // Falls back to stub — id still comes from DB
+      expect(body[0].session.id).toBe("oc-session-abc");
+      expect(body[0].session.title).toBe("Test Session");
+    } finally {
+      if (orig !== undefined) {
+        process.env.WEAVE_SDK_CALL_TIMEOUT_MS = orig;
+      } else {
+        delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+      }
+    }
+  });
+
+  it("ContinuesWithoutStatusDataWhenSessionStatusTimesOut", async () => {
+    const sdkSession = makeSdkSession();
+    const dbSession = makeDbSession({ status: "idle" });
+    const instance = makeManagedInstance();
+    // session.status never resolves
+    instance.client.session.status = vi.fn().mockReturnValue(new Promise(() => {}));
+    instance.client.session.get = vi.fn().mockResolvedValue({ data: sdkSession });
+
+    mockListSessions.mockReturnValue([dbSession] as never);
+    mockListInstances.mockReturnValue([instance] as never);
+    mockGetWorkspace.mockReturnValue(makeDbWorkspace() as never);
+
+    const orig = process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+    process.env.WEAVE_SDK_CALL_TIMEOUT_MS = "50";
+    try {
+      const res = await GET(new NextRequest("http://localhost/api/sessions"));
+      const body = await res.json();
+
+      // Returns 200 — status timeout is gracefully handled via Promise.allSettled
+      expect(res.status).toBe(200);
+      expect(body).toHaveLength(1);
+      // Status falls back to DB-based value since live status unavailable
+      expect(body[0].session.id).toBe("oc-session-abc");
+    } finally {
+      if (orig !== undefined) {
+        process.env.WEAVE_SDK_CALL_TIMEOUT_MS = orig;
+      } else {
+        delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+      }
+    }
+  });
+
+  it("FallsBackGracefullyWhenSessionListTimesOutDuringDbUnavailable", async () => {
+    const instance = makeManagedInstance();
+    // session.list never resolves
+    instance.client.session.list = vi.fn().mockReturnValue(new Promise(() => {}));
+
+    mockListSessions.mockImplementation(() => {
+      throw new Error("DB unavailable");
+    });
+    mockListInstances.mockReturnValue([instance] as never);
+
+    const orig = process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+    process.env.WEAVE_SDK_CALL_TIMEOUT_MS = "50";
+    try {
+      const res = await GET(new NextRequest("http://localhost/api/sessions"));
+      const body = await res.json();
+
+      // Returns empty array — the timed-out session.list() is caught by Promise.allSettled
+      expect(res.status).toBe(200);
+      expect(body).toEqual([]);
+    } finally {
+      if (orig !== undefined) {
+        process.env.WEAVE_SDK_CALL_TIMEOUT_MS = orig;
+      } else {
+        delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+      }
+    }
   });
 });
 

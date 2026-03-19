@@ -2,8 +2,8 @@
  * Tests for async-utils.ts — withTimeout helper.
  */
 
-import { describe, it, expect } from "vitest";
-import { withTimeout, TimeoutError } from "@/lib/server/async-utils";
+import { describe, it, expect, afterEach } from "vitest";
+import { withTimeout, TimeoutError, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 describe("withTimeout", () => {
   it("ResolvesWhenPromiseSettlesBeforeTimeout", async () => {
@@ -54,5 +54,29 @@ describe("withTimeout", () => {
         "timer-cleanup-reject",
       ),
     ).rejects.toThrow("fail");
+  });
+});
+
+describe("getSDKCallTimeoutMs", () => {
+  afterEach(() => {
+    delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+  });
+
+  it("ReturnsDefaultOf10000WhenEnvVarNotSet", () => {
+    delete process.env.WEAVE_SDK_CALL_TIMEOUT_MS;
+    expect(getSDKCallTimeoutMs()).toBe(10_000);
+  });
+
+  it("ReadsCustomValueFromEnvVar", () => {
+    process.env.WEAVE_SDK_CALL_TIMEOUT_MS = "5000";
+    expect(getSDKCallTimeoutMs()).toBe(5000);
+  });
+
+  it("IgnoresInvalidEnvVarValues", () => {
+    const invalids = ["abc", "0", "-1", ""];
+    for (const val of invalids) {
+      process.env.WEAVE_SDK_CALL_TIMEOUT_MS = val;
+      expect(getSDKCallTimeoutMs()).toBe(10_000);
+    }
   });
 });

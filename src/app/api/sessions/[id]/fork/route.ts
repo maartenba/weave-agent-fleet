@@ -10,6 +10,7 @@ import {
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
 import type { ForkSessionRequest, ForkSessionResponse } from "@/lib/api-types";
+import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -92,7 +93,11 @@ export async function POST(
 
     // Step 6: Create the session in OpenCode
     const title = body.title?.trim() || "New Session";
-    const result = await instance.client.session.create({ title });
+    const result = await withTimeout(
+      instance.client.session.create({ title }),
+      getSDKCallTimeoutMs(),
+      `session.create for fork in instance ${instance.id}`,
+    );
 
     const session = result.data;
     if (!session) {
