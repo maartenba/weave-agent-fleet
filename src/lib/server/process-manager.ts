@@ -13,12 +13,13 @@
  */
 
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { existsSync, statSync } from "fs";
 import { homedir } from "os";
 import { createServer, Socket } from "net";
 import { dirname, resolve, sep } from "path";
 import { randomUUID } from "crypto";
+import { killProcessTree, killProcessTreeAsync } from "./process-kill";
 import {
   insertInstance,
   updateInstanceStatus,
@@ -154,36 +155,44 @@ async function spawnOpencodeServer(
     close(force?: boolean) {
       // No-op if process never spawned or already exited
       if (proc.pid === undefined || proc.exitCode !== null) return;
+      // Capture pid — narrowed to number by the undefined check above
+      const pid = proc.pid;
 
       if (force) {
-        // Synchronous SIGKILL — used during process.on('exit') where no async work runs
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          // Process already dead — ignore ESRCH
-        }
+        // Synchronous kill — used during process.on('exit') where no async work runs.
+        // On Windows: taskkill /T /F kills the entire process tree (cmd.exe + opencode.exe).
+        // On POSIX: proc.kill("SIGKILL") terminates the ChildProcess directly.
+        killProcessTree(proc, "SIGKILL", pid);
         return;
       }
 
-      // Graceful: SIGTERM → timeout → SIGKILL
-      try {
-        proc.kill("SIGTERM");
-      } catch {
-        // Process already dead — no escalation needed
+      // Graceful: attempt soft kill → timeout → force kill
+      // On Windows: taskkill /T /F is always forceful — there is no graceful equivalent.
+      //   Windows processes don't handle SIGTERM, so we force-kill immediately.
+      // On POSIX: SIGTERM → grace period → SIGKILL escalation.
+      if (process.platform === "win32") {
+        // Windows: no graceful option — kill the process tree immediately
+        killProcessTree(proc, "SIGKILL", pid);
         return;
       }
+
+      // POSIX graceful: SIGTERM → timeout → SIGKILL
+      void killProcessTreeAsync(proc, "SIGTERM", pid).catch((err: unknown) => {
+        // ESRCH (process already dead) is swallowed inside killProcessTreeAsync.
+        // Any error reaching here is unexpected (e.g. EPERM) — log for diagnostics.
+        log.warn("process-manager", "SIGTERM failed during graceful close — SIGKILL escalation will follow", {
+          pid,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       const killTimer = setTimeout(() => {
         if (proc.exitCode === null) {
           log.warn("process-manager", "Process did not exit after SIGTERM grace period — sending SIGKILL", {
-            pid: proc.pid,
+            pid,
             graceMs: KILL_GRACE_MS,
           });
-          try {
-            proc.kill("SIGKILL");
-          } catch {
-            // Process died between check and kill — ignore
-          }
+          killProcessTree(proc, "SIGKILL", pid);
         }
       }, KILL_GRACE_MS);
 
@@ -254,6 +263,7 @@ const _g = globalThis as unknown as {
   __weaveRespawnAttempts?: Map<string, number[]>;
   __weaveInitDone?: boolean;
   __weaveSignalHandlersRegistered?: boolean;
+  __weavePortCooldowns?: Map<number, number>;
 };
 
 // Module-level singleton map — persists across API route invocations in one Next.js process
@@ -264,6 +274,11 @@ const usedPorts: Set<number> = (_g.__weaveUsedPorts ??= new Set());
 const directoryToInstanceId: Map<string, string> = (_g.__weaveDirToInstance ??= new Map());
 // Track in-flight spawn promises to prevent duplicate concurrent spawns for the same directory
 const inflightSpawns: Map<string, Promise<ManagedInstance>> = (_g.__weaveInflightSpawns ??= new Map());
+// Track ports in cooldown (port → timestamp when cooldown started)
+// Ports enter cooldown when the OS reports them in use but no managed instance owns them.
+// They are held out of allocation for WEAVE_PORT_COOLDOWN_MS (default 60s) to allow
+// zombie processes time to release them, preventing permanent port exhaustion.
+const portCooldowns: Map<number, number> = (_g.__weavePortCooldowns ??= new Map());
 
 // Recovery state — resolved once startup recovery is complete
 if (!_g.__weaveRecoveryPromise) {
@@ -359,11 +374,27 @@ export function validateDirectory(directory: string): string {
 }
 
 export function allocatePort(): number {
+  const cooldownMs =
+    parseInt(process.env.WEAVE_PORT_COOLDOWN_MS ?? "", 10) || 60_000;
+  const now = Date.now();
+
   for (let port = PORT_START; port <= PORT_END; port++) {
-    if (!usedPorts.has(port)) {
-      usedPorts.add(port);
-      return port;
+    // Skip ports actively managed by a running instance
+    if (usedPorts.has(port)) continue;
+
+    // Skip ports in active cooldown (zombie process may still hold them)
+    const cooldownStart = portCooldowns.get(port);
+    if (cooldownStart !== undefined) {
+      if (now - cooldownStart < cooldownMs) {
+        // Still in cooldown — skip this port
+        continue;
+      }
+      // Cooldown expired — remove from cooldowns and let it be re-checked
+      portCooldowns.delete(port);
     }
+
+    usedPorts.add(port);
+    return port;
   }
   throw new Error(`No available ports in range ${PORT_START}–${PORT_END}`);
 }
@@ -384,10 +415,18 @@ export function _resetForTests(): void {
   _cleanupRun = false;
   _g.__weaveCleanupRun = false;
   usedPorts.clear();
+  portCooldowns.clear();
   directoryToInstanceId.clear();
   inflightSpawns.clear();
   _healthFailCounts.clear();
   _respawnAttempts.clear();
+}
+
+/**
+ * Return the portCooldowns Map for test assertions.
+ */
+export function _getPortCooldownsForTests(): Map<number, number> {
+  return portCooldowns;
 }
 
 /**
@@ -546,9 +585,12 @@ export async function spawnInstance(directory: string): Promise<ManagedInstance>
       // Pre-check: is the OS port actually free?
       const available = await isPortAvailable(port);
       if (!available) {
-        log.warn("process-manager", `Port ${port} allocated but OS reports it in use — skipping`, { port });
-        // Don't release: keep it marked as used so we don't retry it.
-        // The health check loop or a restart will eventually clear it.
+        log.warn("process-manager", `Port ${port} allocated but OS reports it in use — moving to cooldown`, { port });
+        // Release from usedPorts and add to cooldowns for retry after cooldown expires.
+        // The cooldown prevents this port from being allocated again until the zombie
+        // process (if any) releases it.
+        releasePort(port);
+        portCooldowns.set(port, Date.now());
         continue;
       }
 
@@ -673,6 +715,42 @@ export function destroyAll(): void {
   for (const id of [...instances.keys()]) {
     destroyInstance(id, true);
   }
+
+  // Windows belt-and-suspenders: after destroying all managed instances,
+  // do a final synchronous sweep of ALL ports in the managed range to catch
+  // any orphaned processes not tracked in our managed instance map.
+  // Uses spawnSync (guaranteed synchronous, safe inside process.on("exit")).
+  if (process.platform === "win32") {
+    try {
+      // Run netstat once and scan all lines for our port range.
+      // netstat -ano output: Proto LocalAddress ForeignAddress State PID
+      // Local address format: "127.0.0.1:<port>" or "0.0.0.0:<port>"
+      // We split each line into columns and only inspect the local address (column 2)
+      // to avoid false positives from foreign address ports in our range.
+      const result = spawnSync("netstat", ["-ano"], { encoding: "utf8", timeout: 5000 });
+      if (result.stdout) {
+        const lines = (result.stdout as string).split("\n");
+        for (const line of lines) {
+          // Split into whitespace-delimited columns:
+          // [0]=Proto, [1]=LocalAddress, [2]=ForeignAddress, [3]=State, [4]=PID
+          const cols = line.trim().split(/\s+/);
+          if (cols.length < 5) continue;
+          const localAddr = cols[1];
+          const portMatch = localAddr.match(/:(\d+)$/);
+          if (!portMatch) continue;
+          const port = parseInt(portMatch[1], 10);
+          if (port < PORT_START || port > PORT_END) continue;
+
+          const pid = cols[4];
+          if (pid && /^\d+$/.test(pid) && pid !== "0") {
+            spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { timeout: 3000 });
+          }
+        }
+      }
+    } catch {
+      // Ignore errors in exit handler — best effort only
+    }
+  }
 }
 
 // Kick off recovery as soon as the module is first loaded.
@@ -795,7 +873,15 @@ export function _getRespawnAttemptsForTests(): Map<string, number[]> {
  */
 export function startHealthCheckLoop(): void {
   if (_g.__weaveHealthCheckInterval) return; // already running
+
+  // Cycle counter for periodic (not every-tick) sweeps
+  let _healthCheckCycle = 0;
+  const PORT_COOLDOWN_SWEEP_EVERY_N_CYCLES = 5;
+  const PORT_MAX_STUCK_MS =
+    parseInt(process.env.WEAVE_PORT_MAX_STUCK_MS ?? "", 10) || 5 * 60 * 1000; // 5 minutes
+
   _g.__weaveHealthCheckInterval = setInterval(async () => {
+    _healthCheckCycle++;
     // Collect running instances for parallel port checks
     const running = [...instances.entries()].filter(([, i]) => i.status === "running");
 
@@ -884,6 +970,37 @@ export function startHealthCheckLoop(): void {
 
     // Periodic cleanup: remove stale _respawnAttempts entries
     _cleanupStaleRespawnAttempts();
+
+    // Periodic zombie port reclamation — run every N cycles to avoid overhead.
+    // Re-checks expired cooldown ports and reclaims them if they're now free.
+    if (_healthCheckCycle % PORT_COOLDOWN_SWEEP_EVERY_N_CYCLES === 0 && portCooldowns.size > 0) {
+      const now = Date.now();
+      const cooldownMs =
+        parseInt(process.env.WEAVE_PORT_COOLDOWN_MS ?? "", 10) || 60_000;
+
+      for (const [port, cooldownStart] of portCooldowns) {
+        const elapsedMs = now - cooldownStart;
+
+        // If cooldown has expired, check if the port is now free
+        if (elapsedMs >= cooldownMs) {
+          const free = await isPortAvailable(port);
+          if (free) {
+            // Port is available again — remove from cooldowns so it can be allocated
+            portCooldowns.delete(port);
+            log.info("process-manager", `Zombie port ${port} is now free — removed from cooldown`, { port, elapsedMs });
+          } else {
+            // Still occupied — log a warning; on Windows hint at the zombie PID
+            if (elapsedMs >= PORT_MAX_STUCK_MS) {
+              log.error("process-manager", `Port ${port} has been in cooldown for ${Math.round(elapsedMs / 1000)}s — possible zombie process. Manual intervention may be required.`, { port, elapsedMs });
+            } else {
+              log.warn("process-manager", `Port ${port} still in use after cooldown expiry — zombie process may still be running`, { port, elapsedMs });
+            }
+            // Reset cooldown timer so we re-check again after another cooldown period
+            portCooldowns.set(port, now);
+          }
+        }
+      }
+    }
   }, HEALTH_CHECK_INTERVAL_MS);
 }
 
@@ -908,9 +1025,23 @@ if (!_g.__weaveSignalHandlersRegistered) {
     destroyAll();
     process.exit(0);
   });
-  process.on("SIGHUP", () => {
-    destroyAll();
-    process.exit(0);
-  });
+  // SIGHUP is not supported on Windows — registering it throws an error.
+  // Only register on non-Windows platforms.
+  if (process.platform !== "win32") {
+    process.on("SIGHUP", () => {
+      destroyAll();
+      process.exit(0);
+    });
+  }
   process.on("beforeExit", destroyAll);
+  // Last-resort cleanup for uncaught exceptions — attempt to kill all instances
+  // before re-throwing so processes aren't left as zombies on unexpected crashes.
+  process.on("uncaughtException", (err) => {
+    try {
+      destroyAll();
+    } catch {
+      // Ignore cleanup errors — we're already in an error state
+    }
+    throw err;
+  });
 }

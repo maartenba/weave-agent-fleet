@@ -4,7 +4,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { resolve } from "path";
-import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots, buildAgentModelConfig, _tcpPortAliveForTests, _cleanupStaleRespawnAttempts, _getRespawnAttemptsForTests } from "@/lib/server/process-manager";
+import { allocatePort, releasePort, _resetForTests, validateDirectory, getAllowedRoots, getEnvRoots, buildAgentModelConfig, _tcpPortAliveForTests, _cleanupStaleRespawnAttempts, _getRespawnAttemptsForTests, _getPortCooldownsForTests } from "@/lib/server/process-manager";
 import { _resetDbForTests } from "@/lib/server/database";
 import { getInstance as getDbInstance, getRunningInstances, insertWorkspaceRoot } from "@/lib/server/db-repository";
 import { createSecureTempDir, writeTempFile } from "./test-temp-utils";
@@ -608,3 +608,94 @@ describe("_cleanupStaleRespawnAttempts", () => {
     expect(remaining[0]).toBe(recentTimestamp);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Port cooldown mechanism
+// ---------------------------------------------------------------------------
+
+describe("port cooldowns", () => {
+  beforeEach(() => {
+    _resetForTests();
+    delete process.env.WEAVE_PORT_COOLDOWN_MS;
+  });
+
+  afterEach(() => {
+    delete process.env.WEAVE_PORT_COOLDOWN_MS;
+  });
+
+  it("SkipsPortInActiveCooldownDuringAllocatePort", () => {
+    const cooldowns = _getPortCooldownsForTests();
+    // Place port 4097 in cooldown
+    cooldowns.set(4097, Date.now());
+
+    // Should skip 4097 and allocate 4098
+    const port = allocatePort();
+    expect(port).toBe(4098);
+    expect(cooldowns.has(4097)).toBe(true);
+  });
+
+  it("AllocatesExpiredCooldownPort", () => {
+    const cooldowns = _getPortCooldownsForTests();
+    // Use a very short cooldown so it's already expired
+    process.env.WEAVE_PORT_COOLDOWN_MS = "1";
+
+    // Set cooldown timestamp in the past
+    const staleTimestamp = Date.now() - 2000; // 2 seconds ago
+    cooldowns.set(4097, staleTimestamp);
+
+    // Short wait to ensure cooldown is expired
+    const port = allocatePort();
+    // Expired cooldown port 4097 should be re-allocated
+    expect(port).toBe(4097);
+    // Should be removed from cooldowns once allocated
+    expect(cooldowns.has(4097)).toBe(false);
+  });
+
+  it("ResetForTestsClearsPortCooldowns", () => {
+    const cooldowns = _getPortCooldownsForTests();
+    cooldowns.set(4097, Date.now());
+    cooldowns.set(4098, Date.now());
+    expect(cooldowns.size).toBe(2);
+
+    _resetForTests();
+
+    expect(_getPortCooldownsForTests().size).toBe(0);
+  });
+
+  it("GetPortCooldownsForTestsReturnsTheSameMapInstance", () => {
+    const a = _getPortCooldownsForTests();
+    const b = _getPortCooldownsForTests();
+    expect(a).toBe(b);
+  });
+
+  it("CooldownPortNotAddedToUsedPorts", () => {
+    const cooldowns = _getPortCooldownsForTests();
+    // Put port 4097 in cooldown
+    cooldowns.set(4097, Date.now());
+
+    // Allocate 3 ports — should skip 4097
+    const p1 = allocatePort(); // 4098
+    const p2 = allocatePort(); // 4099
+    const p3 = allocatePort(); // 4100
+
+    expect(p1).toBe(4098);
+    expect(p2).toBe(4099);
+    expect(p3).toBe(4100);
+
+    // Release one and ensure we can reallocate it
+    releasePort(p1);
+    const p4 = allocatePort();
+    expect(p4).toBe(4098);
+  });
+
+  it("ThrowsWhenAllPortsAreInCooldownOrUsed", () => {
+    const cooldowns = _getPortCooldownsForTests();
+    // Fill all 104 ports (4097–4200) with active cooldowns
+    for (let p = 4097; p <= 4200; p++) {
+      cooldowns.set(p, Date.now());
+    }
+
+    expect(() => allocatePort()).toThrow("No available ports in range 4097\u20134200");
+  });
+});
+
