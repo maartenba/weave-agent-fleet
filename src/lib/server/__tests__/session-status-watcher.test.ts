@@ -2,8 +2,8 @@
  * Tests for session-status-watcher.ts — state management and event processing.
  *
  * Tests the public API: ensureWatching / stopWatching / _resetForTests.
- * Event processing tests use a controllable mock async iterable to simulate
- * the OpenCode SDK event stream.
+ * Event processing tests push events directly via the captured hub listener
+ * (no mock async iterable needed — the hub owns the subscription).
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -14,12 +14,24 @@ vi.mock("@/lib/server/process-manager", () => ({
   _recoveryComplete: Promise.resolve(),
 }));
 
-// Mock opencode-client to prevent real SDK calls
-vi.mock("@/lib/server/opencode-client", () => ({
-  getClientForInstance: vi.fn(() => {
-    throw new Error("No instance in test");
-  }),
-}));
+// Mock instance-event-hub — capture the registered listener for direct event injection
+vi.mock("@/lib/server/instance-event-hub", () => {
+  const listeners = new Map<string, (event: { type: string; properties: Record<string, unknown> }) => void>();
+  return {
+    addListener: vi.fn((instanceId: string, listener: (event: { type: string; properties: Record<string, unknown> }) => void) => {
+      listeners.set(instanceId, listener);
+      return () => {
+        listeners.delete(instanceId);
+      };
+    }),
+    removeAllListeners: vi.fn(),
+    _resetForTests: vi.fn(() => {
+      listeners.clear();
+    }),
+    // Expose for tests to push events
+    __listeners: listeners,
+  };
+});
 
 // Mock db-repository
 vi.mock("@/lib/server/db-repository", () => ({
@@ -27,58 +39,29 @@ vi.mock("@/lib/server/db-repository", () => ({
   updateSessionStatus: vi.fn(),
   getSession: vi.fn(() => undefined),
   getActiveChildSessions: vi.fn(() => []),
+  incrementSessionTokens: vi.fn(() => undefined),
 }));
 
 // Mock activity-emitter
 vi.mock("@/lib/server/activity-emitter", () => ({
   emitActivityStatus: vi.fn(),
+  emitTokenUpdate: vi.fn(),
 }));
 
 import { ensureWatching, stopWatching, _resetForTests } from "@/lib/server/session-status-watcher";
 import * as processManager from "@/lib/server/process-manager";
-import * as opencodeClient from "@/lib/server/opencode-client";
+import * as instanceEventHub from "@/lib/server/instance-event-hub";
 import * as dbRepository from "@/lib/server/db-repository";
 import * as activityEmitter from "@/lib/server/activity-emitter";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function createMockEventStream() {
-  const events: unknown[] = [];
-  let resolve: (() => void) | null = null;
-  let done = false;
-
-  const stream: AsyncIterable<unknown> = {
-    [Symbol.asyncIterator]() {
-      let index = 0;
-      return {
-        async next() {
-          while (index >= events.length && !done) {
-            await new Promise<void>((r) => {
-              resolve = r;
-            });
-          }
-          if (index >= events.length && done) {
-            return { done: true as const, value: undefined };
-          }
-          return { done: false as const, value: events[index++] };
-        },
-      };
-    },
-  };
-
-  return {
-    stream,
-    push(event: unknown) {
-      events.push(event);
-      resolve?.();
-      resolve = null;
-    },
-    end() {
-      done = true;
-      resolve?.();
-      resolve = null;
-    },
-  };
+// Helper to push an event to the captured listener for a given instance
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pushEvent(instanceId: string, event: { type: string; properties: Record<string, any> }): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listeners = (instanceEventHub as any).__listeners as Map<string, (e: typeof event) => void>;
+  const listener = listeners.get(instanceId);
+  if (!listener) throw new Error(`No listener registered for instance ${instanceId}`);
+  listener(event);
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -97,7 +80,6 @@ afterEach(() => {
 describe("session-status-watcher", () => {
   describe("ensureWatching / stopWatching", () => {
     it("EnsureWatchingDoesNotThrowWhenInstanceIsDead", () => {
-      // getInstance returns undefined → instance is dead / not found
       vi.mocked(processManager.getInstance).mockReturnValue(undefined);
       expect(() => ensureWatching("inst-1")).not.toThrow();
     });
@@ -107,21 +89,35 @@ describe("session-status-watcher", () => {
     });
 
     it("DoubleEnsureWatchingIsIdempotent", () => {
-      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
-      expect(() => {
-        ensureWatching("inst-1");
-        ensureWatching("inst-1");
-      }).not.toThrow();
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      ensureWatching("inst-1");
+      ensureWatching("inst-1");
+
+      // addListener should only be called once
+      expect(instanceEventHub.addListener).toHaveBeenCalledTimes(1);
     });
 
     it("StopWatchingAfterEnsureWatchingDoesNotThrow", () => {
-      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       ensureWatching("inst-1");
       expect(() => stopWatching("inst-1")).not.toThrow();
     });
 
     it("DoubleStopIsNoOp", () => {
-      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       ensureWatching("inst-1");
       stopWatching("inst-1");
       expect(() => stopWatching("inst-1")).not.toThrow();
@@ -130,7 +126,11 @@ describe("session-status-watcher", () => {
 
   describe("_resetForTests", () => {
     it("ClearsAllStateWithoutError", () => {
-      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       ensureWatching("inst-1");
       ensureWatching("inst-2");
 
@@ -138,38 +138,35 @@ describe("session-status-watcher", () => {
     });
 
     it("AllowsReWatchingAfterReset", () => {
-      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       ensureWatching("inst-1");
       _resetForTests();
+      vi.clearAllMocks();
 
-      // Should not throw — state was cleared
+      // Should register a new listener after reset
       expect(() => ensureWatching("inst-1")).not.toThrow();
+      expect(instanceEventHub.addListener).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("event processing", () => {
     const instanceId = "inst-test";
 
-    function setupWatchingWithStream(mockStream: AsyncIterable<unknown>) {
+    function setupWatching() {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
-
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockResolvedValue({ stream: mockStream }),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
       ensureWatching(instanceId);
     }
 
-    it("EmitsActivityStatusOnBusyTransition", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("EmitsActivityStatusOnBusyTransition", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "db-1",
@@ -177,16 +174,12 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-sess-1",
           status: { type: "busy" },
         },
-      });
-
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
       });
 
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
@@ -195,13 +188,10 @@ describe("session-status-watcher", () => {
         activityStatus: "busy",
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("db-1", "active");
-
-      mock.end();
     });
 
-    it("EmitsActivityStatusOnIdleTransition", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("EmitsActivityStatusOnIdleTransition", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "db-2",
@@ -209,16 +199,12 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-sess-2",
           status: { type: "idle" },
         },
-      });
-
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
       });
 
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
@@ -227,13 +213,10 @@ describe("session-status-watcher", () => {
         activityStatus: "idle",
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("db-2", "idle");
-
-      mock.end();
     });
 
-    it("EmitsActivityStatusOnSessionIdleEvent", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("EmitsActivityStatusOnSessionIdleEvent", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "db-3",
@@ -241,15 +224,11 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.idle",
         properties: {
           sessionID: "oc-sess-3",
         },
-      });
-
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
       });
 
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
@@ -258,13 +237,10 @@ describe("session-status-watcher", () => {
         activityStatus: "idle",
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("db-3", "idle");
-
-      mock.end();
     });
 
-    it("EmitsWaitingInputOnPermissionEvent", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("EmitsWaitingInputOnPermissionEvent", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "db-4",
@@ -272,15 +248,11 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "permission.request",
         properties: {
           sessionID: "oc-sess-4",
         },
-      });
-
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
       });
 
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
@@ -289,13 +261,10 @@ describe("session-status-watcher", () => {
         activityStatus: "waiting_input",
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("db-4", "waiting_input");
-
-      mock.end();
     });
 
-    it("DoesNotEmitWhenStatusUnchanged", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("DoesNotEmitWhenStatusUnchanged", () => {
+      setupWatching();
 
       // DB already has status "idle" — same as what the event reports
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
@@ -304,7 +273,7 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-sess-5",
@@ -312,23 +281,16 @@ describe("session-status-watcher", () => {
         },
       });
 
-      // Give the async loop a chance to process
-      await new Promise((r) => setTimeout(r, 30));
-
       expect(activityEmitter.emitActivityStatus).not.toHaveBeenCalled();
       expect(dbRepository.updateSessionStatus).not.toHaveBeenCalled();
-
-      mock.end();
     });
 
-    it("DoesNotEmitForUnknownSession", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("DoesNotEmitForUnknownSession", () => {
+      setupWatching();
 
-      // DB has no record for this session
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue(undefined);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-unknown",
@@ -336,39 +298,25 @@ describe("session-status-watcher", () => {
         },
       });
 
-      // Give the async loop a chance to process
-      await new Promise((r) => setTimeout(r, 30));
-
       expect(activityEmitter.emitActivityStatus).not.toHaveBeenCalled();
       expect(dbRepository.updateSessionStatus).not.toHaveBeenCalled();
-
-      mock.end();
     });
   });
 
   describe("parent status propagation", () => {
     const instanceId = "inst-test";
 
-    function setupWatchingWithStream(mockStream: AsyncIterable<unknown>) {
+    function setupWatching() {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
-
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockResolvedValue({ stream: mockStream }),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
       ensureWatching(instanceId);
     }
 
-    it("PropagatesBusyToParentWhenChildBecomesBusy", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("PropagatesBusyToParentWhenChildBecomesBusy", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "child-db-1",
@@ -385,7 +333,7 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-child-1",
@@ -393,17 +341,13 @@ describe("session-status-watcher", () => {
         },
       });
 
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
-      });
+      expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
 
-      // Child gets busy
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-child-1",
         instanceId,
         activityStatus: "busy",
       });
-      // Parent also gets busy (with parent's own IDs)
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-parent-1",
         instanceId: "inst-parent",
@@ -411,13 +355,10 @@ describe("session-status-watcher", () => {
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("child-db-1", "active");
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("parent-db-1", "active");
-
-      mock.end();
     });
 
-    it("PropagatesIdleToParentWhenLastChildGoesIdle", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("PropagatesIdleToParentWhenLastChildGoesIdle", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "child-db-2",
@@ -434,10 +375,9 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      // No remaining active children
       vi.mocked(dbRepository.getActiveChildSessions).mockReturnValue([]);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-child-2",
@@ -445,30 +385,23 @@ describe("session-status-watcher", () => {
         },
       });
 
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
-      });
+      expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(2);
 
-      // Child goes idle
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-child-2",
         instanceId,
         activityStatus: "idle",
       });
-      // Parent also goes idle
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-parent-2",
         instanceId: "inst-parent",
         activityStatus: "idle",
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("parent-db-2", "idle");
-
-      mock.end();
     });
 
-    it("DoesNotPropagateIdleToParentWhenOtherChildrenStillActive", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("DoesNotPropagateIdleToParentWhenOtherChildrenStillActive", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "child-db-3",
@@ -485,13 +418,12 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      // Another sibling is still active
       vi.mocked(dbRepository.getActiveChildSessions).mockReturnValue([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { id: "sibling-db-1", status: "active" } as any,
       ]);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-child-3",
@@ -499,24 +431,16 @@ describe("session-status-watcher", () => {
         },
       });
 
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
-      });
-
-      // Only child gets idle event — parent stays busy
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-child-3",
         instanceId,
         activityStatus: "idle",
       });
-
-      mock.end();
     });
 
-    it("DoesNotPropagateToTerminalParent", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("DoesNotPropagateToTerminalParent", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "child-db-4",
@@ -525,7 +449,6 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      // Parent is in terminal state
       vi.mocked(dbRepository.getSession).mockReturnValue({
         id: "parent-db-4",
         status: "stopped",
@@ -534,7 +457,7 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-child-4",
@@ -542,11 +465,6 @@ describe("session-status-watcher", () => {
         },
       });
 
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
-      });
-
-      // Only child gets the event — terminal parent is not touched
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
         sessionId: "oc-child-4",
@@ -555,13 +473,10 @@ describe("session-status-watcher", () => {
       });
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledTimes(1);
       expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("child-db-4", "active");
-
-      mock.end();
     });
 
-    it("DoesNotPropagateWhenChildHasNoParent", async () => {
-      const mock = createMockEventStream();
-      setupWatchingWithStream(mock.stream);
+    it("DoesNotPropagateWhenChildHasNoParent", () => {
+      setupWatching();
 
       vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
         id: "child-db-5",
@@ -570,7 +485,7 @@ describe("session-status-watcher", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
-      mock.push({
+      pushEvent(instanceId, {
         type: "session.status",
         properties: {
           sessionID: "oc-child-5",
@@ -578,119 +493,8 @@ describe("session-status-watcher", () => {
         },
       });
 
-      await vi.waitFor(() => {
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
-      });
-
-      // Only child event — no parent lookup
       expect(activityEmitter.emitActivityStatus).toHaveBeenCalledTimes(1);
       expect(dbRepository.getSession).not.toHaveBeenCalled();
-
-      mock.end();
-    });
-  });
-
-  describe("subscribe timeout", () => {
-    it("CleansUpWatcherWhenSubscribeTimesOut", async () => {
-      const instanceId = "inst-timeout";
-
-      vi.mocked(processManager.getInstance).mockReturnValue({
-        directory: "/test",
-        status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      // Return a subscribe that never resolves
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockReturnValue(new Promise(() => {})),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      // Set a very short timeout for the test
-      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "50";
-
-      try {
-        ensureWatching(instanceId);
-
-        // Wait for the timeout to fire and clean up
-        await new Promise((r) => setTimeout(r, 200));
-
-        // After timeout, re-watching should be possible (watcher was cleaned up)
-        // If the watcher was NOT cleaned up, this would be a no-op (idempotent guard)
-        // Since we can't directly inspect the watchers Map, we verify the subscribe
-        // was called once (not twice, which would mean the idempotent guard blocked it)
-        const subscribeFn = vi.mocked(opencodeClient.getClientForInstance).mock.results[0]
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ?.value?.event?.subscribe as any;
-        expect(subscribeFn).toHaveBeenCalledTimes(1);
-      } finally {
-        if (origTimeout !== undefined) {
-          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
-        } else {
-          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-        }
-      }
-    });
-
-    it("SuccessfulSubscribeIsNotAffectedByTimeout", async () => {
-      const mock = createMockEventStream();
-      const instanceId = "inst-no-timeout";
-
-      vi.mocked(processManager.getInstance).mockReturnValue({
-        directory: "/test",
-        status: "running",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockResolvedValue({ stream: mock.stream }),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "5000";
-
-      try {
-        ensureWatching(instanceId);
-
-        // Push an event to prove the stream is working
-        vi.mocked(dbRepository.getSessionByOpencodeId).mockReturnValue({
-          id: "db-timeout-test",
-          status: "idle",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any);
-
-        mock.push({
-          type: "session.status",
-          properties: {
-            sessionID: "oc-timeout-test",
-            status: { type: "busy" },
-          },
-        });
-
-        await vi.waitFor(() => {
-          expect(activityEmitter.emitActivityStatus).toHaveBeenCalled();
-        });
-
-        expect(activityEmitter.emitActivityStatus).toHaveBeenCalledWith({
-          sessionId: "oc-timeout-test",
-          instanceId,
-          activityStatus: "busy",
-        });
-
-        mock.end();
-      } finally {
-        if (origTimeout !== undefined) {
-          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
-        } else {
-          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-        }
-      }
     });
   });
 });

@@ -1,10 +1,9 @@
 /**
  * Tests for callback-monitor.ts — session tracking and cleanup logic.
  *
- * Full integration testing (event stream subscription, callback firing) requires
- * a running OpenCode instance and is out of scope. These tests verify the state
- * management: startMonitoring/stopMonitoring track sessions correctly and
- * _resetForTests clears everything.
+ * Tests state management: startMonitoring/stopMonitoring track sessions
+ * correctly and _resetForTests clears everything. Event-driven callback
+ * tests push events via the captured hub listener.
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -15,12 +14,23 @@ vi.mock("@/lib/server/process-manager", () => ({
   _recoveryComplete: Promise.resolve(),
 }));
 
-// Mock opencode-client to prevent real SDK calls
-vi.mock("@/lib/server/opencode-client", () => ({
-  getClientForInstance: vi.fn(() => {
-    throw new Error("No instance in test");
-  }),
-}));
+// Mock instance-event-hub — capture registered listeners for direct event injection
+vi.mock("@/lib/server/instance-event-hub", () => {
+  const listeners = new Map<string, (event: { type: string; properties: Record<string, unknown> }) => void>();
+  return {
+    addListener: vi.fn((instanceId: string, listener: (event: { type: string; properties: Record<string, unknown> }) => void) => {
+      listeners.set(instanceId, listener);
+      return () => {
+        listeners.delete(instanceId);
+      };
+    }),
+    removeAllListeners: vi.fn(),
+    _resetForTests: vi.fn(() => {
+      listeners.clear();
+    }),
+    __listeners: listeners,
+  };
+});
 
 // Mock callback-service to prevent real callback delivery
 vi.mock("@/lib/server/callback-service", () => ({
@@ -28,7 +38,7 @@ vi.mock("@/lib/server/callback-service", () => ({
   fireSessionErrorCallbacks: vi.fn(),
 }));
 
-// Mock db-repository — provide no-op implementations for functions used by the module
+// Mock db-repository — provide no-op implementations
 vi.mock("@/lib/server/db-repository", () => ({
   getAllPendingCallbacks: vi.fn(() => []),
   claimPendingCallback: vi.fn(() => true),
@@ -39,7 +49,25 @@ vi.mock("@/lib/server/db-repository", () => ({
 
 import { startMonitoring, stopMonitoring, _resetForTests } from "@/lib/server/callback-monitor";
 import * as processManager from "@/lib/server/process-manager";
-import * as opencodeClient from "@/lib/server/opencode-client";
+import * as instanceEventHub from "@/lib/server/instance-event-hub";
+import * as callbackService from "@/lib/server/callback-service";
+import * as dbRepository from "@/lib/server/db-repository";
+
+// Helper to push an event to the captured listener for a given instance
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pushEvent(instanceId: string, event: { type: string; properties: Record<string, any> }): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listeners = (instanceEventHub as any).__listeners as Map<string, (e: typeof event) => void>;
+  const listener = listeners.get(instanceId);
+  if (!listener) throw new Error(`No listener registered for instance ${instanceId}`);
+  listener(event);
+}
+
+function hasListener(instanceId: string): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listeners = (instanceEventHub as any).__listeners as Map<string, unknown>;
+  return listeners.has(instanceId);
+}
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +85,7 @@ afterEach(() => {
 describe("callback-monitor", () => {
   describe("startMonitoring / stopMonitoring", () => {
     it("StartMonitoringDoesNotThrowWhenInstanceIsDead", () => {
-      // getInstance returns undefined → instance is dead
+      vi.mocked(processManager.getInstance).mockReturnValue(undefined);
       expect(() => startMonitoring("db-1", "oc-1", "inst-1")).not.toThrow();
     });
 
@@ -66,19 +94,38 @@ describe("callback-monitor", () => {
     });
 
     it("DoubleStartMonitoringIsIdempotent", () => {
-      // Both calls should succeed without error
-      expect(() => {
-        startMonitoring("db-1", "oc-1", "inst-1");
-        startMonitoring("db-1", "oc-1", "inst-1");
-      }).not.toThrow();
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
+      } as any);
+
+      startMonitoring("db-1", "oc-1", "inst-1");
+      startMonitoring("db-1", "oc-1", "inst-1");
+
+      // addListener should only be called once for the instance
+      expect(instanceEventHub.addListener).toHaveBeenCalledTimes(1);
     });
 
     it("StopMonitoringAfterStartDoesNotThrow", () => {
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
+      } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
       expect(() => stopMonitoring("db-1")).not.toThrow();
     });
 
     it("DoubleStopIsNoOp", () => {
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
+      } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
       stopMonitoring("db-1");
       expect(() => stopMonitoring("db-1")).not.toThrow();
@@ -87,6 +134,12 @@ describe("callback-monitor", () => {
 
   describe("_resetForTests", () => {
     it("ClearsAllStateWithoutError", () => {
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
+      } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
       startMonitoring("db-2", "oc-2", "inst-2");
 
@@ -94,10 +147,16 @@ describe("callback-monitor", () => {
     });
 
     it("AllowsReMonitoringAfterReset", () => {
+      vi.mocked(processManager.getInstance).mockReturnValue({
+        directory: "/test",
+        status: "running",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
+      } as any);
       startMonitoring("db-1", "oc-1", "inst-1");
       _resetForTests();
+      vi.clearAllMocks();
 
-      // Should not throw — state was cleared
       expect(() => startMonitoring("db-1", "oc-1", "inst-1")).not.toThrow();
     });
   });
@@ -142,7 +201,6 @@ describe("callback-monitor", () => {
         await new Promise((r) => setTimeout(r, 300));
 
         // No crash — polling loop is still alive despite the timeout
-        // (verified by reaching this line without an unhandled rejection)
         expect(true).toBe(true);
       } finally {
         if (origTimeout !== undefined) {
@@ -154,132 +212,123 @@ describe("callback-monitor", () => {
     });
   });
 
-  describe("subscribe timeout", () => {
-    it("CleansUpSubscriptionWhenSubscribeTimesOut", async () => {
-      const instanceId = "inst-timeout";
+  describe("per-instance listener ref-counting (Blocker 3)", () => {
+    const instanceId = "inst-refcount";
 
+    function setupInstance() {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        client: { session: { status: vi.fn() } },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: {} }) } },
       } as any);
+    }
 
-      // Return a subscribe that never resolves
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockReturnValue(new Promise(() => {})),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+    it("TwoStartMonitoringCallsForDifferentSessionsOnSameInstanceResultInOneAddListenerCall", () => {
+      setupInstance();
+      startMonitoring("db-A", "oc-A", instanceId);
+      startMonitoring("db-B", "oc-B", instanceId);
 
-      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "50";
-
-      try {
-        startMonitoring("db-timeout-1", "oc-timeout-1", instanceId);
-
-        // Wait for the timeout to fire and clean up
-        await new Promise((r) => setTimeout(r, 200));
-
-        // The subscription should be cleaned up — starting monitoring for the same
-        // instance with a new session should create a new subscription attempt
-        const subscribeFn = vi.mocked(opencodeClient.getClientForInstance).mock.results[0]
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ?.value?.event?.subscribe as any;
-        expect(subscribeFn).toHaveBeenCalledTimes(1);
-      } finally {
-        if (origTimeout !== undefined) {
-          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
-        } else {
-          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-        }
-      }
+      expect(instanceEventHub.addListener).toHaveBeenCalledTimes(1);
+      expect(instanceEventHub.addListener).toHaveBeenCalledWith(instanceId, expect.any(Function));
     });
 
-    it("SuccessfulSubscribeWorksWithinTimeout", async () => {
-      const instanceId = "inst-fast";
+    it("StopMonitoringFirstSessionDoesNotRemoveHubListener", () => {
+      setupInstance();
+      startMonitoring("db-A", "oc-A", instanceId);
+      startMonitoring("db-B", "oc-B", instanceId);
 
-      function createMockEventStream() {
-        const events: unknown[] = [];
-        let resolve: (() => void) | null = null;
-        let done = false;
+      stopMonitoring("db-A");
 
-        const stream: AsyncIterable<unknown> = {
-          [Symbol.asyncIterator]() {
-            let index = 0;
-            return {
-              async next() {
-                while (index >= events.length && !done) {
-                  await new Promise<void>((r) => { resolve = r; });
-                }
-                if (index >= events.length && done) {
-                  return { done: true as const, value: undefined };
-                }
-                return { done: false as const, value: events[index++] };
-              },
-            };
-          },
-        };
+      // Hub listener for instance should still be registered (session B is still active)
+      expect(hasListener(instanceId)).toBe(true);
+    });
 
-        return {
-          stream,
-          push(event: unknown) {
-            events.push(event);
-            resolve?.();
-            resolve = null;
-          },
-          end() {
-            done = true;
-            resolve?.();
-            resolve = null;
-          },
-        };
-      }
+    it("StopMonitoringLastSessionRemovesHubListener", () => {
+      setupInstance();
+      startMonitoring("db-A", "oc-A", instanceId);
+      startMonitoring("db-B", "oc-B", instanceId);
 
-      const mock = createMockEventStream();
+      stopMonitoring("db-A");
+      stopMonitoring("db-B");
 
+      // Hub listener should now be removed
+      expect(hasListener(instanceId)).toBe(false);
+    });
+  });
+
+  describe("event-driven callback detection (Blocker 1)", () => {
+    const instanceId = "inst-callback";
+
+    function setupInstance() {
       vi.mocked(processManager.getInstance).mockReturnValue({
         directory: "/test",
         status: "running",
-        client: {
-          session: {
-            status: vi.fn().mockResolvedValue({ data: {} }),
-          },
-        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        client: { session: { status: vi.fn().mockResolvedValue({ data: { "oc-sess": { type: "busy" } } }) } },
       } as any);
+    }
 
-      vi.mocked(opencodeClient.getClientForInstance).mockReturnValue({
-        event: {
-          subscribe: vi.fn().mockResolvedValue({ stream: mock.stream }),
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+    it("FiresCallbackOnBusyToIdleTransition", async () => {
+      setupInstance();
+      startMonitoring("db-1", "oc-sess", instanceId);
 
-      const origTimeout = process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-      process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = "5000";
+      // Wait for initial poll to complete
+      await new Promise((r) => setTimeout(r, 50));
 
-      try {
-        startMonitoring("db-fast-1", "oc-fast-1", instanceId);
+      // Simulate busy event (state tracking)
+      pushEvent(instanceId, {
+        type: "session.status",
+        properties: { sessionID: "oc-sess", status: { type: "busy" } },
+      });
 
-        // Give it a moment to subscribe
-        await new Promise((r) => setTimeout(r, 50));
+      // Now idle
+      pushEvent(instanceId, {
+        type: "session.status",
+        properties: { sessionID: "oc-sess", status: { type: "idle" } },
+      });
 
-        // Subscribe should have been called
-        const subscribeFn = vi.mocked(opencodeClient.getClientForInstance).mock.results[0]
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ?.value?.event?.subscribe as any;
-        expect(subscribeFn).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => {
+        expect(callbackService.fireSessionCallbacks).toHaveBeenCalledWith("oc-sess", instanceId);
+      });
+      expect(dbRepository.updateSessionStatus).toHaveBeenCalledWith("db-1", "idle");
+    });
 
-        mock.end();
-      } finally {
-        if (origTimeout !== undefined) {
-          process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS = origTimeout;
-        } else {
-          delete process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS;
-        }
-      }
+    it("HandlerCallingStopMonitoringDuringDispatchDoesNotThrow", async () => {
+      setupInstance();
+      startMonitoring("db-safe", "oc-safe", instanceId);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Set busy state first
+      pushEvent(instanceId, {
+        type: "session.status",
+        properties: { sessionID: "oc-safe", status: { type: "busy" } },
+      });
+
+      // idle event triggers stopMonitoringSession inside the handler
+      expect(() => {
+        pushEvent(instanceId, {
+          type: "session.status",
+          properties: { sessionID: "oc-safe", status: { type: "idle" } },
+        });
+      }).not.toThrow();
+    });
+
+    it("FiresErrorCallbackOnErrorEvent", async () => {
+      setupInstance();
+      startMonitoring("db-err", "oc-err", instanceId);
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      pushEvent(instanceId, {
+        type: "error",
+        properties: { sessionID: "oc-err" },
+      });
+
+      await vi.waitFor(() => {
+        expect(callbackService.fireSessionErrorCallbacks).toHaveBeenCalledWith("oc-err", instanceId);
+      });
     });
   });
 });

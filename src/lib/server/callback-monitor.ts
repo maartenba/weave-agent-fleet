@@ -1,6 +1,6 @@
 /**
- * Callback Monitor — server-side event subscription manager that fires
- * completion callbacks without depending on a browser SSE connection.
+ * Callback Monitor — server-side event listener that fires completion
+ * callbacks without depending on a browser SSE connection.
  *
  * Three layers of redundancy:
  * 1. SSE handler (instant, browser-dependent) — existing, unchanged
@@ -9,6 +9,13 @@
  *
  * Duplicate delivery is prevented by the atomic `claimPendingCallback()` in
  * db-repository, which ensures only one caller succeeds per callback row.
+ *
+ * Architecture:
+ * - Registers one listener per running OpenCode instance on the shared
+ *   Instance Event Hub (which owns the actual SDK subscription and reconnection).
+ * - Uses ref-counting: first `startMonitoring()` call for a given instance
+ *   registers a hub listener; the listener is removed when the last monitored
+ *   session on that instance is stopped.
  *
  * Uses the globalThis singleton pattern (matching process-manager.ts) for
  * Turbopack compatibility.
@@ -21,7 +28,7 @@ import {
   updateSessionStatus,
 } from "./db-repository";
 import { getInstance, _recoveryComplete } from "./process-manager";
-import { getClientForInstance } from "./opencode-client";
+import { addListener } from "./instance-event-hub";
 import {
   fireSessionCallbacks,
   fireSessionErrorCallbacks,
@@ -43,12 +50,10 @@ interface MonitoredSession {
   instanceId: string;
 }
 
-interface InstanceSubscription {
-  instanceId: string;
-  directory: string;
+interface InstanceMonitorState {
   sessionStates: Map<string, "idle" | "busy">; // keyed by opencode session ID
-  monitoredDbSessionIds: Set<string>; // Fleet DB IDs being monitored on this instance
-  abort: AbortController;
+  monitoredDbSessionIds: Set<string>;           // Fleet DB IDs being monitored on this instance
+  unsubscribe: () => void;                      // hub unsubscribe for this instance
 }
 
 // ─── globalThis-based singletons ──────────────────────────────────────────────
@@ -56,7 +61,7 @@ interface InstanceSubscription {
 const _g = globalThis as unknown as {
   __weaveCallbackMonitor?: {
     monitoredSessions: Map<string, MonitoredSession>;
-    instanceSubscriptions: Map<string, InstanceSubscription>;
+    instanceMonitorStates: Map<string, InstanceMonitorState>;
   };
   __weaveCallbackPollInterval?: ReturnType<typeof setInterval> | null;
   __weaveCallbackMonitorInit?: boolean;
@@ -67,79 +72,45 @@ function getMonitorState() {
   if (!_g.__weaveCallbackMonitor) {
     _g.__weaveCallbackMonitor = {
       monitoredSessions: new Map(),
-      instanceSubscriptions: new Map(),
+      instanceMonitorStates: new Map(),
     };
   }
   return _g.__weaveCallbackMonitor;
 }
 
-// ─── Event Stream Processing ──────────────────────────────────────────────────
+// ─── Event Handler Builder ────────────────────────────────────────────────────
 
 /**
- * Process events from an instance's event stream, detecting busy→idle
- * transitions for monitored sessions and firing callbacks.
+ * Build the hub event handler for a given instance. The handler detects
+ * busy→idle transitions for monitored sessions and fires callbacks.
+ *
+ * NOTE: The handler calls stopMonitoringSession() during dispatch (break after
+ * first match ensures safe iteration of monitoredSessions). The hub's snapshot
+ * dispatch makes this safe at the hub level.
  */
-async function processEventStream(
-  instanceId: string,
-  eventStream: AsyncIterable<unknown>,
-  abortController: AbortController
-): Promise<void> {
-  const { monitoredSessions, instanceSubscriptions } = getMonitorState();
+function buildHandler(instanceId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function handleEvent({ type, properties }: { type: string; properties: Record<string, any> }): void {
+    const { monitoredSessions, instanceMonitorStates } = getMonitorState();
 
-  try {
-    for await (const rawEvent of eventStream) {
-      if (abortController.signal.aborted) break;
+    const state = instanceMonitorStates.get(instanceId);
+    if (!state) return; // state was removed
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const event = rawEvent as any;
-      const type: string = event?.type ?? "unknown";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const properties: Record<string, any> = event?.properties ?? event ?? {};
+    if (type === "session.status") {
+      const statusType: string = properties?.status?.type ?? "";
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
 
-      const sub = instanceSubscriptions.get(instanceId);
-      if (!sub) break; // subscription was removed
+      if (!eventSessionId) return;
 
-      if (type === "session.status") {
-        const statusType: string = properties?.status?.type ?? "";
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-
-        if (!eventSessionId) continue;
-
-        if (statusType === "busy") {
-          sub.sessionStates.set(eventSessionId, "busy");
-        } else if (statusType === "idle") {
-          const prevState = sub.sessionStates.get(eventSessionId);
-          sub.sessionStates.set(eventSessionId, "idle");
-
-          if (prevState === "busy") {
-            // Find the monitored session by opencode session ID
-            for (const [dbSessionId, monitored] of monitoredSessions) {
-              if (
-                monitored.opencodeSessionId === eventSessionId &&
-                monitored.instanceId === instanceId
-              ) {
-                try {
-                  updateSessionStatus(dbSessionId, "idle");
-                  void fireSessionCallbacks(eventSessionId, instanceId);
-                } catch (err) {
-                  log.error("callback-monitor", "Failed to fire callback for session", { dbSessionId, err });
-                }
-                stopMonitoringSession(dbSessionId);
-                break;
-              }
-            }
-          }
-        }
-      } else if (type === "session.idle") {
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-        if (!eventSessionId) continue;
-
-        const prevState = sub.sessionStates.get(eventSessionId);
-        sub.sessionStates.set(eventSessionId, "idle");
+      if (statusType === "busy") {
+        state.sessionStates.set(eventSessionId, "busy");
+      } else if (statusType === "idle") {
+        const prevState = state.sessionStates.get(eventSessionId);
+        state.sessionStates.set(eventSessionId, "idle");
 
         if (prevState === "busy") {
+          // Find the monitored session by opencode session ID
           for (const [dbSessionId, monitored] of monitoredSessions) {
             if (
               monitored.opencodeSessionId === eventSessionId &&
@@ -156,66 +127,79 @@ async function processEventStream(
             }
           }
         }
-      } else if (type === "error") {
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-        if (!eventSessionId) continue;
+      }
+    } else if (type === "session.idle") {
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
+      if (!eventSessionId) return;
 
+      const prevState = state.sessionStates.get(eventSessionId);
+      state.sessionStates.set(eventSessionId, "idle");
+
+      if (prevState === "busy") {
         for (const [dbSessionId, monitored] of monitoredSessions) {
           if (
             monitored.opencodeSessionId === eventSessionId &&
             monitored.instanceId === instanceId
           ) {
             try {
-              void fireSessionErrorCallbacks(eventSessionId, instanceId);
+              updateSessionStatus(dbSessionId, "idle");
+              void fireSessionCallbacks(eventSessionId, instanceId);
             } catch (err) {
-              log.error("callback-monitor", "Failed to fire error callback for session", { dbSessionId, err });
+              log.error("callback-monitor", "Failed to fire callback for session", { dbSessionId, err });
             }
             stopMonitoringSession(dbSessionId);
             break;
           }
         }
       }
+    } else if (type === "error") {
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
+      if (!eventSessionId) return;
+
+      for (const [dbSessionId, monitored] of monitoredSessions) {
+        if (
+          monitored.opencodeSessionId === eventSessionId &&
+          monitored.instanceId === instanceId
+        ) {
+          try {
+            void fireSessionErrorCallbacks(eventSessionId, instanceId);
+          } catch (err) {
+            log.error("callback-monitor", "Failed to fire error callback for session", { dbSessionId, err });
+          }
+          stopMonitoringSession(dbSessionId);
+          break;
+        }
+      }
     }
-  } catch (err) {
-    if (!abortController.signal.aborted) {
-      log.error("callback-monitor", "Event stream errored", { instanceId, err });
-    }
-  } finally {
-    // Stream ended — clean up subscription
-    const sub = instanceSubscriptions.get(instanceId);
-    if (sub) {
-      instanceSubscriptions.delete(instanceId);
-      // Any monitored sessions left on this subscription are now orphaned —
-      // the polling fallback will catch them
-    }
-  }
+  };
 }
 
 // ─── Subscription Management ──────────────────────────────────────────────────
 
 /**
  * Internal: remove a session from monitoring state and clean up instance
- * subscription if no more sessions are being monitored on it.
+ * monitor state if no more sessions are being monitored on it.
  */
 function stopMonitoringSession(dbSessionId: string): void {
-  const { monitoredSessions, instanceSubscriptions } = getMonitorState();
+  const { monitoredSessions, instanceMonitorStates } = getMonitorState();
 
   const monitored = monitoredSessions.get(dbSessionId);
   if (!monitored) return;
 
   monitoredSessions.delete(dbSessionId);
 
-  // Remove from instance subscription tracking
-  const sub = instanceSubscriptions.get(monitored.instanceId);
-  if (sub) {
-    sub.monitoredDbSessionIds.delete(dbSessionId);
-    sub.sessionStates.delete(monitored.opencodeSessionId);
+  // Remove from instance monitor state tracking
+  const state = instanceMonitorStates.get(monitored.instanceId);
+  if (state) {
+    state.monitoredDbSessionIds.delete(dbSessionId);
+    state.sessionStates.delete(monitored.opencodeSessionId);
 
-    // If no more sessions on this instance, tear down the subscription
-    if (sub.monitoredDbSessionIds.size === 0) {
-      sub.abort.abort();
-      instanceSubscriptions.delete(monitored.instanceId);
+    // If no more sessions on this instance, tear down the hub listener
+    if (state.monitoredDbSessionIds.size === 0) {
+      state.unsubscribe();
+      instanceMonitorStates.delete(monitored.instanceId);
     }
   }
 }
@@ -224,7 +208,8 @@ function stopMonitoringSession(dbSessionId: string): void {
 
 /**
  * Start monitoring a child session for busy→idle transitions.
- * Creates an instance-level event subscription if one doesn't exist.
+ * Registers a hub listener for the instance on the first monitored session;
+ * subsequent sessions on the same instance share the same listener.
  * Performs an initial status poll to catch already-idle sessions.
  */
 export function startMonitoring(
@@ -232,7 +217,7 @@ export function startMonitoring(
   opencodeSessionId: string,
   instanceId: string
 ): void {
-  const { monitoredSessions, instanceSubscriptions } = getMonitorState();
+  const { monitoredSessions, instanceMonitorStates } = getMonitorState();
 
   // Idempotent — skip if already monitoring
   if (monitoredSessions.has(dbSessionId)) return;
@@ -249,12 +234,12 @@ export function startMonitoring(
     startCallbackPollingLoop();
   }
 
-  // Add to existing instance subscription or create new one
-  let sub = instanceSubscriptions.get(instanceId);
-  if (sub) {
-    sub.monitoredDbSessionIds.add(dbSessionId);
+  // Add to existing instance monitor state or create new one
+  let state = instanceMonitorStates.get(instanceId);
+  if (state) {
+    state.monitoredDbSessionIds.add(dbSessionId);
   } else {
-    // Create new subscription for this instance
+    // First session on this instance — register a hub listener
     const instance = getInstance(instanceId);
     if (!instance || instance.status === "dead") {
       log.warn("callback-monitor", "Instance is dead — cannot monitor session", { instanceId, dbSessionId });
@@ -262,43 +247,15 @@ export function startMonitoring(
       return;
     }
 
-    const abort = new AbortController();
-    sub = {
-      instanceId,
-      directory: instance.directory,
+    const handler = buildHandler(instanceId);
+    const unsubscribe = addListener(instanceId, handler);
+
+    state = {
       sessionStates: new Map(),
       monitoredDbSessionIds: new Set([dbSessionId]),
-      abort,
+      unsubscribe,
     };
-    instanceSubscriptions.set(instanceId, sub);
-
-    // Start event subscription (fire-and-forget)
-    void (async () => {
-      try {
-        const client = getClientForInstance(instanceId);
-        const subscribeTimeoutMs =
-          parseInt(process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS ?? "", 10) || 30_000;
-        const subscribeResult = await withTimeout(
-          client.event.subscribe({ directory: instance.directory }),
-          subscribeTimeoutMs,
-          `event.subscribe for instance ${instanceId}`,
-        );
-
-        const eventStream =
-          "stream" in subscribeResult
-            ? (subscribeResult as { stream: AsyncIterable<unknown> }).stream
-            : (subscribeResult as AsyncIterable<unknown>);
-
-        await processEventStream(instanceId, eventStream, abort);
-      } catch (err) {
-        log.error("callback-monitor", "Failed to subscribe to instance", { instanceId, err });
-        // Clean up on failure (including timeout) — polling will catch the session
-        const currentSub = instanceSubscriptions.get(instanceId);
-        if (currentSub) {
-          instanceSubscriptions.delete(instanceId);
-        }
-      }
-    })();
+    instanceMonitorStates.set(instanceId, state);
   }
 
   // Initial status poll — catch already-idle sessions
@@ -324,10 +281,10 @@ export function startMonitoring(
         }
         stopMonitoringSession(dbSessionId);
       } else if (liveStatus?.type === "busy") {
-        // Mark as busy in subscription state so we can detect the transition
-        const currentSub = instanceSubscriptions.get(instanceId);
-        if (currentSub) {
-          currentSub.sessionStates.set(opencodeSessionId, "busy");
+        // Mark as busy in state so we can detect the transition
+        const currentState = instanceMonitorStates.get(instanceId);
+        if (currentState) {
+          currentState.sessionStates.set(opencodeSessionId, "busy");
         }
       }
     } catch (err) {
@@ -450,13 +407,13 @@ export function startCallbackPollingLoop(): void {
 export function _resetForTests(): void {
   const state = getMonitorState();
 
-  // Abort all subscriptions
-  for (const sub of state.instanceSubscriptions.values()) {
-    sub.abort.abort();
+  // Unsubscribe all hub listeners
+  for (const monitorState of state.instanceMonitorStates.values()) {
+    monitorState.unsubscribe();
   }
 
   state.monitoredSessions.clear();
-  state.instanceSubscriptions.clear();
+  state.instanceMonitorStates.clear();
 
   if (_g.__weaveCallbackPollInterval) {
     clearInterval(_g.__weaveCallbackPollInterval);

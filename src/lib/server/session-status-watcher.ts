@@ -1,5 +1,5 @@
 /**
- * Session Status Watcher — server-side event subscription that persists
+ * Session Status Watcher — server-side event listener that persists
  * busy/idle transitions for ALL sessions on each running instance.
  *
  * Unlike the callback monitor (which only tracks child sessions with
@@ -8,13 +8,14 @@
  * sidebar can always show accurate working/idle state.
  *
  * Architecture:
- * - One event subscription per running OpenCode instance
+ * - Registers one listener per running OpenCode instance on the shared
+ *   Instance Event Hub (which owns the actual SDK subscription and reconnection).
  * - Detects `session.status` (busy/idle) events for any session on that instance
  * - Persists status transitions to the Fleet DB
  * - The sidebar's polled `GET /api/sessions` endpoint then picks up the
  *   correct DB status even when the SDK poll returns no data (because the
- *   SDK only returns sessions with active event subscriptions — which this
- *   module ensures exist)
+ *   SDK only returns sessions with active event subscriptions — which the
+ *   hub ensures exist)
  *
  * Uses the globalThis singleton pattern (matching process-manager.ts) for
  * Turbopack compatibility.
@@ -29,26 +30,18 @@ import {
 } from "./db-repository";
 import type { DbSession } from "./db-repository";
 import { getInstance } from "./process-manager";
-import { getClientForInstance } from "./opencode-client";
+import { addListener } from "./instance-event-hub";
+import type { InstanceEventListener } from "./instance-event-hub";
 import { emitActivityStatus, emitTokenUpdate } from "./activity-emitter";
 import { log } from "./logger";
-import { withTimeout } from "./async-utils";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface InstanceWatcher {
-  instanceId: string;
-  directory: string;
-  abort: AbortController;
-}
 
 // ─── globalThis-based singletons ──────────────────────────────────────────────
 
 const _g = globalThis as unknown as {
-  __weaveSessionStatusWatchers?: Map<string, InstanceWatcher>;
+  __weaveSessionStatusWatchers?: Map<string, () => void>;
 };
 
-function getWatchers(): Map<string, InstanceWatcher> {
+function getWatchers(): Map<string, () => void> {
   if (!_g.__weaveSessionStatusWatchers) {
     _g.__weaveSessionStatusWatchers = new Map();
   }
@@ -109,79 +102,24 @@ function propagateToParent(
   }
 }
 
-// ─── Event Stream Processing ──────────────────────────────────────────────────
+// ─── Event Handler ────────────────────────────────────────────────────────────
 
 /**
- * Process events from an instance's event stream, persisting busy/idle
- * transitions for every session on that instance.
+ * Build the event handler for a given instance. Processes events dispatched
+ * by the Instance Event Hub, persisting busy/idle transitions for every
+ * session on that instance.
  */
-async function processEventStream(
-  instanceId: string,
-  eventStream: AsyncIterable<unknown>,
-  abortController: AbortController,
-): Promise<void> {
-  try {
-    for await (const rawEvent of eventStream) {
-      if (abortController.signal.aborted) break;
+function buildHandler(instanceId: string): InstanceEventListener {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function handleEvent({ type, properties }: { type: string; properties: Record<string, any> }): void {
+    if (type === "session.status") {
+      const statusType: string = properties?.status?.type ?? "";
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const event = rawEvent as any;
-      const type: string = event?.type ?? "unknown";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const properties: Record<string, any> = event?.properties ?? event ?? {};
+      if (!eventSessionId) return;
 
-      if (type === "session.status") {
-        const statusType: string = properties?.status?.type ?? "";
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-
-        if (!eventSessionId) continue;
-
-        if (statusType === "idle") {
-          try {
-            const dbSession = getSessionByOpencodeId(eventSessionId);
-            if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "idle") {
-              updateSessionStatus(dbSession.id, "idle");
-              emitActivityStatus({
-                sessionId: eventSessionId,
-                instanceId,
-                activityStatus: "idle",
-              });
-              propagateToParent(dbSession, "idle");
-            }
-          } catch (err) {
-            log.warn("session-status-watcher", "Failed to persist idle status", {
-              sessionId: eventSessionId,
-              instanceId,
-              err,
-            });
-          }
-        } else if (statusType === "busy") {
-          try {
-            const dbSession = getSessionByOpencodeId(eventSessionId);
-            if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "active") {
-              updateSessionStatus(dbSession.id, "active");
-              emitActivityStatus({
-                sessionId: eventSessionId,
-                instanceId,
-                activityStatus: "busy",
-              });
-              propagateToParent(dbSession, "busy");
-            }
-          } catch (err) {
-            log.warn("session-status-watcher", "Failed to persist active status", {
-              sessionId: eventSessionId,
-              instanceId,
-              err,
-            });
-          }
-        }
-      } else if (type === "session.idle") {
-        // Some SDK versions emit session.idle instead of session.status
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-        if (!eventSessionId) continue;
-
+      if (statusType === "idle") {
         try {
           const dbSession = getSessionByOpencodeId(eventSessionId);
           if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "idle") {
@@ -194,84 +132,122 @@ async function processEventStream(
             propagateToParent(dbSession, "idle");
           }
         } catch (err) {
-          log.warn("session-status-watcher", "Failed to persist idle status (session.idle event)", {
+          log.warn("session-status-watcher", "Failed to persist idle status", {
             sessionId: eventSessionId,
             instanceId,
             err,
           });
         }
-      } else if (type.startsWith("permission.")) {
-        // Permission events indicate the session is waiting for user input
-        const eventSessionId: string =
-          properties?.sessionID ?? properties?.info?.id ?? "";
-        if (!eventSessionId) continue;
-
+      } else if (statusType === "busy") {
         try {
           const dbSession = getSessionByOpencodeId(eventSessionId);
-          if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "waiting_input") {
-            updateSessionStatus(dbSession.id, "waiting_input");
+          if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "active") {
+            updateSessionStatus(dbSession.id, "active");
             emitActivityStatus({
               sessionId: eventSessionId,
               instanceId,
-              activityStatus: "waiting_input",
+              activityStatus: "busy",
             });
+            propagateToParent(dbSession, "busy");
           }
         } catch (err) {
-          log.warn("session-status-watcher", "Failed to persist waiting_input status", {
-            sessionId: eventSessionId,
-            instanceId,
-            err,
-          });
-        }
-      } else if (type === "message.part.updated") {
-        // Capture step-finish events to accumulate per-session token/cost data
-        const part = properties?.part;
-        if (!part || part.type !== "step-finish") continue;
-
-        const eventSessionId: string = part.sessionID ?? "";
-        const tokensDelta = (part.tokens?.input ?? 0) + (part.tokens?.output ?? 0) + (part.tokens?.reasoning ?? 0);
-        const costDelta: number = part.cost ?? 0;
-
-        if (!eventSessionId || (tokensDelta === 0 && costDelta === 0)) continue;
-
-        try {
-          const dbSession = getSessionByOpencodeId(eventSessionId);
-          if (dbSession) {
-            const totals = incrementSessionTokens(dbSession.id, tokensDelta, costDelta);
-            if (totals) {
-              emitTokenUpdate({
-                sessionId: eventSessionId,
-                totalTokens: totals.totalTokens,
-                totalCost: totals.totalCost,
-              });
-            }
-          }
-        } catch (err) {
-          log.warn("session-status-watcher", "Failed to persist token data", {
+          log.warn("session-status-watcher", "Failed to persist active status", {
             sessionId: eventSessionId,
             instanceId,
             err,
           });
         }
       }
+    } else if (type === "session.idle") {
+      // Some SDK versions emit session.idle instead of session.status
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
+      if (!eventSessionId) return;
+
+      try {
+        const dbSession = getSessionByOpencodeId(eventSessionId);
+        if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "idle") {
+          updateSessionStatus(dbSession.id, "idle");
+          emitActivityStatus({
+            sessionId: eventSessionId,
+            instanceId,
+            activityStatus: "idle",
+          });
+          propagateToParent(dbSession, "idle");
+        }
+      } catch (err) {
+        log.warn("session-status-watcher", "Failed to persist idle status (session.idle event)", {
+          sessionId: eventSessionId,
+          instanceId,
+          err,
+        });
+      }
+    } else if (type.startsWith("permission.")) {
+      // Permission events indicate the session is waiting for user input
+      const eventSessionId: string =
+        properties?.sessionID ?? properties?.info?.id ?? "";
+      if (!eventSessionId) return;
+
+      try {
+        const dbSession = getSessionByOpencodeId(eventSessionId);
+        if (dbSession && !TERMINAL_STATUSES.includes(dbSession.status) && dbSession.status !== "waiting_input") {
+          updateSessionStatus(dbSession.id, "waiting_input");
+          emitActivityStatus({
+            sessionId: eventSessionId,
+            instanceId,
+            activityStatus: "waiting_input",
+          });
+        }
+      } catch (err) {
+        log.warn("session-status-watcher", "Failed to persist waiting_input status", {
+          sessionId: eventSessionId,
+          instanceId,
+          err,
+        });
+      }
+    } else if (type === "message.part.updated") {
+      // Capture step-finish events to accumulate per-session token/cost data
+      const part = properties?.part;
+      if (!part || part.type !== "step-finish") return;
+
+      const eventSessionId: string = part.sessionID ?? "";
+      const tokensDelta = (part.tokens?.input ?? 0) + (part.tokens?.output ?? 0) + (part.tokens?.reasoning ?? 0);
+      const costDelta: number = part.cost ?? 0;
+
+      if (!eventSessionId || (tokensDelta === 0 && costDelta === 0)) return;
+
+      try {
+        const dbSession = getSessionByOpencodeId(eventSessionId);
+        if (dbSession) {
+          const totals = incrementSessionTokens(dbSession.id, tokensDelta, costDelta);
+          if (totals) {
+            emitTokenUpdate({
+              sessionId: eventSessionId,
+              totalTokens: totals.totalTokens,
+              totalCost: totals.totalCost,
+            });
+          }
+        }
+      } catch (err) {
+        log.warn("session-status-watcher", "Failed to persist token data", {
+          sessionId: eventSessionId,
+          instanceId,
+          err,
+        });
+      }
     }
-  } catch (err) {
-    if (!abortController.signal.aborted) {
-      log.warn("session-status-watcher", "Event stream errored", { instanceId, err });
-    }
-  } finally {
-    // Stream ended — clean up watcher
-    const watchers = getWatchers();
-    watchers.delete(instanceId);
-  }
+  };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Ensure there is an active event subscription watching session status
- * transitions for the given instance. Idempotent — if a watcher already
- * exists for this instance, this is a no-op.
+ * Ensure there is an active listener watching session status transitions
+ * for the given instance. Idempotent — if a watcher already exists for
+ * this instance, this is a no-op.
+ *
+ * The underlying SDK subscription is managed by the Instance Event Hub,
+ * which handles reconnection automatically.
  */
 export function ensureWatching(instanceId: string): void {
   const watchers = getWatchers();
@@ -285,42 +261,9 @@ export function ensureWatching(instanceId: string): void {
     return;
   }
 
-  const abort = new AbortController();
-  const watcher: InstanceWatcher = {
-    instanceId,
-    directory: instance.directory,
-    abort,
-  };
-  watchers.set(instanceId, watcher);
-
-  // Start event subscription (fire-and-forget)
-  void (async () => {
-    try {
-      const client = getClientForInstance(instanceId);
-      const subscribeTimeoutMs =
-        parseInt(process.env.WEAVE_SUBSCRIBE_TIMEOUT_MS ?? "", 10) || 30_000;
-      const subscribeResult = await withTimeout(
-        client.event.subscribe({ directory: instance.directory }),
-        subscribeTimeoutMs,
-        `event.subscribe for instance ${instanceId}`,
-      );
-
-      const eventStream =
-        "stream" in subscribeResult
-          ? (subscribeResult as { stream: AsyncIterable<unknown> }).stream
-          : (subscribeResult as AsyncIterable<unknown>);
-
-      await processEventStream(instanceId, eventStream, abort);
-    } catch (err) {
-      log.warn("session-status-watcher", "Failed to subscribe to instance events", {
-        instanceId,
-        err,
-      });
-      // Clean up on failure (including timeout) — abort the controller and remove watcher
-      abort.abort();
-      watchers.delete(instanceId);
-    }
-  })();
+  const handler = buildHandler(instanceId);
+  const unsubscribe = addListener(instanceId, handler);
+  watchers.set(instanceId, unsubscribe);
 }
 
 /**
@@ -328,9 +271,9 @@ export function ensureWatching(instanceId: string): void {
  */
 export function stopWatching(instanceId: string): void {
   const watchers = getWatchers();
-  const watcher = watchers.get(instanceId);
-  if (watcher) {
-    watcher.abort.abort();
+  const unsubscribe = watchers.get(instanceId);
+  if (unsubscribe) {
+    unsubscribe();
     watchers.delete(instanceId);
   }
 }
@@ -340,8 +283,8 @@ export function stopWatching(instanceId: string): void {
  */
 export function _resetForTests(): void {
   const watchers = getWatchers();
-  for (const watcher of watchers.values()) {
-    watcher.abort.abort();
+  for (const unsubscribe of watchers.values()) {
+    unsubscribe();
   }
   watchers.clear();
 }

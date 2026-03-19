@@ -29,6 +29,7 @@ import {
   listWorkspaceRoots,
 } from "./db-repository";
 import { ensureWatching, stopWatching } from "./session-status-watcher";
+import { removeAllListeners as hubRemoveAllListeners } from "./instance-event-hub";
 import { log } from "./logger";
 import { getMergedConfig } from "./config-manager";
 
@@ -630,6 +631,8 @@ export function listInstances(): ManagedInstance[] {
 export function destroyInstance(id: string, force?: boolean): void {
   // Stop watching session status events before tearing down
   stopWatching(id);
+  // Force-clean hub subscription (cancels any pending reconnection)
+  hubRemoveAllListeners(id);
 
   const instance = instances.get(id);
   if (!instance) return;
@@ -842,6 +845,8 @@ export function startHealthCheckLoop(): void {
 
           // Stop session status watcher for this instance (prevents leaked watchers)
           stopWatching(id);
+          // Force-clean hub subscription (cancels any pending reconnection)
+          hubRemoveAllListeners(id);
 
           try {
             updateInstanceStatus(id, "stopped", new Date().toISOString());
