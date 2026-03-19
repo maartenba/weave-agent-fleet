@@ -44,6 +44,11 @@ export async function GET(
     start(controller) {
       const encoder = new TextEncoder();
 
+      // Send an immediate comment so the browser/proxy recognizes the stream
+      // as active. Without this, some environments buffer the response until
+      // real data arrives, delaying the EventSource onopen callback.
+      controller.enqueue(encoder.encode(`: connected\n\n`));
+
       function send(event: SSEEvent) {
         if (abortController.signal.aborted) return;
         try {

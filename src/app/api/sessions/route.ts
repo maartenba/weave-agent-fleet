@@ -204,29 +204,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const items: SessionListItem[] = [];
 
-  // Batch-fetch session statuses from each live instance to detect idle sessions
-  // that may not have an SSE observer. This adds at most N network calls where
-  // N = number of live instances.
-  type SessionStatusMap = Record<string, { type: string }>;
-  const instanceStatusMaps = new Map<string, SessionStatusMap>();
-  await Promise.allSettled(
-    liveInstances
-      .filter((i) => i.status === "running")
-      .map(async (instance) => {
-        try {
-          const result = await withTimeout(
-            instance.client.session.status({ directory: instance.directory }),
-            getSDKCallTimeoutMs(),
-            `session.status for instance ${instance.id}`,
-          );
-          if (result.data) {
-            instanceStatusMaps.set(instance.id, result.data as SessionStatusMap);
-          }
-        } catch (err) {
-          log.warn("sessions-route", "Failed to fetch session statuses from live instance", { instanceId: instance.id, err });
-        }
-      })
-  );
+  // Session statuses are kept up-to-date in the DB by the session-status-watcher
+  // (which listens to SSE events in real-time). No SDK HTTP calls needed here.
 
   // Batch-fetch which sessions have active children (for parent status override)
   let parentIdsWithActiveChildren: Set<string>;
@@ -237,22 +216,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     parentIdsWithActiveChildren = new Set();
   }
 
-  // ── Pass 1: Synchronous status/workspace determination ──────────────────
-  // Collects sessions that need a live session.get() call into pendingFetches,
-  // and pushes stub items for everything else. This avoids sequential awaits.
-  interface PendingFetch {
-    dbSession: typeof dbSessions[number];
-    liveInstance: typeof liveInstances[number];
-    sessionStatus: SessionListItem["sessionStatus"];
-    instanceStatus: "running" | "dead";
-    workspaceDirectory: string;
-    workspaceDisplayName: string | null;
-    isolationStrategy: string;
-    sourceDirectory: string | null;
-    branch: string | null;
-  }
-  const pendingFetches: PendingFetch[] = [];
-
+  // ── Build session list items from DB + live status ──────────────────────
   for (const dbSession of dbSessions) {
     // Determine the live instance state
     const liveInstance = liveInstanceMap.get(dbSession.instance_id);
@@ -263,28 +227,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (liveInstance) {
       instanceStatus = liveInstance.status;
       if (liveInstance.status === "running") {
-        // Check live session status from the SDK (source of truth when instance is running)
-        const statusMap = instanceStatusMaps.get(dbSession.instance_id);
-        const liveStatus = statusMap?.[dbSession.opencode_session_id];
-
-        if (liveStatus) {
-          // SDK reports this session is alive — trust live state over DB
-          if (liveStatus.type === "busy") {
-            sessionStatus = "active";
-          } else if (liveStatus.type === "idle") {
-            sessionStatus = "idle";
-          } else {
-            // Unknown live status type — treat as active
-            sessionStatus = "active";
-          }
+        // Use DB status (kept in sync by session-status-watcher via SSE events)
+        const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
+        if (TERMINAL_STATUSES.includes(dbSession.status)) {
+          sessionStatus = dbSession.status;
+        } else if (dbSession.status === "idle") {
+          sessionStatus = "idle";
+        } else if (dbSession.status === "waiting_input") {
+          sessionStatus = "waiting_input";
         } else {
-          // Session not found in live SDK poll — fall back to DB status
-          const TERMINAL_STATUSES = ["stopped", "completed", "error", "disconnected"];
-          if (TERMINAL_STATUSES.includes(dbSession.status)) {
-            sessionStatus = dbSession.status;
-          } else {
-            sessionStatus = dbSession.status === "idle" ? "idle" : "active";
-          }
+          sessionStatus = "active";
         }
 
         // Override idle parents to active if they have busy children
@@ -351,134 +303,39 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       log.warn("sessions-route", "Failed to fetch workspace info from DB", { workspaceId: dbSession.workspace_id, err });
     }
 
-    // Queue live sessions for parallel fetch; push stubs for the rest
-    if (liveInstance && instanceStatus === "running") {
-      pendingFetches.push({
-        dbSession,
-        liveInstance,
-        sessionStatus,
-        instanceStatus,
-        workspaceDirectory,
-        workspaceDisplayName,
-        isolationStrategy,
-        sourceDirectory,
-        branch,
-      });
-    } else {
-      // For disconnected/stopped sessions, synthesize a stub session object
-      items.push({
-        instanceId: dbSession.instance_id,
-        workspaceId: dbSession.workspace_id,
-        workspaceDirectory,
-        workspaceDisplayName,
-        isolationStrategy,
-        sourceDirectory,
-        branch,
-        sessionStatus,
-        session: {
-          id: dbSession.opencode_session_id,
-          title: dbSession.title,
-          directory: dbSession.directory,
-          projectID: "",
-          version: "0",
-          time: {
-            created: new Date(dbSession.created_at).getTime(),
-            updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
-          },
-        } as Parameters<typeof items.push>[0]["session"],
-        instanceStatus,
-        dbId: dbSession.id,
-        parentSessionId: dbSession.parent_session_id,
-        activityStatus: deriveActivityStatus(sessionStatus),
-        lifecycleStatus: deriveLifecycleStatus(sessionStatus),
-        typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
-        totalTokens: dbSession.total_tokens || undefined,
-        totalCost: dbSession.total_cost || undefined,
-      });
-    }
-  }
-
-  // ── Pass 2: Parallel session.get() calls (chunked to limit concurrency) ───
-  const PARALLEL_FETCH_LIMIT = 10;
-  for (let offset = 0; offset < pendingFetches.length; offset += PARALLEL_FETCH_LIMIT) {
-    const chunk = pendingFetches.slice(offset, offset + PARALLEL_FETCH_LIMIT);
-    const fetchResults = await Promise.allSettled(
-      chunk.map(async ({ dbSession, liveInstance }) => {
-        const result = await withTimeout(
-          liveInstance.client.session.get({ sessionID: dbSession.opencode_session_id }),
-          getSDKCallTimeoutMs(),
-          `session.get for session ${dbSession.opencode_session_id}`,
-        );
-        return result.data;
-      })
-    );
-
-    for (let i = 0; i < chunk.length; i++) {
-      const pending = chunk[i]!;
-      const { dbSession, sessionStatus, instanceStatus, workspaceDirectory, workspaceDisplayName, isolationStrategy, sourceDirectory, branch } = pending;
-      const fetchResult = fetchResults[i]!;
-
-      if (fetchResult.status === "fulfilled" && fetchResult.value) {
-        const sessionData = fetchResult.value;
-        // Overlay user-renamed title from Fleet DB
-        if (dbSession.title !== "Untitled") {
-          sessionData.title = dbSession.title;
-        }
-        items.push({
-          instanceId: dbSession.instance_id,
-          workspaceId: dbSession.workspace_id,
-          workspaceDirectory,
-          workspaceDisplayName,
-          isolationStrategy,
-          sourceDirectory,
-          branch,
-          sessionStatus,
-          session: sessionData,
-          instanceStatus,
-          dbId: dbSession.id,
-          parentSessionId: dbSession.parent_session_id,
-          activityStatus: deriveActivityStatus(sessionStatus),
-          lifecycleStatus: deriveLifecycleStatus(sessionStatus),
-          typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
-          totalTokens: dbSession.total_tokens || undefined,
-          totalCost: dbSession.total_cost || undefined,
-        });
-      } else {
-        // SDK call failed — fall back to stub
-        if (fetchResult.status === "rejected") {
-          log.warn("sessions-route", "Failed to fetch live session details from SDK — using stub", { sessionId: dbSession.opencode_session_id, err: fetchResult.reason });
-        }
-        items.push({
-          instanceId: dbSession.instance_id,
-          workspaceId: dbSession.workspace_id,
-          workspaceDirectory,
-          workspaceDisplayName,
-          isolationStrategy,
-          sourceDirectory,
-          branch,
-          sessionStatus,
-          session: {
-            id: dbSession.opencode_session_id,
-            title: dbSession.title,
-            directory: dbSession.directory,
-            projectID: "",
-            version: "0",
-            time: {
-              created: new Date(dbSession.created_at).getTime(),
-              updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
-            },
-          } as Parameters<typeof items.push>[0]["session"],
-          instanceStatus,
-          dbId: dbSession.id,
-          parentSessionId: dbSession.parent_session_id,
-          activityStatus: deriveActivityStatus(sessionStatus),
-          lifecycleStatus: deriveLifecycleStatus(sessionStatus),
-          typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
-          totalTokens: dbSession.total_tokens || undefined,
-          totalCost: dbSession.total_cost || undefined,
-        });
-      }
-    }
+    // ── All sessions use DB-only stubs (no live session.get() calls) ────────
+    // The sidebar only needs id, title, status, and timestamps — all available
+    // from the DB. Eliminating the session.get() round-trip for every live
+    // session removes the most expensive part of the polling cycle.
+    items.push({
+      instanceId: dbSession.instance_id,
+      workspaceId: dbSession.workspace_id,
+      workspaceDirectory,
+      workspaceDisplayName,
+      isolationStrategy,
+      sourceDirectory,
+      branch,
+      sessionStatus,
+      session: {
+        id: dbSession.opencode_session_id,
+        title: dbSession.title,
+        directory: dbSession.directory,
+        projectID: "",
+        version: "0",
+        time: {
+          created: new Date(dbSession.created_at).getTime(),
+          updated: new Date(dbSession.stopped_at ?? dbSession.created_at).getTime(),
+        },
+      } as Parameters<typeof items.push>[0]["session"],
+      instanceStatus,
+      dbId: dbSession.id,
+      parentSessionId: dbSession.parent_session_id,
+      activityStatus: deriveActivityStatus(sessionStatus),
+      lifecycleStatus: deriveLifecycleStatus(sessionStatus),
+      typedInstanceStatus: instanceStatus === "running" ? "running" : "stopped",
+      totalTokens: dbSession.total_tokens || undefined,
+      totalCost: dbSession.total_cost || undefined,
+    });
   }
 
   const total = countSessions(statuses);
