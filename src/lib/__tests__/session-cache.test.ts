@@ -90,16 +90,28 @@ describe("sessionCache", () => {
   });
 
   describe("TTL expiry", () => {
+    // Use fake timers to eliminate timing flakiness in boundary tests.
+    // Without this, the few ms between Date.now() in makeEntry and Date.now()
+    // inside sessionCache.get() can push boundary entries past the TTL on slow CI.
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it("returns null and deletes entry when TTL has elapsed", () => {
-      // Store an entry with a timestamp that is older than CACHE_TTL_MS.
-      const expired = makeEntry({ timestamp: Date.now() - CACHE_TTL_MS - 1 });
+      const now = Date.now();
+      const expired = makeEntry({ timestamp: now - CACHE_TTL_MS - 1 });
       sessionCache.set("old", "inst-1", expired);
 
       expect(sessionCache.get("old", "inst-1")).toBeNull();
     });
 
     it("returns the entry when it is exactly within TTL", () => {
-      const recent = makeEntry({ timestamp: Date.now() - CACHE_TTL_MS + 5_000 });
+      const now = Date.now();
+      const recent = makeEntry({ timestamp: now - CACHE_TTL_MS + 5_000 });
       sessionCache.set("fresh", "inst-1", recent);
 
       expect(sessionCache.get("fresh", "inst-1")).not.toBeNull();
@@ -107,7 +119,8 @@ describe("sessionCache", () => {
 
     it("returns the entry at the exact TTL boundary (not strictly greater)", () => {
       // The check is `> CACHE_TTL_MS`, so exactly CACHE_TTL_MS should still be valid.
-      const boundary = makeEntry({ timestamp: Date.now() - CACHE_TTL_MS });
+      const now = Date.now();
+      const boundary = makeEntry({ timestamp: now - CACHE_TTL_MS });
       sessionCache.set("boundary", "inst-1", boundary);
 
       expect(sessionCache.get("boundary", "inst-1")).not.toBeNull();
