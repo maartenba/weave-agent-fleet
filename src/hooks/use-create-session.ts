@@ -2,12 +2,14 @@
 
 import { useState, useCallback } from "react";
 import type { CreateSessionRequest, CreateSessionResponse } from "@/lib/api-types";
+import type { ContextSource } from "@/integrations/types";
 import { apiFetch } from "@/lib/api-client";
 
 export interface CreateSessionOptions {
   title?: string;
   isolationStrategy?: "existing" | "worktree" | "clone";
   branch?: string;
+  context?: ContextSource;
 }
 
 export interface UseCreateSessionResult {
@@ -33,6 +35,7 @@ export function useCreateSession(): UseCreateSessionResult {
           title: opts?.title,
           isolationStrategy: opts?.isolationStrategy,
           branch: opts?.branch,
+          context: opts?.context,
         };
 
         const response = await apiFetch("/api/sessions", {

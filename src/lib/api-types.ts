@@ -9,6 +9,7 @@ import type {
   SessionLifecycleStatus,
   InstanceStatus,
 } from "@/lib/types";
+import type { ContextSource } from "@/integrations/types";
 
 // Re-export SDK types used across the UI
 export type { Session as SDKSession, Part, SessionStatus };
@@ -22,6 +23,10 @@ export interface CreateSessionRequest {
   title?: string;
   isolationStrategy?: "existing" | "worktree" | "clone";
   branch?: string;
+  /** Optional integration context to inject as the initial prompt */
+  context?: ContextSource;
+  /** Optional pre-formatted initial prompt text (takes precedence over context) */
+  initialPrompt?: string;
   onComplete?: {
     /** OpenCode session ID of the conductor session to notify on completion */
     notifySessionId: string;

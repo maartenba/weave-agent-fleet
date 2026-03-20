@@ -35,6 +35,10 @@ vi.mock("@/lib/server/opencode-client", () => ({
   getClientForInstance: vi.fn(),
 }));
 
+vi.mock("@/lib/server/context-formatter", () => ({
+  formatContextAsPrompt: vi.fn((ctx: unknown) => `Formatted: ${JSON.stringify(ctx)}`),
+}));
+
 vi.mock("crypto", async (importOriginal) => {
   const original = await importOriginal<typeof import("crypto")>();
   return {
@@ -50,6 +54,7 @@ import { DELETE, PATCH } from "@/app/api/sessions/[id]/route";
 import * as processManager from "@/lib/server/process-manager";
 import * as workspaceManager from "@/lib/server/workspace-manager";
 import * as dbRepository from "@/lib/server/db-repository";
+import * as contextFormatter from "@/lib/server/context-formatter";
 
 // ─── Typed mock helpers ───────────────────────────────────────────────────────
 
@@ -70,6 +75,7 @@ const mockUpdateSessionStatus = vi.mocked(dbRepository.updateSessionStatus);
 const mockGetSessionsForInstance = vi.mocked(dbRepository.getSessionsForInstance);
 const mockUpdateSessionTitle = vi.mocked(dbRepository.updateSessionTitle);
 const mockGetSessionIdsWithActiveChildren = vi.mocked(dbRepository.getSessionIdsWithActiveChildren);
+const mockFormatContextAsPrompt = vi.mocked(contextFormatter.formatContextAsPrompt);
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -111,6 +117,7 @@ function makeManagedInstance(overrides: Record<string, unknown> = {}) {
         list: vi.fn(),
         messages: vi.fn(),
         status: vi.fn(),
+        promptAsync: vi.fn().mockResolvedValue(undefined),
       },
     },
     ...overrides,
@@ -343,6 +350,127 @@ describe("POST /api/sessions", () => {
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Custom Title" })
     );
+  });
+
+  it("CallsFormatContextAsPromptAndSendsPromptWhenContextProvided", async () => {
+    const workspace = makeWorkspaceInfo();
+    const sdkSession = makeSdkSession();
+    const instance = makeManagedInstance();
+    instance.client.session.create = vi.fn().mockResolvedValue({ data: sdkSession });
+    const promptAsyncMock = vi.fn().mockResolvedValue(undefined);
+    instance.client.session.promptAsync = promptAsyncMock;
+
+    mockCreateWorkspace.mockResolvedValue(workspace);
+    mockSpawnInstance.mockResolvedValue(instance as never);
+    mockFormatContextAsPrompt.mockReturnValue("Formatted context prompt");
+
+    const context = {
+      type: "github-issue" as const,
+      title: "Fix login bug",
+      url: "https://github.com/acme/app/issues/42",
+      body: "Login fails when email has uppercase letters",
+      number: 42,
+      labels: ["bug"],
+      author: "user1",
+    };
+
+    const req = new NextRequest("http://localhost/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ directory: "/home/user/project", context }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    expect(mockFormatContextAsPrompt).toHaveBeenCalledWith(context);
+    expect(promptAsyncMock).toHaveBeenCalledWith({
+      sessionID: "oc-session-abc",
+      parts: [{ type: "text", text: "Formatted context prompt" }],
+    });
+  });
+
+  it("UsesTitleFromContextWhenNoExplicitTitleProvided", async () => {
+    const workspace = makeWorkspaceInfo();
+    const sdkSession = makeSdkSession();
+    const instance = makeManagedInstance();
+    const createMock = vi.fn().mockResolvedValue({ data: sdkSession });
+    instance.client.session.create = createMock;
+
+    mockCreateWorkspace.mockResolvedValue(workspace);
+    mockSpawnInstance.mockResolvedValue(instance as never);
+
+    const context = {
+      type: "github-pr" as const,
+      title: "Add dark mode",
+      url: "https://github.com/acme/app/pulls/7",
+      number: 7,
+      body: "",
+      author: "dev1",
+    };
+
+    const req = new NextRequest("http://localhost/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ directory: "/home/user/project", context }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await POST(req);
+
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Add dark mode" })
+    );
+  });
+
+  it("SendsInitialPromptDirectlyWhenInitialPromptProvided", async () => {
+    const workspace = makeWorkspaceInfo();
+    const sdkSession = makeSdkSession();
+    const instance = makeManagedInstance();
+    instance.client.session.create = vi.fn().mockResolvedValue({ data: sdkSession });
+    const promptAsyncMock = vi.fn().mockResolvedValue(undefined);
+    instance.client.session.promptAsync = promptAsyncMock;
+
+    mockCreateWorkspace.mockResolvedValue(workspace);
+    mockSpawnInstance.mockResolvedValue(instance as never);
+
+    const req = new NextRequest("http://localhost/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ directory: "/home/user/project", initialPrompt: "Do the thing" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    expect(mockFormatContextAsPrompt).not.toHaveBeenCalled();
+    expect(promptAsyncMock).toHaveBeenCalledWith({
+      sessionID: "oc-session-abc",
+      parts: [{ type: "text", text: "Do the thing" }],
+    });
+  });
+
+  it("DoesNotCallPromptAsyncWhenNoContextOrInitialPrompt", async () => {
+    const workspace = makeWorkspaceInfo();
+    const sdkSession = makeSdkSession();
+    const instance = makeManagedInstance();
+    instance.client.session.create = vi.fn().mockResolvedValue({ data: sdkSession });
+    const promptAsyncMock = vi.fn().mockResolvedValue(undefined);
+    instance.client.session.promptAsync = promptAsyncMock;
+
+    mockCreateWorkspace.mockResolvedValue(workspace);
+    mockSpawnInstance.mockResolvedValue(instance as never);
+
+    const req = new NextRequest("http://localhost/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ directory: "/home/user/project", title: "Plain session" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    expect(mockFormatContextAsPrompt).not.toHaveBeenCalled();
+    expect(promptAsyncMock).not.toHaveBeenCalled();
   });
 });
 

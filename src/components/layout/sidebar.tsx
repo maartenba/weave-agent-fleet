@@ -11,6 +11,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Blocks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSessionsContext } from "@/contexts/sessions-context";
+import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import {
   useSidebar,
@@ -34,6 +36,7 @@ import { useCurrentSessionDirectory } from "@/hooks/use-current-session-director
 export function Sidebar() {
   const pathname = usePathname();
   const { sessions, error, refetch } = useSessionsContext();
+  const { connectedIntegrations } = useIntegrationsContext();
   const workspaces = useWorkspaces(sessions);
   const {
     collapsed,
@@ -300,6 +303,39 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-sidebar-border p-2 space-y-1">
+        {/* Integrations */}
+        {connectedIntegrations.length > 0 && (collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/integrations"
+                className={cn(
+                  "flex items-center justify-center rounded-md py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/integrations")
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+                )}
+              >
+                <Blocks className="h-4 w-4 shrink-0" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Integrations</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Link
+            href="/integrations"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+              pathname.startsWith("/integrations")
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+            )}
+          >
+            <Blocks className="h-4 w-4" />
+            <span className="whitespace-nowrap">Integrations</span>
+          </Link>
+        ))}
+
         {/* Settings */}
         {collapsed ? (
           <Tooltip>

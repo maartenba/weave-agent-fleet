@@ -3,6 +3,7 @@ import { spawnInstance, listInstances, validateDirectory, _recoveryComplete } fr
 import { createWorkspace } from "@/lib/server/workspace-manager";
 import { insertSession, listSessions, countSessions, getWorkspace, getInstance, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
+import { formatContextAsPrompt } from "@/lib/server/context-formatter";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
 import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { directory, title, isolationStrategy = "existing", branch } = body;
+  const { directory, title, isolationStrategy = "existing", branch, context, initialPrompt } = body;
 
   if (!directory || typeof directory !== "string") {
     return NextResponse.json(
@@ -57,8 +58,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const instance = await spawnInstance(workspace.directory);
 
     // Step 3: Create the session in OpenCode
+    const sessionTitle = title ?? context?.title ?? "New Session";
     const result = await withTimeout(
-      instance.client.session.create({ title: title ?? "New Session" }),
+      instance.client.session.create({ title: sessionTitle }),
       getSDKCallTimeoutMs(),
       `session.create for instance ${instance.id}`,
     );
@@ -122,6 +124,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } catch (err) {
         log.warn("sessions-route", "Failed to start callback monitoring for child session", { sessionId: sessionDbId, err });
       }
+    }
+
+    // Step 6: Send initial prompt if context or initialPrompt is provided (fire-and-forget)
+    const promptText = initialPrompt ?? (context ? formatContextAsPrompt(context) : null);
+    if (promptText && session.id) {
+      instance.client.session.promptAsync({
+        sessionID: session.id,
+        parts: [{ type: "text", text: promptText }],
+      }).catch((err: unknown) => {
+        log.warn("sessions-route", "Failed to send initial context prompt — session still created", { sessionId: session.id, err });
+      });
     }
 
     const response: CreateSessionResponse = {
