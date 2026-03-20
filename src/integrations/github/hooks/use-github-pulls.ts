@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { GitHubPullRequest } from "../types";
 
@@ -33,28 +33,37 @@ export function useGitHubPulls(
   const [fetchKey, setFetchKey] = useState(0);
 
   const PER_PAGE = 30;
+  const prevKeyRef = useRef<string | null>(null);
+
+  // Derive empty state from owner/repo outside the effect
+  const ownerRepoKey = owner && repo ? `${owner}/${repo}` : null;
+  if (prevKeyRef.current !== ownerRepoKey && !ownerRepoKey) {
+    prevKeyRef.current = ownerRepoKey;
+    if (pulls.length > 0) setPulls([]);
+  } else if (prevKeyRef.current !== ownerRepoKey) {
+    prevKeyRef.current = ownerRepoKey;
+  }
 
   useEffect(() => {
-    if (!owner || !repo) {
-      setPulls([]);
-      return;
-    }
+    if (!owner || !repo) return;
 
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
-    const params = new URLSearchParams({
-      state,
-      sort,
-      direction,
-      page: String(page),
-      per_page: String(PER_PAGE),
-    });
+    const fetchPulls = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    apiFetch(`/api/integrations/github/repos/${owner}/${repo}/pulls?${params}`)
-      .then((res) => res.json())
-      .then((data: GitHubPullRequest[]) => {
+      const params = new URLSearchParams({
+        state,
+        sort,
+        direction,
+        page: String(page),
+        per_page: String(PER_PAGE),
+      });
+
+      try {
+        const res = await apiFetch(`/api/integrations/github/repos/${owner}/${repo}/pulls?${params}`);
+        const data: GitHubPullRequest[] = await res.json();
         if (cancelled) return;
         if (page === 1) {
           setPulls(data);
@@ -62,14 +71,15 @@ export function useGitHubPulls(
           setPulls((prev) => [...prev, ...data]);
         }
         setHasMore(data.length === PER_PAGE);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load pull requests");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    };
+
+    fetchPulls();
 
     return () => {
       cancelled = true;

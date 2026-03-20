@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,14 +42,10 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [directory, setDirectory] = usePersistedState("weave:new-session:lastDirectory", defaultDir ?? "");
-  const [title, setTitle] = useState(contextSource.title);
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const title = titleOverride ?? contextSource.title;
   const [isolationStrategy, setIsolationStrategy] = useState<IsolationStrategy>("existing");
   const { createSession, isLoading, error } = useCreateSession();
-
-  // Reset title when contextSource changes
-  useEffect(() => {
-    setTitle(contextSource.title);
-  }, [contextSource.title]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -74,11 +70,11 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
 
   const handleOpenChange = useCallback((value: boolean) => {
     if (!value) {
-      setTitle(contextSource.title);
+      setTitleOverride(null);
       setIsolationStrategy("existing");
     }
     setOpen(value);
-  }, [contextSource.title]);
+  }, []);
 
   return (
     <>
@@ -169,7 +165,7 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
               <Input
                 id="ctx-title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => setTitleOverride(e.target.value)}
                 placeholder={contextSource.title}
                 disabled={isLoading}
               />

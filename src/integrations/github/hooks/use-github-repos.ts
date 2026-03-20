@@ -25,12 +25,14 @@ export function useGitHubRepos(): UseGitHubReposResult {
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
-    apiFetch(`/api/integrations/github/repos?page=${page}&per_page=${PER_PAGE}&sort=updated`)
-      .then((res) => res.json())
-      .then((data: GitHubRepo[]) => {
+    const fetchRepos = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await apiFetch(`/api/integrations/github/repos?page=${page}&per_page=${PER_PAGE}&sort=updated`);
+        const data: GitHubRepo[] = await res.json();
         if (cancelled) return;
         if (page === 1) {
           setRepos(data);
@@ -38,14 +40,15 @@ export function useGitHubRepos(): UseGitHubReposResult {
           setRepos((prev) => [...prev, ...data]);
         }
         setHasMore(data.length === PER_PAGE);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load repos");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    };
+
+    fetchRepos();
 
     return () => {
       cancelled = true;

@@ -1,11 +1,11 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/github-integration.md",
-  "started_at": "2026-03-20T18:02:58.395Z",
+  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/github-device-auth.md",
+  "started_at": "2026-03-20T19:12:58.273Z",
   "session_ids": [
-    "ses_2f4461000ffeoiL5CwgVPC8dMX"
+    "ses_2f36bad55ffemY77wb49VY6CZS"
   ],
-  "plan_name": "github-integration",
+  "plan_name": "github-device-auth",
   "agent": "tapestry",
-  "start_sha": "fe39e9542029a37726a2fc9a5f75327fc2f6502d",
+  "start_sha": "9d5f214555a485a1028ff1ca2e831b80b75a5f38",
   "paused": true
 }

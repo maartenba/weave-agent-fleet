@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { GitHubIssue } from "../types";
 
@@ -33,28 +33,37 @@ export function useGitHubIssues(
   const [fetchKey, setFetchKey] = useState(0);
 
   const PER_PAGE = 30;
+  const prevKeyRef = useRef<string | null>(null);
+
+  // Derive empty state from owner/repo outside the effect
+  const ownerRepoKey = owner && repo ? `${owner}/${repo}` : null;
+  if (prevKeyRef.current !== ownerRepoKey && !ownerRepoKey) {
+    prevKeyRef.current = ownerRepoKey;
+    if (issues.length > 0) setIssues([]);
+  } else if (prevKeyRef.current !== ownerRepoKey) {
+    prevKeyRef.current = ownerRepoKey;
+  }
 
   useEffect(() => {
-    if (!owner || !repo) {
-      setIssues([]);
-      return;
-    }
+    if (!owner || !repo) return;
 
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
-    const params = new URLSearchParams({
-      state,
-      sort,
-      direction,
-      page: String(page),
-      per_page: String(PER_PAGE),
-    });
+    const fetchIssues = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    apiFetch(`/api/integrations/github/repos/${owner}/${repo}/issues?${params}`)
-      .then((res) => res.json())
-      .then((data: GitHubIssue[]) => {
+      const params = new URLSearchParams({
+        state,
+        sort,
+        direction,
+        page: String(page),
+        per_page: String(PER_PAGE),
+      });
+
+      try {
+        const res = await apiFetch(`/api/integrations/github/repos/${owner}/${repo}/issues?${params}`);
+        const data: GitHubIssue[] = await res.json();
         if (cancelled) return;
         // Filter out pull requests (GitHub issues endpoint also returns PRs)
         const issuesOnly = data.filter((i) => !i.pull_request);
@@ -64,14 +73,15 @@ export function useGitHubIssues(
           setIssues((prev) => [...prev, ...issuesOnly]);
         }
         setHasMore(data.length === PER_PAGE);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load issues");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    };
+
+    fetchIssues();
 
     return () => {
       cancelled = true;
