@@ -36,6 +36,7 @@ if /i "%~1"=="skill" goto :do_cli
 if /i "%~1"=="help" goto :show_help
 if /i "%~1"=="--help" goto :show_help
 if /i "%~1"=="-h" goto :show_help
+if /i "%~1"=="--port" goto :parse_port
 
 echo Unknown command: %~1
 echo Run "weave-fleet help" for usage.
@@ -93,7 +94,7 @@ if exist "%VERSION_FILE%" (
 )
 echo Weave Fleet v!VERSION!
 echo.
-echo Usage: weave-fleet [command]
+echo Usage: weave-fleet [command] [--port ^<number^>]
 echo.
 echo Commands:
 echo   (none)       Start the Weave Fleet server
@@ -104,12 +105,31 @@ echo   update       Update to the latest version
 echo   uninstall    Remove Weave Fleet
 echo   help         Show this help message
 echo.
+echo Options:
+echo   --port ^<number^>  Server port (overrides PORT env var, default: 3000)
+echo.
 echo Environment variables:
 echo   PORT             Server port (default: 3000)
 echo   WEAVE_HOSTNAME   Server bind address (default: 0.0.0.0)
 echo   WEAVE_DB_PATH    Database file path (default: %%USERPROFILE%%\.weave\fleet.db)
 echo   OPENCODE_BIN     Full path to opencode binary (if not on PATH)
 exit /b 0
+
+:parse_port
+if "%~2"=="" (
+    echo Error: --port requires a port number. >&2
+    echo Usage: weave-fleet [--port ^<number^>] >&2
+    exit /b 1
+)
+rem Validate numeric: strictly match one or more decimal digits only.
+rem This rejects negatives (-1), hex (0x1F90), expressions (1+2), etc.
+echo %~2| findstr /r "^[0-9][0-9]*$" >nul 2>&1
+if !ERRORLEVEL! neq 0 (
+    echo Error: --port value must be a number, got '%~2'. >&2
+    exit /b 1
+)
+set "PORT=%~2"
+goto :start_server
 
 :start_server
 
