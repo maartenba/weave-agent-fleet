@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
+import { MarkdownRenderer } from "@/components/session/markdown-renderer";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -129,9 +129,7 @@ export function PrRow({ pr, owner, repo }: PrRowProps) {
       <CollapsibleContent>
         <div className="ml-9 mr-3 mb-3 p-4 rounded-md border bg-muted/30 space-y-3">
           {pr.body ? (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-              <ReactMarkdown>{pr.body}</ReactMarkdown>
-            </div>
+            <MarkdownRenderer content={pr.body} />
           ) : (
             <p className="text-sm text-muted-foreground italic">
               No description provided.
@@ -167,9 +165,7 @@ export function PrRow({ pr, owner, repo }: PrRowProps) {
                         {formatAge(comment.created_at)}
                       </span>
                     </div>
-                    <div className="prose prose-xs dark:prose-invert max-w-none text-muted-foreground">
-                      <ReactMarkdown>{comment.body}</ReactMarkdown>
-                    </div>
+                    <MarkdownRenderer content={comment.body} className="text-muted-foreground" />
                   </div>
                 ))}
               </div>
