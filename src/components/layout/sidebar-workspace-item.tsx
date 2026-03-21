@@ -113,7 +113,7 @@ export const SidebarWorkspaceItem = React.memo(function SidebarWorkspaceItem({
           {/* Workspace row */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md pl-8 pr-3 py-1.5 text-sm transition-colors",
+              "flex items-center gap-2 rounded-md pl-3 pr-3 py-1.5 text-sm transition-colors",
               isActiveWorkspace
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"

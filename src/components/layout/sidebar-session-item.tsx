@@ -154,7 +154,7 @@ export const SidebarSessionItem = React.memo(function SidebarSessionItem({ item,
             }}
             className={cn(
               "flex items-center gap-2 rounded-md pr-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-              isChild ? "pl-16" : "pl-12",
+              isChild ? "pl-8" : "pl-5",
               isActive
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"

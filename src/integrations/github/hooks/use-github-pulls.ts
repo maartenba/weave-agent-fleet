@@ -33,16 +33,19 @@ export function useGitHubPulls(
   const [fetchKey, setFetchKey] = useState(0);
 
   const PER_PAGE = 30;
-  const prevKeyRef = useRef<string | null>(null);
 
-  // Derive empty state from owner/repo outside the effect
+  // Reset state when owner/repo changes (including to null)
   const ownerRepoKey = owner && repo ? `${owner}/${repo}` : null;
-  if (prevKeyRef.current !== ownerRepoKey && !ownerRepoKey) {
-    prevKeyRef.current = ownerRepoKey;
-    if (pulls.length > 0) setPulls([]);
-  } else if (prevKeyRef.current !== ownerRepoKey) {
-    prevKeyRef.current = ownerRepoKey;
-  }
+  const prevKeyRef = useRef(ownerRepoKey);
+  useEffect(() => {
+    if (prevKeyRef.current !== ownerRepoKey) {
+      prevKeyRef.current = ownerRepoKey;
+      setPulls([]);
+      setPage(1);
+      setHasMore(true);
+      setError(null);
+    }
+  }, [ownerRepoKey]);
 
   useEffect(() => {
     if (!owner || !repo) return;

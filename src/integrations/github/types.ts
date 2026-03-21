@@ -53,3 +53,10 @@ export interface GitHubComment {
   user: { login: string; avatar_url: string };
   created_at: string;
 }
+
+export interface BookmarkedRepo {
+  /** "owner/repo" — used as unique key */
+  fullName: string;
+  owner: string;
+  name: string;
+}

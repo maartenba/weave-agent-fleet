@@ -9,6 +9,12 @@ interface UseSidebarResizeOptions {
   onResizeEnd: (width: number) => void;
   onResizeStart: () => void;
   disabled?: boolean;
+  /**
+   * Pixel offset subtracted from `clientX` before clamping.
+   * Use this when the resizable element does not start at the left viewport edge.
+   * Default: 0
+   */
+  offset?: number;
 }
 
 export function useSidebarResize({
@@ -18,6 +24,7 @@ export function useSidebarResize({
   onResizeEnd,
   onResizeStart,
   disabled = false,
+  offset = 0,
 }: UseSidebarResizeOptions) {
   const isResizingRef = useRef(false);
   const latestWidthRef = useRef(0);
@@ -47,12 +54,12 @@ export function useSidebarResize({
       e.preventDefault();
 
       const newWidth = Math.round(
-        Math.min(maxWidth, Math.max(minWidth, e.clientX))
+        Math.min(maxWidth, Math.max(minWidth, e.clientX - offset))
       );
       latestWidthRef.current = newWidth;
       onResize(newWidth);
     },
-    [minWidth, maxWidth, onResize]
+    [minWidth, maxWidth, onResize, offset]
   );
 
   const handlePointerUp = useCallback(

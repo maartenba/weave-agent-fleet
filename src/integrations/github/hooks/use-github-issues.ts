@@ -33,16 +33,19 @@ export function useGitHubIssues(
   const [fetchKey, setFetchKey] = useState(0);
 
   const PER_PAGE = 30;
-  const prevKeyRef = useRef<string | null>(null);
 
-  // Derive empty state from owner/repo outside the effect
+  // Reset state when owner/repo changes (including to null)
   const ownerRepoKey = owner && repo ? `${owner}/${repo}` : null;
-  if (prevKeyRef.current !== ownerRepoKey && !ownerRepoKey) {
-    prevKeyRef.current = ownerRepoKey;
-    if (issues.length > 0) setIssues([]);
-  } else if (prevKeyRef.current !== ownerRepoKey) {
-    prevKeyRef.current = ownerRepoKey;
-  }
+  const prevKeyRef = useRef(ownerRepoKey);
+  useEffect(() => {
+    if (prevKeyRef.current !== ownerRepoKey) {
+      prevKeyRef.current = ownerRepoKey;
+      setIssues([]);
+      setPage(1);
+      setHasMore(true);
+      setError(null);
+    }
+  }, [ownerRepoKey]);
 
   useEffect(() => {
     if (!owner || !repo) return;
@@ -72,6 +75,8 @@ export function useGitHubIssues(
         } else {
           setIssues((prev) => [...prev, ...issuesOnly]);
         }
+        // Use raw data.length for pagination (API returns mix of issues + PRs per page)
+        // but keep loading if a full page was returned, since filtered results may be fewer
         setHasMore(data.length === PER_PAGE);
       } catch (err: unknown) {
         if (cancelled) return;
