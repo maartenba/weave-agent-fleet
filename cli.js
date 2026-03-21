@@ -528,6 +528,9 @@ function printUsage() {
   console.log("  https://...                   Raw URL to a SKILL.md file");
   console.log("  github:user/repo/path         GitHub repository shorthand");
   console.log("  /path/to/SKILL.md             Local file path");
+  console.log();
+  console.log("Server Options (when starting without a subcommand):");
+  console.log("  --port <number>               Server port (default: 3000)");
 }
 function parseArgs(argv) {
   const command = argv[0] ?? "";

@@ -19,6 +19,56 @@ fi
 
 CLI_JS="$INSTALL_DIR/app/cli.js"
 
+# Pre-parse --port flag before subcommand dispatch.
+# Strips --port <number> from the argument list and exports PORT.
+# This only affects the server-start path; subcommand args are preserved.
+# Remaining args are saved to numbered _WEAVE_ARGn variables (POSIX-safe)
+# and rebuilt into positional parameters after the loop.
+_weave_collect_args() {
+  # Called with the full arg list; sets _WEAVE_ARGC and _WEAVE_ARGn globals.
+  _WEAVE_ARGC=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --port)
+        if [ -z "${2:-}" ] || [ "${2#-}" != "$2" ]; then
+          echo "Error: --port requires a port number." >&2
+          echo "Usage: weave-fleet [--port <number>]" >&2
+          exit 1
+        fi
+        case "$2" in
+          *[!0-9]*)
+            echo "Error: --port value must be a number, got '$2'." >&2
+            exit 1
+            ;;
+        esac
+        export PORT="$2"
+        shift 2
+        ;;
+      *)
+        _WEAVE_ARGC=$((_WEAVE_ARGC + 1))
+        # Safe: \$1 is escaped so eval sees "_WEAVE_ARGn=$1" — a plain
+        # assignment where $1 is expanded as a value, not parsed as code.
+        eval "_WEAVE_ARG${_WEAVE_ARGC}=\$1"
+        shift
+        ;;
+    esac
+  done
+}
+_weave_collect_args "$@"
+# Rebuild positional parameters from saved args
+set --
+_i=1
+while [ "$_i" -le "$_WEAVE_ARGC" ]; do
+  eval "set -- \"\$@\" \"\$_WEAVE_ARG${_i}\""
+  _i=$((_i + 1))
+done
+_j=1
+while [ "$_j" -le "$_WEAVE_ARGC" ]; do
+  eval "unset _WEAVE_ARG${_j}"
+  _j=$((_j + 1))
+done
+unset _i _j _WEAVE_ARGC
+
 # Parse subcommands
 case "${1:-}" in
   version|--version|-v)
@@ -62,7 +112,7 @@ case "${1:-}" in
     [ -f "$VERSION_FILE" ] && VERSION="$(cat "$VERSION_FILE")"
     echo "Weave Fleet v${VERSION}"
     echo ""
-    echo "Usage: weave-fleet [command]"
+    echo "Usage: weave-fleet [command] [--port <number>]"
     echo ""
     echo "Commands:"
     echo "  (none)       Start the Weave Fleet server"
@@ -72,6 +122,9 @@ case "${1:-}" in
     echo "  update       Update to the latest version"
     echo "  uninstall    Remove Weave Fleet"
     echo "  help         Show this help message"
+    echo ""
+    echo "Options:"
+    echo "  --port <number>  Server port (overrides PORT env var, default: 3000)"
     echo ""
     echo "Environment variables:"
     echo "  PORT             Server port (default: 3000)"
