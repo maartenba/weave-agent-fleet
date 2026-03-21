@@ -1,11 +1,11 @@
 {
-  "active_plan": "/Users/pgermishuys/source/weave-agent-fleet/.weave/plans/github-device-auth.md",
-  "started_at": "2026-03-20T19:12:58.273Z",
+  "active_plan": "D:\\repos\\damianh\\weave-agent-fleet-sidebar\\.weave\\plans\\icon-rail-sidebar.md",
+  "started_at": "2026-03-21T08:48:22.475Z",
   "session_ids": [
-    "ses_2f36bad55ffemY77wb49VY6CZS"
+    "ses_2f26a029fffe37eE0Mq1dzApD4"
   ],
-  "plan_name": "github-device-auth",
+  "plan_name": "icon-rail-sidebar",
   "agent": "tapestry",
-  "start_sha": "9d5f214555a485a1028ff1ca2e831b80b75a5f38",
+  "start_sha": "01fe1c31b5a0e08c6bb15edec35f5eccfbc9f7e5",
   "paused": true
 }

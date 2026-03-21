@@ -18,17 +18,16 @@ import {
 } from "@/components/ui/command";
 import { ChevronDown, Star, Lock, RefreshCw, Loader2 } from "lucide-react";
 import { useGitHubRepos } from "../hooks/use-github-repos";
-import type { GitHubRepo } from "../types";
+import type { CachedGitHubRepo } from "../types";
 
 interface RepoSelectorProps {
-  selected: GitHubRepo | null;
-  onSelect: (repo: GitHubRepo) => void;
+  selected: CachedGitHubRepo | null;
+  onSelect: (repo: CachedGitHubRepo) => void;
 }
 
 export function RepoSelector({ selected, onSelect }: RepoSelectorProps) {
   const [open, setOpen] = useState(false);
-  const { repos, isLoading, error, hasMore, loadMore, refetch } =
-    useGitHubRepos();
+  const { repos, isLoading, error, refresh } = useGitHubRepos();
 
   return (
     <div className="flex items-center gap-2">
@@ -44,7 +43,7 @@ export function RepoSelector({ selected, onSelect }: RepoSelectorProps) {
         <PopoverContent className="w-80 p-0" align="start">
           <Command>
             <CommandInput placeholder="Search repositories…" />
-            <CommandList>
+            <CommandList className="thin-scrollbar">
               {error && (
                 <div className="py-3 px-4 text-xs text-destructive">{error}</div>
               )}
@@ -82,17 +81,10 @@ export function RepoSelector({ selected, onSelect }: RepoSelectorProps) {
                     </div>
                   </CommandItem>
                 ))}
-                {hasMore && (
-                  <CommandItem
-                    onSelect={loadMore}
-                    className="justify-center text-xs text-muted-foreground"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      "Load more…"
-                    )}
-                  </CommandItem>
+                {isLoading && repos.length === 0 && (
+                  <div className="flex justify-center py-3">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  </div>
                 )}
               </CommandGroup>
             </CommandList>
@@ -103,7 +95,7 @@ export function RepoSelector({ selected, onSelect }: RepoSelectorProps) {
       <Button
         variant="ghost"
         size="icon-sm"
-        onClick={refetch}
+        onClick={refresh}
         disabled={isLoading}
         aria-label="Refresh repositories"
       >

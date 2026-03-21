@@ -53,3 +53,21 @@ export interface GitHubComment {
   user: { login: string; avatar_url: string };
   created_at: string;
 }
+
+export interface BookmarkedRepo {
+  /** "owner/repo" — used as unique key */
+  fullName: string;
+  owner: string;
+  name: string;
+}
+
+/** Lean repo shape for localStorage cache — subset of GitHubRepo */
+export interface CachedGitHubRepo {
+  id: number;
+  full_name: string;
+  name: string;
+  owner_login: string;
+  private: boolean;
+  language: string | null;
+  stargazers_count: number;
+}

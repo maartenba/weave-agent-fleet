@@ -141,6 +141,12 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
+  /* Icon rail — semantic aliases of sidebar tokens (work across all themes) */
+  --color-icon-rail: var(--sidebar);
+  --color-icon-rail-border: var(--sidebar-border);
+  --color-icon-rail-foreground: var(--sidebar-foreground);
+  --color-icon-rail-active: var(--sidebar-primary);
+
   /* Weave brand colors */
   --color-weave-blue: #3B82F6;
   --color-weave-purple: #A855F7;
@@ -656,4 +662,21 @@
 .theme-light .hljs-deletion {
   color: #b31d28;
   background-color: #ffeef0;
+}
+
+/* Thin styled scrollbar — regular class because @utility doesn't support pseudo-elements */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 3px;
 }
