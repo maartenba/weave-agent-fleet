@@ -1,0 +1,3 @@
+- `message.part.updated` in the client can safely fallback to top-level `properties.sessionID` as long as `part.messageID` remains required.
+- Enforcing `normalizedSessionId === sessionId` in the handler prevents cross-session mutation while still accepting valid fallback-shaped events.
+- Reconnect/backfill appends newer messages only, so preserving part events in real time is essential to avoid persistent blank assistant shells.

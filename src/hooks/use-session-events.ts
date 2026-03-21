@@ -420,7 +420,7 @@ type SetStatus = React.Dispatch<React.SetStateAction<SessionConnectionStatus>>;
 type SetSessionStatus = React.Dispatch<React.SetStateAction<"idle" | "busy">>;
 type SetError = React.Dispatch<React.SetStateAction<string | undefined>>;
 
-function handleEvent(
+export function handleEvent(
   event: SSEEvent,
   sessionId: string,
   setMessages: SetMessages,
@@ -471,8 +471,10 @@ function handleEvent(
 
   if (type === "message.part.updated") {
     const part = properties?.part;
-    if (!part?.messageID || !part?.sessionID) return;
-    setMessages((prev) => applyPartUpdate(prev, part));
+    if (!part?.messageID) return;
+    const normalizedSessionId = part.sessionID ?? properties?.sessionID ?? sessionId;
+    if (!normalizedSessionId || normalizedSessionId !== sessionId) return;
+    setMessages((prev) => applyPartUpdate(prev, { ...part, sessionID: normalizedSessionId }));
 
     // Auto-switch agent on plan_exit/plan_enter tool completions (matching TUI behavior)
     if (part.type === "tool" && part.state?.status === "completed") {
