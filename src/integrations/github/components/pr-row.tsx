@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Collapsible,
@@ -36,11 +36,14 @@ export function PrRow({ pr, owner, repo }: PrRowProps) {
   const { comments, isLoading, fetch: fetchComments } =
     useGitHubComments(owner, repo, "pulls", pr.number);
 
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen && comments.length === 0 && !isLoading) {
+    if (isOpen && !hasFetchedRef.current && !isLoading) {
+      hasFetchedRef.current = true;
       fetchComments();
     }
-  }, [isOpen, comments.length, isLoading, fetchComments]);
+  }, [isOpen, isLoading, fetchComments]);
 
   const contextSource: ContextSource = {
     type: "github-pr",
