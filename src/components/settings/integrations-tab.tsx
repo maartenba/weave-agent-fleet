@@ -1,12 +1,59 @@
 "use client";
 
 import { Suspense } from "react";
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { getIntegrations } from "@/integrations/registry";
+import { useGitHubRepos } from "@/integrations/github/hooks/use-github-repos";
+
+function formatRelativeTime(ts: number | null): string {
+  if (ts === null) return "Never";
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function GitHubConnectedActions({
+  onDisconnect,
+}: {
+  onDisconnect: () => void;
+}) {
+  const { repos, isLoading, lastUpdated, refresh } = useGitHubRepos();
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={onDisconnect}>
+          Disconnect
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={refresh}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
+          Refresh repos
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {repos.length} repos cached · Updated {formatRelativeTime(lastUpdated)}
+      </p>
+    </div>
+  );
+}
 
 export function IntegrationsTab() {
   const { connect, disconnect, integrations } = useIntegrationsContext();
@@ -70,13 +117,19 @@ export function IntegrationsTab() {
                 </div>
 
                 {connected ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => disconnect(manifest.id)}
-                  >
-                    Disconnect
-                  </Button>
+                  manifest.id === "github" ? (
+                    <GitHubConnectedActions
+                      onDisconnect={() => disconnect(manifest.id)}
+                    />
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => disconnect(manifest.id)}
+                    >
+                      Disconnect
+                    </Button>
+                  )
                 ) : SettingsComponent ? (
                   <Suspense fallback={null}>
                     <SettingsComponent />

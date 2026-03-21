@@ -9,9 +9,9 @@ import { PrList } from "./components/pr-list";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { useGitHubIssues } from "./hooks/use-github-issues";
 import { useGitHubPulls } from "./hooks/use-github-pulls";
-import type { GitHubRepo } from "./types";
+import type { CachedGitHubRepo } from "./types";
 
-function GitHubBrowserInner({ repo }: { repo: GitHubRepo }) {
+function GitHubBrowserInner({ repo }: { repo: CachedGitHubRepo }) {
   const [owner, repoName] = repo.full_name.split("/");
   const { issues } = useGitHubIssues(owner, repoName, { state: "open" });
   const { pulls } = useGitHubPulls(owner, repoName, { state: "open" });
@@ -52,7 +52,7 @@ function GitHubBrowserInner({ repo }: { repo: GitHubRepo }) {
 
 export function GitHubBrowser() {
   const [selectedRepo, setSelectedRepo] =
-    usePersistedState<GitHubRepo | null>("weave:github:lastRepo", null);
+    usePersistedState<CachedGitHubRepo | null>("weave:github:lastRepo", null);
 
   return (
     <div>

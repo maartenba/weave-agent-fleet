@@ -60,3 +60,14 @@ export interface BookmarkedRepo {
   owner: string;
   name: string;
 }
+
+/** Lean repo shape for localStorage cache — subset of GitHubRepo */
+export interface CachedGitHubRepo {
+  id: number;
+  full_name: string;
+  name: string;
+  owner_login: string;
+  private: boolean;
+  language: string | null;
+  stargazers_count: number;
+}

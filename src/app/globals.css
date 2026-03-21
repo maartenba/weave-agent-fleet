@@ -97,23 +97,6 @@
   }
 }
 
-@utility thin-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--muted) transparent;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: var(--muted);
-    border-radius: 3px;
-  }
-}
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -679,4 +662,21 @@
 .theme-light .hljs-deletion {
   color: #b31d28;
   background-color: #ffeef0;
+}
+
+/* Thin styled scrollbar — regular class because @utility doesn't support pseudo-elements */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 3px;
 }

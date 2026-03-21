@@ -29,7 +29,7 @@ interface AddRepoDialogProps {
 
 export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
   const [open, setOpen] = useState(false);
-  const { repos, isLoading, error, hasMore, loadMore } = useGitHubRepos();
+  const { repos, isLoading, error } = useGitHubRepos();
   const { addRepo, hasRepo } = useBookmarkedRepos();
   const { connectedIntegrations } = useIntegrationsContext();
 
@@ -42,7 +42,7 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
     if (!repo) return;
     addRepo({
       fullName: repo.full_name,
-      owner: repo.owner.login,
+      owner: repo.owner_login,
       name: repo.name,
     });
     setOpen(false);
@@ -51,7 +51,7 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0 gap-0 sm:max-w-md" showCloseButton={false}>
+      <DialogContent className="p-0 gap-0 sm:max-w-md top-[10%] translate-y-0" showCloseButton={false}>
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle>Add Repository</DialogTitle>
         </DialogHeader>
@@ -74,7 +74,7 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
         ) : (
           <Command>
             <CommandInput placeholder="Search repositories…" />
-            <CommandList className="max-h-72">
+            <CommandList className="max-h-72 thin-scrollbar">
               {error && (
                 <div className="py-3 px-4 text-xs text-destructive">{error}</div>
               )}
@@ -112,18 +112,10 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
                     </div>
                   </CommandItem>
                 ))}
-                {isLoading && (
+                {isLoading && availableRepos.length === 0 && (
                   <div className="flex justify-center py-3">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
-                )}
-                {hasMore && !isLoading && (
-                  <CommandItem
-                    onSelect={loadMore}
-                    className="justify-center text-xs text-muted-foreground"
-                  >
-                    Load more…
-                  </CommandItem>
                 )}
               </CommandGroup>
             </CommandList>

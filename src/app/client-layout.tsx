@@ -6,6 +6,7 @@ import { KeybindingsProvider } from "@/contexts/keybindings-context";
 import { CommandRegistryProvider } from "@/contexts/command-registry-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { IntegrationsProvider } from "@/contexts/integrations-context";
+import { GitHubRepoCacheWarmer } from "@/integrations/github/components/repo-cache-warmer";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/layout/sidebar";
 import { NavigationCommands } from "@/components/commands/navigation-commands";
@@ -19,13 +20,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       <SessionsProvider>
         <IntegrationsProvider>
+          <GitHubRepoCacheWarmer />
           <SidebarProvider>
             <KeybindingsProvider>
               <CommandRegistryProvider>
                 <TooltipProvider delayDuration={0}>
                   <div className="flex h-screen overflow-hidden">
                     <Sidebar />
-                    <main className="flex-1 overflow-auto">{children}</main>
+                    <main className="flex-1 overflow-auto thin-scrollbar">{children}</main>
                   </div>
                 </TooltipProvider>
                 <NavigationCommands />
