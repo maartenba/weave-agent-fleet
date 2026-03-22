@@ -15,7 +15,9 @@
     "build:standalone": "next build && npm run build:cli && bash scripts/assemble-standalone.sh",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "node scripts/tauri-prebuild.mjs && npx tauri build"
+    "tauri:build": "node scripts/tauri-prebuild.mjs && npx tauri build",
+    "tauri:build:stable": "WEAVE_UPDATE_CHANNEL=stable node scripts/tauri-prebuild.mjs && npx tauri build",
+    "tauri:build:dev": "WEAVE_UPDATE_CHANNEL=dev node scripts/tauri-prebuild.mjs && npx tauri build"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.2.24",

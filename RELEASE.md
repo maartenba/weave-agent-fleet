@@ -52,6 +52,38 @@ git push origin refs/tags/vX.Y.Z
 gh release create vX.Y.Z --generate-notes
 ```
 
+## Dev channel publishing (push to `main`)
+
+Dev channel packaging is automated by `.github/workflows/dev-channel.yml`.
+
+- Trigger: every push to `main`
+- Release tag namespace: `dev`
+- Release type: prerelease (rolling)
+- Updater metadata location: `releases/download/dev/latest.json`
+- Package behavior: dev installers replace the normal app install (same app identity)
+
+### Local channel-specific package builds
+
+Use these scripts to produce channel-specific packages intentionally:
+
+```bash
+# stable package
+bun run tauri:build:stable
+
+# dev package (optionally override build id)
+WEAVE_DEV_BUILD_ID=123 bun run tauri:build:dev
+```
+
+The prebuild script stamps both channel-specific updater endpoint and Tauri version before packaging.
+
+## Required secrets for publishing
+
+Both stable and dev workflows require:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- `GITHUB_TOKEN` (provided by Actions runtime)
+
 ## Verification checklist
 
 Before considering the release complete, verify all of the following:
@@ -62,6 +94,13 @@ Before considering the release complete, verify all of the following:
 - `git show vX.Y.Z:src-tauri/Cargo.toml` shows `version = "X.Y.Z"`
 - `git ls-remote --tags origin refs/tags/vX.Y.Z` resolves to the intended commit
 - `gh release view vX.Y.Z` succeeds
+
+For dev channel publishes, also verify:
+
+- `gh release view dev` succeeds
+- Dev release contains platform installers for latest `main` build
+- Dev release contains `latest.json` updater metadata
+- Stable tagged release assets were not modified by dev publish
 
 ## If a tag or release was created too early
 
