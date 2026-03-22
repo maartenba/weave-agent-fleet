@@ -41,6 +41,7 @@ git commit -m "chore: release vX.Y.Z"
 
 git show --no-patch --decorate HEAD
 git show HEAD:package.json
+git show HEAD:package-lock.json
 git show HEAD:src-tauri/tauri.conf.json
 git show HEAD:src-tauri/Cargo.toml
 
@@ -56,6 +57,7 @@ gh release create vX.Y.Z --generate-notes
 Before considering the release complete, verify all of the following:
 
 - `git show vX.Y.Z:package.json` shows `"version": "X.Y.Z"`
+- `git show vX.Y.Z:package-lock.json` shows `"version": "X.Y.Z"`
 - `git show vX.Y.Z:src-tauri/tauri.conf.json` shows `"version": "X.Y.Z"`
 - `git show vX.Y.Z:src-tauri/Cargo.toml` shows `version = "X.Y.Z"`
 - `git ls-remote --tags origin refs/tags/vX.Y.Z` resolves to the intended commit
