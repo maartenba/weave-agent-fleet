@@ -11,7 +11,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useSidebar, type SidebarView } from "@/contexts/sidebar-context";
+import {
+  useSidebar,
+  viewHasPanel,
+  type SidebarView,
+} from "@/contexts/sidebar-context";
 
 
 // ── Default routes per view ──────────────────────────────────────────────────
@@ -28,11 +32,22 @@ function isFleetRoute(pathname: string): boolean {
 }
 
 /** Map a pathname to the view it belongs to (if any) */
-function viewForPathname(pathname: string): SidebarView | null {
+export function viewForPathname(pathname: string): SidebarView | null {
   if (pathname === "/welcome") return "welcome";
   if (pathname === "/github" || pathname.startsWith("/github/")) return "github";
   if (isFleetRoute(pathname)) return "fleet";
   return null;
+}
+
+export function nextViewForSwitch(
+  activeView: SidebarView,
+  targetView: SidebarView
+): SidebarView {
+  if (activeView === targetView && viewHasPanel(targetView)) {
+    return "welcome";
+  }
+
+  return targetView;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -157,10 +172,18 @@ export function SidebarIconRail() {
   // Keep the map up-to-date as the user navigates within a view
   useEffect(() => {
     const owningView = viewForPathname(pathname);
-    if (owningView && owningView === activeView) {
+    if (owningView) {
       lastPathByView.current[owningView] = fullUrl;
     }
-  }, [fullUrl, pathname, activeView]);
+  }, [fullUrl, pathname]);
+
+  // Route is source-of-truth for active view on direct navigation/history.
+  useEffect(() => {
+    const owningView = viewForPathname(pathname);
+    if (owningView && owningView !== activeView) {
+      setActiveView(owningView);
+    }
+  }, [activeView, pathname, setActiveView]);
 
   // Navigate when activeView changes (handles both clicks AND ⌘B toggle).
   // We use a ref to track the previous view so this only fires on actual changes,
@@ -180,9 +203,9 @@ export function SidebarIconRail() {
   // Switch to a view (used by icon rail buttons)
   const handleSwitch = useCallback(
     (view: SidebarView) => {
-      setActiveView(view);
+      setActiveView(nextViewForSwitch(activeView, view));
     },
-    [setActiveView]
+    [activeView, setActiveView]
   );
 
   return (

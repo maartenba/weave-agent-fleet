@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { CircleDot, GitPullRequest } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/header";
+import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { IssueList } from "@/integrations/github/components/issue-list";
 import { PrList } from "@/integrations/github/components/pr-list";
 import { useGitHubIssues } from "@/integrations/github/hooks/use-github-issues";
@@ -16,14 +17,26 @@ interface PageProps {
 
 export default function GitHubRepoPage({ params }: PageProps) {
   const { owner, repo } = use(params);
+  const { connectedIntegrations } = useIntegrationsContext();
+  const isGitHubConnected = connectedIntegrations.some((i) => i.id === "github");
 
-  const { issues: openIssues } = useGitHubIssues(owner, repo, { state: "open" });
-  const { pulls: openPulls } = useGitHubPulls(owner, repo, { state: "open" });
+  const ownerValue = isGitHubConnected ? owner : null;
+  const repoValue = isGitHubConnected ? repo : null;
+  const { issues: openIssues } = useGitHubIssues(ownerValue, repoValue, { state: "open" });
+  const { pulls: openPulls } = useGitHubPulls(ownerValue, repoValue, { state: "open" });
 
   return (
     <div className="flex flex-col h-full">
       <Header title={`${owner}/${repo}`} />
-        <div className="flex-1 overflow-auto thin-scrollbar p-6">
+      <div className="flex-1 overflow-auto thin-scrollbar p-6">
+        {!isGitHubConnected ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <p className="text-sm text-muted-foreground">GitHub is not connected.</p>
+            <p className="text-xs text-muted-foreground/70">
+              Connect GitHub in Settings to browse this repository.
+            </p>
+          </div>
+        ) : (
         <Tabs defaultValue="issues">
           <TabsList variant="line">
             <TabsTrigger value="issues" className="gap-1.5">
@@ -54,6 +67,7 @@ export default function GitHubRepoPage({ params }: PageProps) {
             <PrList owner={owner} repo={repo} />
           </TabsContent>
         </Tabs>
+        )}
       </div>
     </div>
   );

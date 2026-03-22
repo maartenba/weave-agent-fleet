@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useGitHubRepos } from "../hooks/use-github-repos";
+import { clearGitHubClientState } from "../storage";
 
 /**
  * Invisible component that keeps the repo cache warm.
@@ -12,20 +13,21 @@ import { useGitHubRepos } from "../hooks/use-github-repos";
  */
 export function GitHubRepoCacheWarmer() {
   const { connectedIntegrations } = useIntegrationsContext();
-  const { isStale, refresh, clear } = useGitHubRepos();
+  const { repos, isStale, refresh, clear } = useGitHubRepos();
 
   const isGitHubConnected = connectedIntegrations.some(
     (i) => i.id === "github"
   );
 
   useEffect(() => {
-    if (isGitHubConnected && isStale) {
+    if (isGitHubConnected && (repos.length === 0 || isStale)) {
       refresh();
     }
     if (!isGitHubConnected) {
+      clearGitHubClientState();
       clear();
     }
-  }, [isGitHubConnected, isStale, refresh, clear]);
+  }, [isGitHubConnected, repos.length, isStale, refresh, clear]);
 
   return null;
 }

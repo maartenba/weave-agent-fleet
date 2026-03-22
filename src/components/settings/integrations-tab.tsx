@@ -49,7 +49,7 @@ function GitHubConnectedActions({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {repos.length} repos cached · Updated {formatRelativeTime(lastUpdated)}
+        {repos.length} repos loaded · Updated {formatRelativeTime(lastUpdated)}
       </p>
     </div>
   );

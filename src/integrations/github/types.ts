@@ -61,7 +61,7 @@ export interface BookmarkedRepo {
   name: string;
 }
 
-/** Lean repo shape for localStorage cache — subset of GitHubRepo */
+/** Lean repo shape for in-memory cache — subset of GitHubRepo */
 export interface CachedGitHubRepo {
   id: number;
   full_name: string;

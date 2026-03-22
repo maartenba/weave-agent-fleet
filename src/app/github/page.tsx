@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { Github } from "lucide-react";
 import { Header } from "@/components/layout/header";
+import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useBookmarkedRepos } from "@/integrations/github/hooks/use-bookmarked-repos";
 
 export default function GitHubPage() {
+  const { connectedIntegrations } = useIntegrationsContext();
+  const isGitHubConnected = connectedIntegrations.some((i) => i.id === "github");
   const { repos } = useBookmarkedRepos();
 
   return (
@@ -15,7 +18,15 @@ export default function GitHubPage() {
         subtitle="Browse issues and pull requests for your repositories"
       />
       <div className="flex-1 overflow-auto thin-scrollbar p-6">
-        {repos.length === 0 ? (
+        {!isGitHubConnected ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <Github className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">GitHub is not connected.</p>
+            <p className="text-xs text-muted-foreground/70">
+              Connect GitHub in Settings to browse repositories.
+            </p>
+          </div>
+        ) : repos.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <Github className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">

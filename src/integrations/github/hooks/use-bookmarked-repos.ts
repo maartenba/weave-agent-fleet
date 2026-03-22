@@ -3,8 +3,7 @@
 import { useCallback } from "react";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import type { BookmarkedRepo } from "@/integrations/github/types";
-
-const BOOKMARKED_REPOS_KEY = "weave:github:repos";
+import { GITHUB_BOOKMARKED_REPOS_KEY } from "@/integrations/github/storage";
 
 interface UseBookmarkedReposResult {
   repos: BookmarkedRepo[];
@@ -15,7 +14,7 @@ interface UseBookmarkedReposResult {
 
 export function useBookmarkedRepos(): UseBookmarkedReposResult {
   const [repos, setRepos] = usePersistedState<BookmarkedRepo[]>(
-    BOOKMARKED_REPOS_KEY,
+    GITHUB_BOOKMARKED_REPOS_KEY,
     []
   );
 

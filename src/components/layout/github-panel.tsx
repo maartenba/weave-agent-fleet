@@ -15,12 +15,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useBookmarkedRepos } from "@/integrations/github/hooks/use-bookmarked-repos";
 import { AddRepoDialog } from "@/integrations/github/components/add-repo-dialog";
 
 export function GitHubPanel() {
   const pathname = usePathname();
+  const { connectedIntegrations } = useIntegrationsContext();
   const { repos, removeRepo } = useBookmarkedRepos();
+  const isGitHubConnected = connectedIntegrations.some((i) => i.id === "github");
 
   const isGitHubIndexActive = pathname === "/github";
 
@@ -59,9 +62,15 @@ export function GitHubPanel() {
         </Tooltip>
       </div>
 
+      {!isGitHubConnected && (
+        <p className="px-3 py-2 text-xs text-muted-foreground">
+          GitHub is not connected. Open Settings to reconnect.
+        </p>
+      )}
+
       {/* Repo list */}
       <div className="mt-0.5 space-y-0.5">
-        {repos.length === 0 ? (
+        {!isGitHubConnected ? null : repos.length === 0 ? (
           <p className="px-3 py-1.5 text-xs text-muted-foreground">
             No repositories added yet.
           </p>

@@ -7,9 +7,11 @@ import { RepoSelector } from "./components/repo-selector";
 import { IssueList } from "./components/issue-list";
 import { PrList } from "./components/pr-list";
 import { usePersistedState } from "@/hooks/use-persisted-state";
+import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useGitHubIssues } from "./hooks/use-github-issues";
 import { useGitHubPulls } from "./hooks/use-github-pulls";
 import type { CachedGitHubRepo } from "./types";
+import { GITHUB_LAST_REPO_KEY } from "./storage";
 
 function GitHubBrowserInner({ repo }: { repo: CachedGitHubRepo }) {
   const [owner, repoName] = repo.full_name.split("/");
@@ -51,8 +53,19 @@ function GitHubBrowserInner({ repo }: { repo: CachedGitHubRepo }) {
 }
 
 export function GitHubBrowser() {
+  const { connectedIntegrations } = useIntegrationsContext();
+  const isGitHubConnected = connectedIntegrations.some((i) => i.id === "github");
   const [selectedRepo, setSelectedRepo] =
-    usePersistedState<CachedGitHubRepo | null>("weave:github:lastRepo", null);
+    usePersistedState<CachedGitHubRepo | null>(GITHUB_LAST_REPO_KEY, null);
+
+  if (!isGitHubConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+        <p className="text-sm text-muted-foreground">GitHub is not connected.</p>
+        <p className="text-xs text-muted-foreground">Connect GitHub in Settings to browse repositories.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
