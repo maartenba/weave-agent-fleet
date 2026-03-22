@@ -12,7 +12,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { isTauri, tauriListen, tauriInvoke } from "@/lib/tauri";
+import {
+  isTauri,
+  tauriGetUpdateState,
+  tauriListen,
+  tauriInvoke,
+  tauriSetUpdatePreferences,
+} from "@/lib/tauri";
+import { useUpdatePreferences } from "@/lib/update-preferences";
 
 interface UpdateAvailablePayload {
   version: string;
@@ -24,7 +31,7 @@ interface UpdateProgressPayload {
   total: number | null;
 }
 
-type UpdateState = "idle" | "available" | "downloading" | "error";
+type UpdateState = "idle" | "available" | "downloading" | "ready" | "error";
 
 function showUpdate(
   payload: UpdateAvailablePayload,
@@ -40,17 +47,48 @@ function showUpdate(
 }
 
 export function TauriUpdateDialog() {
+  const [updatePreferences] = useUpdatePreferences();
   const [state, setState] = useState<UpdateState>("idle");
   const [version, setVersion] = useState("");
   const [currentVersion, setCurrentVersion] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    tauriSetUpdatePreferences(
+      updatePreferences.autoUpdate,
+      updatePreferences.channel,
+    ).catch(() => {
+      // Command unavailable or not ready; ignore and keep client preference.
+    });
+  }, [updatePreferences]);
 
   // Listen for the Rust-emitted "update-available" event AND poll for any
   // pending update that fired before the listener was registered.
   useEffect(() => {
     if (!isTauri()) return;
+
+    tauriGetUpdateState()
+      .then((updateState) => {
+        if (updateState.update_available) {
+          setVersion(updateState.update_available.version);
+          setCurrentVersion(updateState.update_available.current_version);
+          setState(updateState.download_in_progress ? "downloading" : "available");
+          if (!updatePreferences.autoUpdate) {
+            setOpen(true);
+          }
+        }
+
+        if (updateState.update_ready_for_restart) {
+          setState("ready");
+          setOpen(true);
+        }
+      })
+      .catch(() => {
+        // Ignore when command is unavailable.
+      });
 
     let cancelled = false;
     let unlisten: (() => void) | null = null;
@@ -58,7 +96,13 @@ export function TauriUpdateDialog() {
     // Register event listener
     tauriListen<UpdateAvailablePayload>("update-available", (payload) => {
       if (!cancelled) {
-        showUpdate(payload, setVersion, setCurrentVersion, setState, setOpen);
+        if (!updatePreferences.autoUpdate) {
+          showUpdate(payload, setVersion, setCurrentVersion, setState, setOpen);
+        } else {
+          setVersion(payload.version);
+          setCurrentVersion(payload.current_version);
+          setState("downloading");
+        }
       }
     }).then((fn) => {
       if (cancelled) {
@@ -74,13 +118,40 @@ export function TauriUpdateDialog() {
     // is registered.
     tauriInvoke<UpdateAvailablePayload | null>("check_for_update")
       .then((payload) => {
-        if (payload && !cancelled) {
-          showUpdate(payload, setVersion, setCurrentVersion, setState, setOpen);
+        if (payload && !cancelled && !updatePreferences.autoUpdate) {
+            showUpdate(payload, setVersion, setCurrentVersion, setState, setOpen);
         }
       })
       .catch(() => {
         // Not in Tauri or command not available — ignore
       });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [updatePreferences.autoUpdate]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    tauriListen<UpdateAvailablePayload>("update-ready-for-restart", (payload) => {
+      if (!cancelled) {
+        setVersion(payload.version);
+        setCurrentVersion(payload.current_version);
+        setState("ready");
+        setOpen(true);
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn?.();
+      } else {
+        unlisten = fn;
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -157,11 +228,17 @@ export function TauriUpdateDialog() {
             ) : (
               <Download className="h-5 w-5" />
             )}
-            {state === "error" ? "Update Failed" : "Update Available"}
+            {state === "error"
+              ? "Update Failed"
+              : state === "ready"
+                ? "Update Ready"
+                : "Update Available"}
           </DialogTitle>
           <DialogDescription>
             {state === "error"
               ? "Something went wrong while installing the update."
+              : state === "ready"
+                ? `Weave Fleet v${version} has been downloaded and will be applied on next start.`
               : `Weave Fleet v${version} is available (you have v${currentVersion}).`}
           </DialogDescription>
         </DialogHeader>
@@ -178,8 +255,16 @@ export function TauriUpdateDialog() {
               </div>
               <Progress value={progress} />
               <p className="text-xs text-muted-foreground">
-                The app will restart automatically once the update is installed.
+                {updatePreferences.autoUpdate
+                  ? "The update is downloading in the background."
+                  : "The app will restart automatically once the update is installed."}
               </p>
+            </div>
+          )}
+
+          {state === "ready" && (
+            <div className="rounded-md bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
+              Update downloaded. Restart the app to switch to v{version}.
             </div>
           )}
 
@@ -212,6 +297,11 @@ export function TauriUpdateDialog() {
                 Retry
               </Button>
             </>
+          )}
+          {state === "ready" && (
+            <Button variant="outline" onClick={handleDismiss}>
+              Got it
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

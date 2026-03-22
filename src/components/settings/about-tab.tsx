@@ -4,28 +4,40 @@ import { useEffect, useState } from "react";
 import { Loader2, FolderOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useConfig } from "@/hooks/use-config";
 import { apiFetch } from "@/lib/api-client";
+import { useUpdatePreferences } from "@/lib/update-preferences";
 
 interface VersionInfo {
   version: string;
   latest: string | null;
   updateAvailable: boolean;
   checkedAt: string | null;
+  channel?: "stable" | "dev";
 }
 
 export function AboutTab() {
   const { paths, isLoading: configLoading } = useConfig();
+  const [updatePreferences, setUpdatePreferences] = useUpdatePreferences();
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [versionLoading, setVersionLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch("/api/version")
+    setVersionLoading(true);
+    apiFetch(`/api/version?channel=${updatePreferences.channel}`)
       .then((res) => res.json())
       .then(setVersionInfo)
       .catch(() => {})
       .finally(() => setVersionLoading(false));
-  }, []);
+  }, [updatePreferences.channel]);
 
   const isLoading = configLoading || versionLoading;
 
@@ -60,7 +72,68 @@ export function AboutTab() {
                     Update available: v{versionInfo.latest}
                   </Badge>
                 )}
+                {versionInfo?.channel === "dev" && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Dev channel
+                  </Badge>
+                )}
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Updates */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <h4 className="text-sm font-semibold">Updates</h4>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm">Auto-update</p>
+                <p className="text-xs text-muted-foreground">
+                  Download in background and apply on next start
+                </p>
+              </div>
+              <Switch
+                checked={updatePreferences.autoUpdate}
+                onCheckedChange={(checked) =>
+                  setUpdatePreferences((prev) => ({
+                    ...prev,
+                    autoUpdate: checked,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm">Update Channel</p>
+              <Select
+                value={updatePreferences.channel}
+                onValueChange={(value) =>
+                  setUpdatePreferences((prev) => ({
+                    ...prev,
+                    channel: value === "dev" ? "dev" : "stable",
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Select channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stable">stable</SelectItem>
+                  <SelectItem value="dev">dev</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The dev channel tracks `main` and may be less stable.
+              </p>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              Mode: {updatePreferences.autoUpdate ? "auto-download" : "manual"} ·
+              Channel: {updatePreferences.channel}
             </div>
           </div>
         </CardContent>

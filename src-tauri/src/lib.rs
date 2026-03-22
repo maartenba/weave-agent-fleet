@@ -1,6 +1,10 @@
+use std::fs::{create_dir_all, read, remove_file, write};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
-use serde::Serialize;
+use reqwest::Url;
+use semver::Version;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -26,6 +30,20 @@ struct TrayState {
 /// it even if the Rust event fires before the JS listener is registered.
 struct PendingUpdateState {
     payload: Mutex<Option<UpdateAvailablePayload>>,
+    staged_payload: Mutex<Option<UpdateAvailablePayload>>,
+    download_in_progress: Mutex<bool>,
+    download_generation: Mutex<u64>,
+}
+
+/// Managed state holding updater preferences mirrored from client settings.
+struct UpdatePreferencesState {
+    prefs: Mutex<UpdatePreferences>,
+}
+
+#[derive(Clone, Deserialize)]
+struct UpdatePreferences {
+    auto_update: bool,
+    channel: String,
 }
 
 /// Payload emitted to the frontend when an update is available.
@@ -44,6 +62,123 @@ struct UpdateProgressPayload {
     total: Option<u64>,
 }
 
+#[derive(Clone, Serialize)]
+struct UpdateStatePayload {
+    channel: String,
+    auto_update: bool,
+    update_available: Option<UpdateAvailablePayload>,
+    download_in_progress: bool,
+    update_ready_for_restart: bool,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+struct StagedUpdateMetadata {
+    version: String,
+    channel: String,
+}
+
+const STAGED_UPDATE_BYTES_FILE: &str = "staged-update.bin";
+const STAGED_UPDATE_META_FILE: &str = "staged-update.json";
+const STABLE_UPDATE_ENDPOINT: &str = "https://github.com/pgermishuys/weave-agent-fleet/releases/download/v{{current_version}}/latest.json";
+const DEV_UPDATE_ENDPOINT: &str = "https://github.com/pgermishuys/weave-agent-fleet/releases/download/dev/latest.json";
+
+fn normalize_channel(channel: &str) -> Option<&'static str> {
+    match channel {
+        "stable" => Some("stable"),
+        "dev" => Some("dev"),
+        _ => None,
+    }
+}
+
+fn endpoint_for_channel(channel: &str) -> Result<Url, String> {
+    let endpoint = match normalize_channel(channel) {
+        Some("dev") => DEV_UPDATE_ENDPOINT,
+        Some("stable") => STABLE_UPDATE_ENDPOINT,
+        _ => return Err(format!("Unsupported update channel: {}", channel)),
+    };
+
+    Url::parse(endpoint).map_err(|e| format!("Invalid updater endpoint: {}", e))
+}
+
+fn should_update_for_channel(
+    channel: &str,
+    current: &Version,
+    remote: &tauri_plugin_updater::RemoteRelease,
+) -> bool {
+    if remote.version > *current {
+        return true;
+    }
+
+    let same_core = current.major == remote.version.major
+        && current.minor == remote.version.minor
+        && current.patch == remote.version.patch;
+
+    match channel {
+        "dev" => {
+            if same_core && current.pre.is_empty() && !remote.version.pre.is_empty() {
+                return true;
+            }
+            remote.version > *current
+        }
+        "stable" => same_core && !current.pre.is_empty() && remote.version.pre.is_empty(),
+        _ => false,
+    }
+}
+
+fn build_updater_for_channel(
+    app: &tauri::AppHandle,
+    channel: &str,
+) -> Result<tauri_plugin_updater::Updater, String> {
+    let normalized = normalize_channel(channel)
+        .ok_or_else(|| format!("Unsupported update channel: {}", channel))?;
+    let endpoint = endpoint_for_channel(normalized)?;
+
+    app.updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(|e| format!("Failed to configure updater endpoint: {}", e))?
+        .version_comparator(move |current, remote| {
+            should_update_for_channel(normalized, &current, &remote)
+        })
+        .build()
+        .map_err(|e| format!("Failed to build updater: {}", e))
+}
+
+fn staged_metadata(app: &tauri::AppHandle) -> Result<Option<StagedUpdateMetadata>, String> {
+    let (_bytes_path, meta_path) = staged_update_paths(app)?;
+    if !meta_path.exists() {
+        return Ok(None);
+    }
+
+    let metadata = read(&meta_path).map_err(|e| format!("Failed to read staged metadata: {}", e))?;
+    let parsed = serde_json::from_slice::<StagedUpdateMetadata>(&metadata)
+        .map_err(|e| format!("Failed to parse staged metadata: {}", e))?;
+    Ok(Some(parsed))
+}
+
+fn staged_update_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create app data dir: {}", e))?;
+    Ok((
+        app_data_dir.join(STAGED_UPDATE_BYTES_FILE),
+        app_data_dir.join(STAGED_UPDATE_META_FILE),
+    ))
+}
+
+fn clear_staged_update_artifacts(app: &tauri::AppHandle) -> Result<(), String> {
+    let (bytes_path, meta_path) = staged_update_paths(app)?;
+    if bytes_path.exists() {
+        remove_file(&bytes_path)
+            .map_err(|e| format!("Failed to remove staged update bytes: {}", e))?;
+    }
+    if meta_path.exists() {
+        remove_file(&meta_path).map_err(|e| format!("Failed to remove staged metadata: {}", e))?;
+    }
+    Ok(())
+}
+
 /// Tauri command: returns any pending update that was discovered at startup.
 /// The frontend calls this on mount to avoid the event-delivery race condition.
 #[tauri::command]
@@ -51,11 +186,231 @@ fn check_for_update(state: tauri::State<'_, PendingUpdateState>) -> Option<Updat
     state.payload.lock().unwrap().clone()
 }
 
+#[tauri::command]
+fn set_update_preferences(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, UpdatePreferencesState>,
+    pending_state: tauri::State<'_, PendingUpdateState>,
+    auto_update: bool,
+    channel: String,
+) -> Result<(), String> {
+    let normalized = normalize_channel(&channel)
+        .ok_or_else(|| format!("Unsupported update channel: {}", channel))?;
+    let mut prefs = state.prefs.lock().unwrap();
+    let channel_changed = prefs.channel != normalized;
+    prefs.auto_update = auto_update;
+    prefs.channel = normalized.to_string();
+
+    if channel_changed {
+        let mut generation = pending_state.download_generation.lock().unwrap();
+        *generation += 1;
+        *pending_state.payload.lock().unwrap() = None;
+        *pending_state.staged_payload.lock().unwrap() = None;
+        clear_staged_update_artifacts(&app)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_update_state(
+    pending_state: tauri::State<'_, PendingUpdateState>,
+    prefs_state: tauri::State<'_, UpdatePreferencesState>,
+) -> UpdateStatePayload {
+    let prefs = prefs_state.prefs.lock().unwrap().clone();
+    let update_available = pending_state.payload.lock().unwrap().clone();
+    let download_in_progress = *pending_state.download_in_progress.lock().unwrap();
+    let update_ready_for_restart = pending_state.staged_payload.lock().unwrap().is_some();
+
+    UpdateStatePayload {
+        channel: prefs.channel,
+        auto_update: prefs.auto_update,
+        update_available,
+        download_in_progress,
+        update_ready_for_restart,
+    }
+}
+
+async fn check_for_updates_internal(
+    app: &tauri::AppHandle,
+    pending_state: &PendingUpdateState,
+    channel: &str,
+) -> Result<Option<UpdateAvailablePayload>, String> {
+    let updater = build_updater_for_channel(app, channel)?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let payload = UpdateAvailablePayload {
+                version: update.version.clone(),
+                current_version: update.current_version.clone(),
+            };
+            *pending_state.payload.lock().unwrap() = Some(payload.clone());
+            let _ = app.emit("update-available", payload.clone());
+            Ok(Some(payload))
+        }
+        Ok(None) => {
+            *pending_state.payload.lock().unwrap() = None;
+            Ok(None)
+        }
+        Err(e) => Err(format!("Update check failed: {}", e)),
+    }
+}
+
+async fn download_update_internal(
+    app: &tauri::AppHandle,
+    pending_state: &PendingUpdateState,
+    prefs_state: &UpdatePreferencesState,
+) -> Result<UpdateAvailablePayload, String> {
+    {
+        let mut download_in_progress = pending_state.download_in_progress.lock().unwrap();
+        if *download_in_progress {
+            return Err("Update download already in progress".to_string());
+        }
+        *download_in_progress = true;
+    }
+
+    let download_generation = *pending_state.download_generation.lock().unwrap();
+
+    let is_invalidated = || {
+        let current_generation = *pending_state.download_generation.lock().unwrap();
+        current_generation != download_generation
+    };
+
+    if is_invalidated() {
+        *pending_state.download_in_progress.lock().unwrap() = false;
+        return Err("Update download invalidated before start".to_string());
+    }
+
+    let result = async {
+        let channel = prefs_state.prefs.lock().unwrap().channel.clone();
+        let updater = build_updater_for_channel(app, &channel)?;
+        let update = updater
+            .check()
+            .await
+            .map_err(|e| format!("Update check failed: {}", e))?
+            .ok_or_else(|| "No update available".to_string())?;
+
+        let payload = UpdateAvailablePayload {
+            version: update.version.clone(),
+            current_version: update.current_version.clone(),
+        };
+
+        let progress_handle = app.clone();
+        let mut bytes_downloaded: u64 = 0;
+        let bytes = update
+            .download(
+                move |chunk_size, total| {
+                    bytes_downloaded += chunk_size as u64;
+                    let _ = progress_handle.emit(
+                        "update-download-progress",
+                        UpdateProgressPayload {
+                            downloaded: bytes_downloaded,
+                            total,
+                        },
+                    );
+                },
+                || {},
+            )
+            .await
+            .map_err(|e| format!("Update download failed: {}", e))?;
+
+        if is_invalidated() || prefs_state.prefs.lock().unwrap().channel != channel {
+            return Err("Update download invalidated during transfer".to_string());
+        }
+
+        let (bytes_path, meta_path) = staged_update_paths(app)?;
+        write(&bytes_path, &bytes)
+            .map_err(|e| format!("Failed to persist staged update: {}", e))?;
+
+        let prefs = prefs_state.prefs.lock().unwrap().clone();
+        let metadata = StagedUpdateMetadata {
+            version: payload.version.clone(),
+            channel: prefs.channel,
+        };
+        let metadata_json = serde_json::to_vec(&metadata)
+            .map_err(|e| format!("Failed to encode metadata: {}", e))?;
+        write(&meta_path, metadata_json)
+            .map_err(|e| format!("Failed to persist staged metadata: {}", e))?;
+
+        if is_invalidated() || prefs_state.prefs.lock().unwrap().channel != channel {
+            clear_staged_update_artifacts(app)?;
+            return Err("Update download invalidated before staging".to_string());
+        }
+
+        *pending_state.staged_payload.lock().unwrap() = Some(payload.clone());
+        let _ = app.emit("update-ready-for-restart", payload.clone());
+
+        Ok::<UpdateAvailablePayload, String>(payload)
+    }
+    .await;
+
+    *pending_state.download_in_progress.lock().unwrap() = false;
+    result
+}
+
+async fn apply_staged_update_internal(
+    app: &tauri::AppHandle,
+    pending_state: &PendingUpdateState,
+) -> Result<bool, String> {
+    let (bytes_path, _meta_path) = staged_update_paths(app)?;
+    if !bytes_path.exists() {
+        return Ok(false);
+    }
+
+    let bytes = read(&bytes_path).map_err(|e| format!("Failed to read staged update bytes: {}", e))?;
+    let metadata = staged_metadata(app)?.ok_or_else(|| "Missing staged update metadata".to_string())?;
+    let updater = build_updater_for_channel(app, &metadata.channel)?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Update check failed during apply: {}", e))?
+        .ok_or_else(|| "No update available for staged apply".to_string())?;
+
+    update
+        .install(&bytes)
+        .map_err(|e| format!("Failed to install staged update: {}", e))?;
+
+    *pending_state.staged_payload.lock().unwrap() = None;
+    *pending_state.payload.lock().unwrap() = None;
+    clear_staged_update_artifacts(app)?;
+    Ok(true)
+}
+
+#[tauri::command]
+async fn check_for_updates(
+    app: tauri::AppHandle,
+    pending_state: tauri::State<'_, PendingUpdateState>,
+    prefs_state: tauri::State<'_, UpdatePreferencesState>,
+) -> Result<Option<UpdateAvailablePayload>, String> {
+    let channel = prefs_state.prefs.lock().unwrap().channel.clone();
+    check_for_updates_internal(&app, &pending_state, &channel).await
+}
+
+#[tauri::command]
+async fn download_update(
+    app: tauri::AppHandle,
+    pending_state: tauri::State<'_, PendingUpdateState>,
+    prefs_state: tauri::State<'_, UpdatePreferencesState>,
+) -> Result<UpdateAvailablePayload, String> {
+    download_update_internal(&app, &pending_state, &prefs_state).await
+}
+
+#[tauri::command]
+async fn apply_staged_update(
+    app: tauri::AppHandle,
+    pending_state: tauri::State<'_, PendingUpdateState>,
+) -> Result<bool, String> {
+    apply_staged_update_internal(&app, &pending_state).await
+}
+
 /// Tauri command: download + install the available update, then restart.
 /// The frontend invokes this when the user clicks "Install Update".
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let channel = app
+        .try_state::<UpdatePreferencesState>()
+        .map(|state| state.prefs.lock().unwrap().channel.clone())
+        .unwrap_or_else(|| "stable".to_string());
+    let updater = build_updater_for_channel(&app, &channel)?;
     let update = updater
         .check()
         .await
@@ -118,7 +473,15 @@ fn check_opencode_available() -> bool {
 pub fn run() {
     tauri::Builder::default()
         // --- Tauri commands ---
-        .invoke_handler(tauri::generate_handler![check_for_update, install_update])
+        .invoke_handler(tauri::generate_handler![
+            check_for_update,
+            set_update_preferences,
+            get_update_state,
+            check_for_updates,
+            download_update,
+            apply_staged_update,
+            install_update
+        ])
         // --- Plugins (must be registered before setup) ---
         .plugin(
             tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -145,6 +508,15 @@ pub fn run() {
             // Manage pending update state (for frontend pull-based check)
             app.manage(PendingUpdateState {
                 payload: Mutex::new(None),
+                staged_payload: Mutex::new(None),
+                download_in_progress: Mutex::new(false),
+                download_generation: Mutex::new(0),
+            });
+            app.manage(UpdatePreferencesState {
+                prefs: Mutex::new(UpdatePreferences {
+                    auto_update: false,
+                    channel: "stable".to_string(),
+                }),
             });
 
             // (b) Find free port
@@ -340,27 +712,44 @@ pub fn run() {
                 }
             });
 
-            // (g) Auto-update check (delayed 5s after startup)
+            // (g) Apply staged update on startup, then check for updates.
             let update_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                match update_handle.updater() {
-                    Ok(updater) => match updater.check().await {
-                        Ok(Some(update)) => {
-                            println!(
-                                "[weave-fleet] Update available: {}",
-                                update.version
-                            );
-                            let payload = UpdateAvailablePayload {
-                                version: update.version.clone(),
-                                current_version: update.current_version.clone(),
-                            };
-                            // Store for pull-based retrieval by the frontend
-                            if let Some(state) = update_handle.try_state::<PendingUpdateState>() {
-                                *state.payload.lock().unwrap() = Some(payload.clone());
+                if let Some(pending_state) = update_handle.try_state::<PendingUpdateState>() {
+                    match apply_staged_update_internal(&update_handle, &pending_state).await {
+                        Ok(true) => {
+                            println!("[weave-fleet] Applied staged update, restarting...");
+                            update_handle.restart();
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            eprintln!("[weave-fleet] Staged update apply failed: {}", e);
+                        }
+                    }
+
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                    let channel = update_handle
+                        .try_state::<UpdatePreferencesState>()
+                        .map(|state| state.prefs.lock().unwrap().channel.clone())
+                        .unwrap_or_else(|| "stable".to_string());
+
+                    match check_for_updates_internal(&update_handle, &pending_state, &channel).await {
+                        Ok(Some(payload)) => {
+                            println!("[weave-fleet] Update available: {}", payload.version);
+                            if let Some(prefs_state) =
+                                update_handle.try_state::<UpdatePreferencesState>()
+                            {
+                                let auto_update = prefs_state.prefs.lock().unwrap().auto_update;
+                                if auto_update {
+                                    if let Err(e) =
+                                        download_update_internal(&update_handle, &pending_state, &prefs_state)
+                                            .await
+                                    {
+                                        eprintln!("[weave-fleet] Auto-download failed: {}", e);
+                                    }
+                                }
                             }
-                            // Also emit for any already-registered listeners
-                            let _ = update_handle.emit("update-available", payload);
                         }
                         Ok(None) => {
                             println!("[weave-fleet] No update available");
@@ -368,10 +757,9 @@ pub fn run() {
                         Err(e) => {
                             eprintln!("[weave-fleet] Update check failed: {}", e);
                         }
-                    },
-                    Err(e) => {
-                        eprintln!("[weave-fleet] Updater not available: {}", e);
                     }
+                } else {
+                    eprintln!("[weave-fleet] Pending update state unavailable");
                 }
             });
 
@@ -399,4 +787,45 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_update_for_channel;
+    use reqwest::Url;
+    use semver::Version;
+    use tauri_plugin_updater::{ReleaseManifestPlatform, RemoteRelease, RemoteReleaseInner};
+
+    fn release(version: &str) -> RemoteRelease {
+        RemoteRelease {
+            version: Version::parse(version).unwrap(),
+            notes: None,
+            pub_date: None,
+            data: RemoteReleaseInner::Dynamic(ReleaseManifestPlatform {
+                url: Url::parse("https://example.com/update.zip").unwrap(),
+                signature: "sig".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn dev_channel_accepts_same_core_prerelease_from_stable() {
+        let current = Version::parse("0.11.3").unwrap();
+        let remote = release("0.11.3-dev.42");
+        assert!(should_update_for_channel("dev", &current, &remote));
+    }
+
+    #[test]
+    fn stable_channel_accepts_same_core_release_from_dev() {
+        let current = Version::parse("0.11.3-dev.42").unwrap();
+        let remote = release("0.11.3");
+        assert!(should_update_for_channel("stable", &current, &remote));
+    }
+
+    #[test]
+    fn stable_channel_rejects_older_release() {
+        let current = Version::parse("0.11.4-dev.1").unwrap();
+        let remote = release("0.11.3");
+        assert!(!should_update_for_channel("stable", &current, &remote));
+    }
 }

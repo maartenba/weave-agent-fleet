@@ -3,8 +3,12 @@ import { join } from "path";
 
 const GITHUB_RELEASES_URL =
   "https://api.github.com/repos/pgermishuys/weave-agent-fleet/releases/latest";
+const DEV_UPDATER_URL =
+  "https://github.com/pgermishuys/weave-agent-fleet/releases/download/dev/latest.json";
 const CHECK_TIMEOUT_MS = 3000;
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
+
+export type UpdateChannel = "stable" | "dev";
 
 export interface VersionInfo {
   current: string;
@@ -13,8 +17,8 @@ export interface VersionInfo {
   checkedAt: Date | null;
 }
 
-let cachedVersionInfo: VersionInfo | null = null;
-let lastCheckTime = 0;
+const cachedVersionInfoByChannel = new Map<UpdateChannel, VersionInfo>();
+const lastCheckTimeByChannel = new Map<UpdateChannel, number>();
 
 /**
  * Returns the current version from the VERSION file (production install)
@@ -48,11 +52,22 @@ export function getCurrentVersion(): string | null {
 /**
  * Compares two semver version strings. Returns true if `latest` is newer than `current`.
  */
-function isNewer(current: string, latest: string): boolean {
+function isNewer(
+  current: string,
+  latest: string,
+  channel: UpdateChannel,
+): boolean {
   const parseSemver = (v: string) => {
     const clean = v.replace(/^v/, "");
-    const parts = clean.split(".").map(Number);
-    return { major: parts[0] || 0, minor: parts[1] || 0, patch: parts[2] || 0 };
+    const [core, prerelease = ""] = clean.split("-");
+    const parts = core.split(".").map(Number);
+    return {
+      major: parts[0] || 0,
+      minor: parts[1] || 0,
+      patch: parts[2] || 0,
+      prerelease,
+      raw: clean,
+    };
   };
 
   const c = parseSemver(current);
@@ -60,14 +75,44 @@ function isNewer(current: string, latest: string): boolean {
 
   if (l.major !== c.major) return l.major > c.major;
   if (l.minor !== c.minor) return l.minor > c.minor;
-  return l.patch > c.patch;
+  if (l.patch !== c.patch) return l.patch > c.patch;
+
+  if (channel === "dev") {
+    if (!c.prerelease && l.prerelease) return true;
+    if (c.prerelease && !l.prerelease) return false;
+    if (!c.prerelease && !l.prerelease) return false;
+
+    const currentPre = c.prerelease.split(".");
+    const latestPre = l.prerelease.split(".");
+    for (let i = 0; i < Math.max(currentPre.length, latestPre.length); i += 1) {
+      const currentPart = currentPre[i] ?? "";
+      const latestPart = latestPre[i] ?? "";
+      if (currentPart === latestPart) continue;
+
+      const currentNum = Number(currentPart);
+      const latestNum = Number(latestPart);
+      if (!Number.isNaN(currentNum) && !Number.isNaN(latestNum)) {
+        return latestNum > currentNum;
+      }
+
+      return latestPart > currentPart;
+    }
+
+    return false;
+  }
+
+  if (channel === "stable") {
+    return Boolean(c.prerelease && !l.prerelease);
+  }
+
+  return false;
 }
 
 /**
  * Fetches the latest version from GitHub Releases API.
  * Returns null on any error (network, parse, timeout).
  */
-async function fetchLatestVersion(): Promise<string | null> {
+async function fetchStableLatestVersion(): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
@@ -91,11 +136,32 @@ async function fetchLatestVersion(): Promise<string | null> {
   }
 }
 
+async function fetchDevLatestVersion(): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+
+    const response = await fetch(DEV_UPDATER_URL, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as { version?: string };
+    return data.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Returns cached version info, fetching from GitHub if the cache is stale.
  * Never blocks — returns immediately if a check is already in progress.
  */
-export async function getVersionInfo(): Promise<VersionInfo> {
+export async function getVersionInfo(channel: UpdateChannel = "stable"): Promise<VersionInfo> {
   const current = getCurrentVersion();
 
   if (!current) {
@@ -103,20 +169,25 @@ export async function getVersionInfo(): Promise<VersionInfo> {
   }
 
   const now = Date.now();
-  if (cachedVersionInfo && now - lastCheckTime < CACHE_DURATION_MS) {
-    return cachedVersionInfo;
+  const cachedInfo = cachedVersionInfoByChannel.get(channel);
+  const lastCheckedAt = lastCheckTimeByChannel.get(channel) ?? 0;
+  if (cachedInfo && now - lastCheckedAt < CACHE_DURATION_MS) {
+    return cachedInfo;
   }
 
-  const latest = await fetchLatestVersion();
+  const latest =
+    channel === "dev"
+      ? await fetchDevLatestVersion()
+      : await fetchStableLatestVersion();
   const info: VersionInfo = {
     current,
     latest,
-    updateAvailable: latest !== null && isNewer(current, latest),
+    updateAvailable: latest !== null && isNewer(current, latest, channel),
     checkedAt: new Date(),
   };
 
-  cachedVersionInfo = info;
-  lastCheckTime = now;
+  cachedVersionInfoByChannel.set(channel, info);
+  lastCheckTimeByChannel.set(channel, now);
 
   return info;
 }

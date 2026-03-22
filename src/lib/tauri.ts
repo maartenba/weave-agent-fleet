@@ -40,3 +40,28 @@ export async function tauriInvoke<T>(
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(command, args);
 }
+
+export interface TauriUpdateState {
+  channel: "stable" | "dev";
+  auto_update: boolean;
+  update_available: {
+    version: string;
+    current_version: string;
+  } | null;
+  download_in_progress: boolean;
+  update_ready_for_restart: boolean;
+}
+
+export async function tauriSetUpdatePreferences(
+  autoUpdate: boolean,
+  channel: "stable" | "dev",
+): Promise<void> {
+  await tauriInvoke("set_update_preferences", {
+    auto_update: autoUpdate,
+    channel,
+  });
+}
+
+export async function tauriGetUpdateState(): Promise<TauriUpdateState> {
+  return tauriInvoke<TauriUpdateState>("get_update_state");
+}
