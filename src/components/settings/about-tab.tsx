@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Loader2, FolderOpen, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,14 +30,22 @@ export function AboutTab() {
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [versionLoading, setVersionLoading] = useState(true);
 
+  const fetchVersion = useCallback(async (channel: string) => {
+    try {
+      setVersionLoading(true);
+      const res = await apiFetch(`/api/version?channel=${channel}`);
+      const data: VersionInfo = await res.json();
+      setVersionInfo(data);
+    } catch {
+      // ignore fetch errors
+    } finally {
+      setVersionLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    setVersionLoading(true);
-    apiFetch(`/api/version?channel=${updatePreferences.channel}`)
-      .then((res) => res.json())
-      .then(setVersionInfo)
-      .catch(() => {})
-      .finally(() => setVersionLoading(false));
-  }, [updatePreferences.channel]);
+    fetchVersion(updatePreferences.channel);
+  }, [fetchVersion, updatePreferences.channel]);
 
   const isLoading = configLoading || versionLoading;
 

@@ -155,8 +155,11 @@ const tauriConf = JSON.parse(readFileSync(tauriConfPath, "utf-8"));
 
 let channelVersion = pkg.version;
 if (updateChannel === "dev") {
-  const suffix = devBuildId || `${Date.now()}`;
-  channelVersion = `${pkg.version}-dev.${suffix}`;
+  const rawSuffix = devBuildId || `${Date.now()}`;
+  // MSI pre-release identifiers must be numeric and ≤ 65535.
+  // Modulo the build ID to stay within that limit.
+  const suffix = Number(rawSuffix) ? (Number(rawSuffix) % 65536) : rawSuffix;
+  channelVersion = `${pkg.version}-${suffix}`;
 }
 
 const stableEndpoint =
