@@ -1,17 +1,23 @@
 "use client";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronDown, Cpu } from "lucide-react";
 import type { AvailableProvider } from "@/lib/api-types";
-import { ChevronDownIcon, Cpu } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface SelectedModel {
   providerID: string;
@@ -31,11 +37,19 @@ function modelValue(providerID: string, modelID: string): string {
   return `${providerID}::${modelID}`;
 }
 
-function parseModelValue(value: string): SelectedModel | null {
+export function parseModelValue(value: string): SelectedModel | null {
   if (value === DEFAULT_VALUE) return null;
   const sep = value.indexOf("::");
   if (sep === -1) return null;
   return { providerID: value.slice(0, sep), modelID: value.slice(sep + 2) };
+}
+
+export function composeSearchValue(
+  providerName: string,
+  modelName: string,
+  modelId: string
+): string {
+  return `${providerName} ${modelName} ${modelId}`;
 }
 
 export function ModelSelector({
@@ -44,6 +58,8 @@ export function ModelSelector({
   onSelect,
   disabled,
 }: ModelSelectorProps) {
+  const [open, setOpen] = useState(false);
+
   const currentValue = selectedModel
     ? modelValue(selectedModel.providerID, selectedModel.modelID)
     : DEFAULT_VALUE;
@@ -60,13 +76,9 @@ export function ModelSelector({
     }
   }
 
-  function handleValueChange(value: string) {
-    onSelect(parseModelValue(value));
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <Button
           variant="outline"
           size="sm"
@@ -75,36 +87,69 @@ export function ModelSelector({
         >
           <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="truncate">{label}</span>
-          <ChevronDownIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
-        <DropdownMenuRadioGroup
-          value={currentValue}
-          onValueChange={handleValueChange}
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        {/* Default option — outside Command so it's never filtered by search */}
+        <div
+          role="option"
+          aria-selected={currentValue === DEFAULT_VALUE}
+          className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-accent rounded-sm mx-1 mt-1"
+          onClick={() => {
+            onSelect(null);
+            setOpen(false);
+          }}
         >
-          <DropdownMenuRadioItem value={DEFAULT_VALUE} className="text-xs">
-            Default
-          </DropdownMenuRadioItem>
-          {providers.map((provider) => (
-            <div key={provider.id}>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1">
-                {provider.name}
-              </DropdownMenuLabel>
-              {provider.models.map((model) => (
-                <DropdownMenuRadioItem
-                  key={model.id}
-                  value={modelValue(provider.id, model.id)}
-                  className="text-xs"
-                >
-                  {model.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </div>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <Check
+            className={cn(
+              "h-3 w-3 shrink-0",
+              currentValue === DEFAULT_VALUE ? "opacity-100" : "opacity-0"
+            )}
+          />
+          Default
+        </div>
+        <div className="bg-border -mx-1 h-px my-1" />
+        <Command>
+          <CommandInput placeholder="Search models…" />
+          <CommandList className="max-h-72 thin-scrollbar">
+            <CommandEmpty>No matching models</CommandEmpty>
+            {providers.map((provider) => (
+              <CommandGroup key={provider.id} heading={provider.name}>
+                {provider.models.map((model) => {
+                  const value = modelValue(provider.id, model.id);
+                  return (
+                    <CommandItem
+                      key={model.id}
+                      value={composeSearchValue(
+                        provider.name,
+                        model.name,
+                        model.id
+                      )}
+                      onSelect={() => {
+                        onSelect({
+                          providerID: provider.id,
+                          modelID: model.id,
+                        });
+                        setOpen(false);
+                      }}
+                      className="text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          "h-3 w-3 shrink-0",
+                          currentValue === value ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {model.name}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
