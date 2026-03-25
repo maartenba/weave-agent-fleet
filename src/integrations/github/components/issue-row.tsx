@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, MessageSquare, Loader2 } from "lucide-react";
+import { ChevronRight, MessageSquare, Loader2, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGitHubComments } from "../hooks/use-github-comments";
 import { CreateSessionButton } from "./create-session-button";
@@ -104,7 +104,17 @@ export function IssueRow({ issue, owner, repo }: IssueRowProps) {
           <span className="text-xs text-muted-foreground">
             {formatAge(issue.created_at)}
           </span>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+            <a
+              href={issue.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Open on GitHub"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Github className="h-3.5 w-3.5" />
+            </a>
             <CreateSessionButton contextSource={contextSource} />
           </div>
         </div>
