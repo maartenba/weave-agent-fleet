@@ -10,12 +10,12 @@ import { usePersistedState } from "@/hooks/use-persisted-state";
 import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useGitHubIssues } from "./hooks/use-github-issues";
 import { useGitHubPulls } from "./hooks/use-github-pulls";
-import type { CachedGitHubRepo } from "./types";
+import { DEFAULT_ISSUE_FILTER, type CachedGitHubRepo } from "./types";
 import { GITHUB_LAST_REPO_KEY } from "./storage";
 
 function GitHubBrowserInner({ repo }: { repo: CachedGitHubRepo }) {
   const [owner, repoName] = repo.full_name.split("/");
-  const { issues } = useGitHubIssues(owner, repoName, { state: "open" });
+  const { issues } = useGitHubIssues(owner, repoName, DEFAULT_ISSUE_FILTER);
   const { pulls } = useGitHubPulls(owner, repoName, { state: "open" });
 
   return (

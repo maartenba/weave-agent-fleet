@@ -18,6 +18,14 @@ export async function GET(
   const { owner, repo } = await params;
   const { searchParams } = new URL(request.url);
 
+  // Only forward optional filter params when they are present
+  const labels = searchParams.get("labels") ?? undefined;
+  const milestone = searchParams.get("milestone") ?? undefined;
+  const assignee = searchParams.get("assignee") ?? undefined;
+  // "author" in the filter state maps to "creator" in the GitHub API
+  const creator = searchParams.get("creator") ?? undefined;
+  const type = searchParams.get("type") ?? undefined;
+
   const result = await githubFetch<GitHubIssue[]>(
     `/repos/${owner}/${repo}/issues`,
     token,
@@ -28,6 +36,12 @@ export async function GET(
         per_page: searchParams.get("per_page") ?? "30",
         sort: searchParams.get("sort") ?? "updated",
         direction: searchParams.get("direction") ?? undefined,
+        // Optional filter params — only forwarded when present
+        labels,
+        milestone,
+        assignee,
+        creator,
+        type,
       },
     }
   );
