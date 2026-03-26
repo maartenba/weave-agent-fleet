@@ -109,6 +109,7 @@ export function AssigneeFilter({
                           isSelected ? "opacity-100" : "opacity-0"
                         )}
                       />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={user.avatar_url}
                         alt=""

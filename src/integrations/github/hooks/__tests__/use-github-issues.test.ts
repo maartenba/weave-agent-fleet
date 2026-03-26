@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ISSUE_FILTER, type IssueFilterState } from "../../types";
 
@@ -152,7 +152,7 @@ describe("useGitHubIssues", () => {
     apiFetchMock.mockResolvedValue(mockResponse([]));
 
     const useGitHubIssues = await loadUseGitHubIssues();
-    const { result, rerender } = renderHook(
+    const { rerender } = renderHook(
       ({ filter }) => useGitHubIssues("acme", "my-project", filter),
       { initialProps: { filter: DEFAULT_ISSUE_FILTER } }
     );

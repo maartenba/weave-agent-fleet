@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Search, Loader2 } from "lucide-react";
@@ -19,19 +19,16 @@ export function FilterExpressionField({
   isSearching,
 }: FilterExpressionFieldProps) {
   const serialized = serializeFilterExpression(filter);
-  const [localValue, setLocalValue] = useState(serialized);
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingValue, setEditingValue] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local value with external filter changes (when not editing)
-  useEffect(() => {
-    if (!isEditing) {
-      setLocalValue(serialized);
-    }
-  }, [serialized, isEditing]);
+  // When not editing, display the serialized filter expression directly.
+  // When editing, display the user's in-progress text.
+  const localValue = editingValue ?? serialized;
+  const isEditing = editingValue !== null;
 
   const commit = useCallback(() => {
-    setIsEditing(false);
+    setEditingValue(null);
     const parsed = parseFilterExpression(localValue);
     onChange(parsed);
   }, [localValue, onChange]);
@@ -44,8 +41,7 @@ export function FilterExpressionField({
         inputRef.current?.blur();
       } else if (e.key === "Escape") {
         e.preventDefault();
-        setLocalValue(serialized);
-        setIsEditing(false);
+        setEditingValue(null);
         inputRef.current?.blur();
       }
     },
@@ -54,8 +50,7 @@ export function FilterExpressionField({
 
   const handleClear = useCallback(() => {
     onChange({ ...DEFAULT_ISSUE_FILTER });
-    setLocalValue("");
-    setIsEditing(false);
+    setEditingValue(null);
   }, [onChange]);
 
   const hasFilters = serialized.length > 0;
@@ -73,10 +68,11 @@ export function FilterExpressionField({
         ref={inputRef}
         value={localValue}
         onChange={(e) => {
-          setLocalValue(e.target.value);
-          setIsEditing(true);
+          setEditingValue(e.target.value);
         }}
-        onFocus={() => setIsEditing(true)}
+        onFocus={() => {
+          if (editingValue === null) setEditingValue(serialized);
+        }}
         onBlur={commit}
         onKeyDown={handleKeyDown}
         placeholder="Filter issues… e.g. is:open label:bug author:octocat"

@@ -56,12 +56,6 @@ export function createRepoMetadataCache<T>(config: CacheConfig<T>) {
     return cache.get(key) ?? defaultEntry<T>();
   }
 
-  function setEntry(key: string, patch: Partial<CacheEntry<T>>) {
-    const prev = getEntry(key);
-    cache.set(key, { ...prev, ...patch });
-    emitChange();
-  }
-
   function subscribe(callback: () => void) {
     listeners.add(callback);
     return () => {
