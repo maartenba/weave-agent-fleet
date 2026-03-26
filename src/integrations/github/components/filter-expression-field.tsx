@@ -25,7 +25,6 @@ export function FilterExpressionField({
   // When not editing, display the serialized filter expression directly.
   // When editing, display the user's in-progress text.
   const localValue = editingValue ?? serialized;
-  const isEditing = editingValue !== null;
 
   const commit = useCallback(() => {
     setEditingValue(null);

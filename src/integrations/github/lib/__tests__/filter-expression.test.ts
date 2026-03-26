@@ -171,6 +171,11 @@ describe("serializeFilterExpression", () => {
     expect(serializeFilterExpression(state)).toBe('label:"good first issue"');
   });
 
+  it("escapes backslashes and quotes in label values", () => {
+    const state = { ...DEFAULT_ISSUE_FILTER, labels: ['path\\to "file"'] };
+    expect(serializeFilterExpression(state)).toBe('label:"path\\\\to \\"file\\""');
+  });
+
   it("emits sort when non-default", () => {
     const state = { ...DEFAULT_ISSUE_FILTER, sort: "created" as const, direction: "asc" as const };
     expect(serializeFilterExpression(state)).toContain("sort:created-asc");

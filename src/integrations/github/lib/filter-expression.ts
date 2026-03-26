@@ -176,7 +176,7 @@ export function parseFilterExpression(expr: string): IssueFilterState {
  */
 function quoteIfNeeded(value: string): string {
   if (/[\s":]/.test(value)) {
-    return `"${value.replace(/"/g, '\\"')}"`;
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
   return value;
 }
