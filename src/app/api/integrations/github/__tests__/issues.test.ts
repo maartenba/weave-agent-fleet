@@ -114,4 +114,111 @@ describe("GET /api/integrations/github/repos/[owner]/[repo]/issues", () => {
     const body = await res.json();
     expect(body.error).toBe("API rate limit exceeded");
   });
+
+  it("ForwardsLabelsParamAsCommaSeparatedString", async () => {
+    mockGetConfig.mockReturnValue({ token: "ghp_test" });
+
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      headers: new Headers(),
+    } as Response);
+
+    const req = makeRequest(
+      "http://localhost/api/integrations/github/repos/acme/my-project/issues?labels=bug%2Cenhancement"
+    );
+    await GET(req, await makeParams("acme", "my-project"));
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("labels=bug%2Cenhancement"),
+      expect.any(Object)
+    );
+  });
+
+  it("ForwardsMilestoneParam", async () => {
+    mockGetConfig.mockReturnValue({ token: "ghp_test" });
+
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      headers: new Headers(),
+    } as Response);
+
+    const req = makeRequest(
+      "http://localhost/api/integrations/github/repos/acme/my-project/issues?milestone=1"
+    );
+    await GET(req, await makeParams("acme", "my-project"));
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("milestone=1"),
+      expect.any(Object)
+    );
+  });
+
+  it("ForwardsAssigneeParam", async () => {
+    mockGetConfig.mockReturnValue({ token: "ghp_test" });
+
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      headers: new Headers(),
+    } as Response);
+
+    const req = makeRequest(
+      "http://localhost/api/integrations/github/repos/acme/my-project/issues?assignee=octocat"
+    );
+    await GET(req, await makeParams("acme", "my-project"));
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("assignee=octocat"),
+      expect.any(Object)
+    );
+  });
+
+  it("ForwardsCreatorParam", async () => {
+    mockGetConfig.mockReturnValue({ token: "ghp_test" });
+
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      headers: new Headers(),
+    } as Response);
+
+    const req = makeRequest(
+      "http://localhost/api/integrations/github/repos/acme/my-project/issues?creator=alice"
+    );
+    await GET(req, await makeParams("acme", "my-project"));
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("creator=alice"),
+      expect.any(Object)
+    );
+  });
+
+  it("DoesNotForwardAbsentOptionalParams", async () => {
+    mockGetConfig.mockReturnValue({ token: "ghp_test" });
+
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+      headers: new Headers(),
+    } as Response);
+
+    const req = makeRequest(
+      "http://localhost/api/integrations/github/repos/acme/my-project/issues"
+    );
+    await GET(req, await makeParams("acme", "my-project"));
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).not.toContain("labels=");
+    expect(calledUrl).not.toContain("milestone=");
+    expect(calledUrl).not.toContain("assignee=");
+    expect(calledUrl).not.toContain("creator=");
+    expect(calledUrl).not.toContain("type=");
+  });
 });

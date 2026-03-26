@@ -10,6 +10,7 @@ import { IssueList } from "@/integrations/github/components/issue-list";
 import { PrList } from "@/integrations/github/components/pr-list";
 import { useGitHubIssues } from "@/integrations/github/hooks/use-github-issues";
 import { useGitHubPulls } from "@/integrations/github/hooks/use-github-pulls";
+import { DEFAULT_ISSUE_FILTER } from "@/integrations/github/types";
 
 interface PageProps {
   params: Promise<{ owner: string; repo: string }>;
@@ -22,7 +23,7 @@ export default function GitHubRepoPage({ params }: PageProps) {
 
   const ownerValue = isGitHubConnected ? owner : null;
   const repoValue = isGitHubConnected ? repo : null;
-  const { issues: openIssues } = useGitHubIssues(ownerValue, repoValue, { state: "open" });
+  const { issues: openIssues } = useGitHubIssues(ownerValue, repoValue, DEFAULT_ISSUE_FILTER);
   const { pulls: openPulls } = useGitHubPulls(ownerValue, repoValue, { state: "open" });
 
   return (

@@ -94,3 +94,55 @@ export interface CachedGitHubRepo {
   language: string | null;
   stargazers_count: number;
 }
+
+// ─── Issue Filter ─────────────────────────────────────────────────────────────
+
+export interface IssueFilterState {
+  state: "open" | "closed" | "all";
+  labels: string[];
+  /** Milestone title (user-friendly); mapped to number before API call */
+  milestone: string | null;
+  /** Username, "*" (any), or "none" (unassigned) */
+  assignee: string | null;
+  /** Issue creator username */
+  author: string | null;
+  /** Issue type name, "*" (any), or "none" */
+  type: string | null;
+  sort: "created" | "updated" | "comments";
+  direction: "asc" | "desc";
+  /** Free-text search query — switches to GitHub Search API when non-empty */
+  search: string;
+}
+
+export const DEFAULT_ISSUE_FILTER: IssueFilterState = {
+  state: "open",
+  labels: [],
+  milestone: null,
+  assignee: null,
+  author: null,
+  type: null,
+  sort: "updated",
+  direction: "desc",
+  search: "",
+};
+
+// ─── Metadata types for filter dropdowns ─────────────────────────────────────
+
+export interface GitHubLabel {
+  name: string;
+  color: string;
+  description: string | null;
+}
+
+export interface GitHubMilestone {
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  open_issues: number;
+  closed_issues: number;
+}
+
+export interface GitHubAssignee {
+  login: string;
+  avatar_url: string;
+}
