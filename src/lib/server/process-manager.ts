@@ -20,6 +20,7 @@ import { createServer, Socket } from "net";
 import { dirname, resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import { killProcessTree, killProcessTreeAsync } from "./process-kill";
+import { getProfileWorkspaceRoot, getProfilePortRange, getProfileName, getProfileDbPath } from "./profile";
 import {
   insertInstance,
   updateInstanceStatus,
@@ -226,8 +227,13 @@ export interface ManagedInstance {
   recovered: boolean;
 }
 
-const PORT_START = 4097;
-const PORT_END = 4200;
+/**
+ * Lazily evaluate the profile port range so that WEAVE_PROFILE can be set
+ * after module import (e.g. in tests) without freezing the wrong range.
+ */
+function getPortRange(): { start: number; end: number } {
+  return getProfilePortRange();
+}
 const SPAWN_TIMEOUT_MS = 30_000;
 const MAX_PORT_RETRIES = 5;
 
@@ -350,10 +356,8 @@ export function getAllowedRoots(): string[] {
   }
 
   // Always allow the Weave workspace root where worktree/clone directories
-  // are created (WEAVE_WORKSPACE_ROOT or ~/.weave/workspaces by default).
-  const weaveWsRoot = process.env.WEAVE_WORKSPACE_ROOT
-    ? resolve(process.env.WEAVE_WORKSPACE_ROOT)
-    : resolve(homedir(), ".weave", "workspaces");
+  // are created. Resolved via the profile module (respects WEAVE_WORKSPACE_ROOT override).
+  const weaveWsRoot = getProfileWorkspaceRoot();
 
   const seen = new Set<string>();
   const merged: string[] = [];
@@ -402,6 +406,7 @@ export function validateDirectory(directory: string): string {
 }
 
 export function allocatePort(): number {
+  const { start: PORT_START, end: PORT_END } = getPortRange();
   const cooldownMs =
     parseInt(process.env.WEAVE_PORT_COOLDOWN_MS ?? "", 10) || 60_000;
   const now = Date.now();
@@ -775,7 +780,8 @@ export function destroyAll(): void {
           const portMatch = localAddr.match(/:(\d+)$/);
           if (!portMatch) continue;
           const port = parseInt(portMatch[1], 10);
-          if (port < PORT_START || port > PORT_END) continue;
+          const { start, end } = getPortRange();
+          if (port < start || port > end) continue;
 
           const pid = cols[4];
           if (pid && /^\d+$/.test(pid) && pid !== "0") {
@@ -793,6 +799,14 @@ export function destroyAll(): void {
 // Guard: only run once across Turbopack module re-evaluations.
 if (!_g.__weaveInitDone) {
   _g.__weaveInitDone = true;
+
+  // Log the resolved profile configuration on startup
+  log.info("process-manager", "Profile configuration", {
+    profile: getProfileName(),
+    dbPath: getProfileDbPath(),
+    workspaceRoot: getProfileWorkspaceRoot(),
+    portRange: getProfilePortRange(),
+  });
 
   // This is intentionally fire-and-forget — callers await `_recoveryComplete` if they need to.
   recoverInstances().catch((err) => {

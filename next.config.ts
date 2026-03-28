@@ -25,6 +25,9 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: getAppVersion(),
     NEXT_PUBLIC_COMMIT_SHA: getGitCommitSha(),
+    // NEXT_PUBLIC_WEAVE_PROFILE — baked at build time as fallback; the
+    // /api/profile endpoint provides the authoritative runtime value.
+    NEXT_PUBLIC_WEAVE_PROFILE: process.env.WEAVE_PROFILE || "default",
     // NEXT_PUBLIC_API_BASE_URL — set at build time to point the frontend at
     // an external API server (e.g. "http://localhost:3000"). When unset or
     // empty, all fetch calls use relative URLs (same-origin / standalone mode).

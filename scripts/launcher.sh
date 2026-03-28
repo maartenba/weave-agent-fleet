@@ -19,8 +19,8 @@ fi
 
 CLI_JS="$INSTALL_DIR/app/cli.js"
 
-# Pre-parse --port flag before subcommand dispatch.
-# Strips --port <number> from the argument list and exports PORT.
+# Pre-parse --port and --profile flags before subcommand dispatch.
+# Strips them from the argument list and exports PORT / WEAVE_PROFILE.
 # This only affects the server-start path; subcommand args are preserved.
 # Remaining args are saved to numbered _WEAVE_ARGn variables (POSIX-safe)
 # and rebuilt into positional parameters after the loop.
@@ -42,6 +42,34 @@ _weave_collect_args() {
             ;;
         esac
         export PORT="$2"
+        shift 2
+        ;;
+      --profile)
+        if [ -z "${2:-}" ] || [ "${2#-}" != "$2" ]; then
+          echo "Error: --profile requires a profile name." >&2
+          echo "Usage: weave-fleet [--profile <name>]" >&2
+          exit 1
+        fi
+        # Validate: lowercase alphanumeric + hyphens, 1-32 chars, must start/end with alphanumeric
+        case "$2" in
+          *[!a-z0-9-]*)
+            echo "Error: --profile name must contain only lowercase alphanumeric characters and hyphens, got '$2'." >&2
+            exit 1
+            ;;
+          -*)
+            echo "Error: --profile name must start with an alphanumeric character, got '$2'." >&2
+            exit 1
+            ;;
+          *-)
+            echo "Error: --profile name must end with an alphanumeric character, got '$2'." >&2
+            exit 1
+            ;;
+        esac
+        if [ "${#2}" -gt 32 ]; then
+          echo "Error: --profile name must be 32 characters or fewer." >&2
+          exit 1
+        fi
+        export WEAVE_PROFILE="$2"
         shift 2
         ;;
       *)
@@ -112,7 +140,7 @@ case "${1:-}" in
     [ -f "$VERSION_FILE" ] && VERSION="$(cat "$VERSION_FILE")"
     echo "Weave Fleet v${VERSION}"
     echo ""
-    echo "Usage: weave-fleet [command] [--port <number>]"
+    echo "Usage: weave-fleet [command] [--port <number>] [--profile <name>]"
     echo ""
     echo "Commands:"
     echo "  (none)       Start the Weave Fleet server"
@@ -124,13 +152,19 @@ case "${1:-}" in
     echo "  help         Show this help message"
     echo ""
     echo "Options:"
-    echo "  --port <number>  Server port (overrides PORT env var, default: 3000)"
+    echo "  --port <number>    Server port (overrides PORT env var, default: 3000)"
+    echo "  --profile <name>   Named profile for data isolation (default: 'default')"
+    echo "                     Profile name: lowercase alphanumeric + hyphens, max 32 chars"
+    echo "                     e.g. --profile dev, --profile staging"
     echo ""
     echo "Environment variables:"
-    echo "  PORT             Server port (default: 3000)"
-    echo "  WEAVE_HOSTNAME   Server bind address (default: 0.0.0.0)"
-    echo "  WEAVE_DB_PATH    Database file path (default: ~/.weave/fleet.db)"
-    echo "  OPENCODE_BIN     Full path to opencode binary (if not on PATH)"
+    echo "  PORT                  Server port (default: 3000)"
+    echo "  WEAVE_PROFILE         Profile name (default: unset = 'default')"
+    echo "  WEAVE_HOSTNAME        Server bind address (default: 0.0.0.0)"
+    echo "  WEAVE_DB_PATH         Database file path (default: ~/.weave/fleet.db)"
+    echo "  WEAVE_WORKSPACE_ROOT  Workspace root dir (default: ~/.weave/workspaces)"
+    echo "  WEAVE_PORT_RANGE_START Override OpenCode port range base (escape hatch)"
+    echo "  OPENCODE_BIN          Full path to opencode binary (if not on PATH)"
     exit 0
     ;;
 esac
@@ -172,13 +206,31 @@ export NODE_ENV=production
 export PORT="${PORT:-3000}"
 export HOSTNAME="${WEAVE_HOSTNAME:-0.0.0.0}"
 
-# Ensure data directory exists
+# Ensure base data directory exists
 mkdir -p "${HOME}/.weave"
+
+# If a named profile is active, create its directory and wire derived env vars
+if [ -n "${WEAVE_PROFILE:-}" ] && [ "$WEAVE_PROFILE" != "default" ]; then
+  WEAVE_PROFILE_DIR="${HOME}/.weave/profiles/${WEAVE_PROFILE}"
+  mkdir -p "$WEAVE_PROFILE_DIR"
+  # Set derived vars only if not already explicitly set
+  if [ -z "${WEAVE_DB_PATH:-}" ]; then
+    export WEAVE_DB_PATH="${WEAVE_PROFILE_DIR}/fleet.db"
+  fi
+  if [ -z "${WEAVE_WORKSPACE_ROOT:-}" ]; then
+    export WEAVE_WORKSPACE_ROOT="${WEAVE_PROFILE_DIR}/workspaces"
+  fi
+fi
 
 VERSION="unknown"
 [ -f "$VERSION_FILE" ] && VERSION="$(cat "$VERSION_FILE")"
 
-echo "Weave Fleet v${VERSION} starting on http://localhost:${PORT}"
+# Build startup message — include profile name if non-default
+if [ -n "${WEAVE_PROFILE:-}" ] && [ "$WEAVE_PROFILE" != "default" ]; then
+  echo "Weave Fleet v${VERSION} [profile: ${WEAVE_PROFILE}] starting on http://localhost:${PORT}"
+else
+  echo "Weave Fleet v${VERSION} starting on http://localhost:${PORT}"
+fi
 
 # Forward signals to the Node.js process
 trap 'kill $NODE_PID 2>/dev/null; wait $NODE_PID 2>/dev/null; exit' INT TERM HUP

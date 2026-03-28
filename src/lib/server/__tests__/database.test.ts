@@ -1,7 +1,8 @@
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { getDb, _resetDbForTests } from "@/lib/server/database";
+import { getProfileDbPath } from "@/lib/server/profile";
 
 describe("database module", () => {
   beforeEach(() => {
@@ -13,6 +14,7 @@ describe("database module", () => {
   afterEach(() => {
     _resetDbForTests();
     delete process.env.WEAVE_DB_PATH;
+    delete process.env.WEAVE_PROFILE;
   });
 
   it("CreatesDbFileAndReturnsInstance", () => {
@@ -86,5 +88,31 @@ describe("database module", () => {
     // After reset, getting db again creates a fresh instance
     const db2 = getDb();
     expect(db2).not.toBe(db);
+  });
+});
+
+describe("database module — profile awareness", () => {
+  afterEach(() => {
+    _resetDbForTests();
+    delete process.env.WEAVE_DB_PATH;
+    delete process.env.WEAVE_PROFILE;
+  });
+
+  it("UsesProfileDirWhenWeaveProfileIsSet", () => {
+    process.env.WEAVE_PROFILE = "test-db-profile";
+    delete process.env.WEAVE_DB_PATH;
+    _resetDbForTests();
+
+    const expectedPath = join(homedir(), ".weave", "profiles", "test-db-profile", "fleet.db");
+    expect(getProfileDbPath()).toBe(expectedPath);
+  });
+
+  it("WeaveDbPathOverrideTakesPrecedenceOverProfile", () => {
+    process.env.WEAVE_PROFILE = "test-db-profile";
+    const override = join(tmpdir(), `override-test-${randomUUID()}.db`);
+    process.env.WEAVE_DB_PATH = override;
+    _resetDbForTests();
+
+    expect(getProfileDbPath()).toBe(override);
   });
 });

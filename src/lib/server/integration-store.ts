@@ -1,14 +1,17 @@
 /**
  * Integration store — read/write storage for integration configuration.
  *
- * Stores tokens and settings per integration ID at ~/.weave/integrations.json.
+ * Stores tokens and settings per integration ID in the active profile's
+ * integrations.json file:
+ *   - Default profile: ~/.weave/integrations.json
+ *   - Named profiles:  ~/.weave/profiles/<name>/integrations.json
  * Never throws — all errors are handled gracefully.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { log } from "./logger";
+import { getProfileIntegrationsPath } from "./profile";
 
 /** Per-integration configuration record */
 export interface IntegrationConfig {
@@ -21,11 +24,11 @@ export interface IntegrationConfig {
 type IntegrationsFile = Record<string, IntegrationConfig>;
 
 /**
- * Returns the path to ~/.weave/integrations.json.
+ * Returns the path to the integrations config file for the active profile.
  * Accepts an optional override for testing.
  */
 export function getIntegrationsFilePath(override?: string): string {
-  return override ?? join(homedir(), ".weave", "integrations.json");
+  return override ?? getProfileIntegrationsPath();
 }
 
 function readFile(filePath: string): IntegrationsFile {

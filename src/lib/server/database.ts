@@ -1,8 +1,10 @@
 /**
  * Database module — server-side SQLite singleton via better-sqlite3.
  *
- * The database file is stored at ~/.weave/fleet.db by default.
- * Override with the WEAVE_DB_PATH environment variable.
+ * The database file location is resolved by the profile module:
+ *   - Default profile: ~/.weave/fleet.db
+ *   - Named profiles:  ~/.weave/profiles/<name>/fleet.db
+ * Override with the WEAVE_DB_PATH environment variable (takes precedence).
  *
  * Uses WAL mode for concurrent read performance and a busy_timeout
  * to handle write contention in Next.js dev mode.
@@ -10,15 +12,8 @@
 
 import Database from "better-sqlite3";
 import { mkdirSync, rmSync } from "fs";
-import { homedir } from "os";
-import { dirname, resolve } from "path";
-
-function getDbPath(): string {
-  if (process.env.WEAVE_DB_PATH) {
-    return resolve(process.env.WEAVE_DB_PATH);
-  }
-  return resolve(homedir(), ".weave", "fleet.db");
-}
+import { dirname } from "path";
+import { getProfileDbPath } from "./profile";
 
 let _db: Database.Database | null = null;
 
@@ -29,7 +24,7 @@ let _db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (_db) return _db;
 
-  const dbPath = getDbPath();
+  const dbPath = getProfileDbPath();
 
   // Ensure the parent directory exists
   mkdirSync(dirname(dbPath), { recursive: true });
@@ -154,6 +149,6 @@ export function _resetDbForTests(): void {
     _db.close();
     _db = null;
   }
-  const dbPath = getDbPath();
+  const dbPath = getProfileDbPath();
   rmSync(dbPath, { force: true });
 }

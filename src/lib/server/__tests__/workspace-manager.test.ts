@@ -1,5 +1,5 @@
 import { mkdirSync, rmSync, existsSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 import { join, resolve } from "path";
 import { randomUUID } from "crypto";
 import { execSync } from "child_process";
@@ -10,6 +10,7 @@ import {
   cleanupWorkspace,
   getWorkspaceDirectory,
 } from "@/lib/server/workspace-manager";
+import { getProfileWorkspaceRoot } from "@/lib/server/profile";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ afterEach(() => {
   _resetDbForTests();
   delete process.env.WEAVE_DB_PATH;
   delete process.env.WEAVE_WORKSPACE_ROOT;
+  delete process.env.WEAVE_PROFILE;
   for (const dir of testDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -280,5 +282,30 @@ describe("git error messages", () => {
     await expect(
       createWorkspace({ sourceDirectory: dir, strategy: "worktree" })
     ).rejects.toThrow("not a git repository");
+  });
+});
+
+// ─── Profile awareness ────────────────────────────────────────────────────────
+
+describe("workspace-manager — profile awareness", () => {
+  afterEach(() => {
+    delete process.env.WEAVE_PROFILE;
+    delete process.env.WEAVE_WORKSPACE_ROOT;
+  });
+
+  it("UsesProfileWorkspaceRootWhenWeaveProfileIsSet", () => {
+    process.env.WEAVE_PROFILE = "test-ws-profile";
+    delete process.env.WEAVE_WORKSPACE_ROOT;
+
+    const expected = resolve(homedir(), ".weave", "profiles", "test-ws-profile", "workspaces");
+    expect(getProfileWorkspaceRoot()).toBe(expected);
+  });
+
+  it("WeaveWorkspaceRootOverrideTakesPrecedenceOverProfile", () => {
+    process.env.WEAVE_PROFILE = "test-ws-profile";
+    const override = join(tmpdir(), `ws-override-${randomUUID()}`);
+    process.env.WEAVE_WORKSPACE_ROOT = override;
+
+    expect(getProfileWorkspaceRoot()).toBe(override);
   });
 });

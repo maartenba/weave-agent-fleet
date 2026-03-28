@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -150,6 +150,45 @@ function VersionBadge() {
   );
 }
 
+function ProfileBadge() {
+  const [profile, setProfile] = useState<string | null>(
+    () => {
+      // Use build-time value as initial hint (avoids flash on dev)
+      const buildTime = process.env.NEXT_PUBLIC_WEAVE_PROFILE;
+      return buildTime && buildTime !== "default" ? buildTime : null;
+    }
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((data: { name: string; isDefault: boolean }) => {
+        if (cancelled) return;
+        setProfile(data.isDefault ? null : data.name);
+      })
+      .catch(() => {
+        // Silently fall back to build-time value (already set as initial state)
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!profile) return null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <p className="text-center text-[8px] text-purple-400/70 select-none py-0.5 cursor-default leading-tight truncate px-0.5 max-w-full">
+          {profile}
+        </p>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        Profile: {profile}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SidebarIconRail() {
@@ -270,6 +309,7 @@ export function SidebarIconRail() {
       {/* Bottom section: page links + version */}
       <div className="flex flex-col gap-0.5 px-1">
         <IconRailLink icon={Settings} label="Settings" href="/settings" />
+        <ProfileBadge />
         <VersionBadge />
       </div>
     </div>
