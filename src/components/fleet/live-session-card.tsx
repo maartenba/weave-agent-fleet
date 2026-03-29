@@ -20,6 +20,10 @@ import type { SessionListItem } from "@/lib/api-types";
 import { formatRelativeTime } from "@/lib/format-utils";
 import { TokenCostBreakdown } from "@/components/session/token-cost-breakdown";
 
+// Stable reference so React.memo on LiveSessionCard isn't defeated by a fresh
+// object literal on every render.
+const ZERO_TOKENS = { input: 0, output: 0, reasoning: 0 } as const;
+
 export const LiveSessionCard = React.memo(function LiveSessionCard({
   item,
   onTerminate,
@@ -133,7 +137,7 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
               <span>{formatRelativeTime(session.time.created)}</span>
               {item.totalTokens != null && item.totalTokens > 0 && (
                 <TokenCostBreakdown
-                  tokens={{ input: 0, output: 0, reasoning: 0 }}
+                  tokens={ZERO_TOKENS}
                   totalOverride={item.totalTokens}
                   cost={item.totalCost ?? 0}
                   variant="compact"

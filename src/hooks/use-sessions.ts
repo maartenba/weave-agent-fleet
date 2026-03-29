@@ -12,7 +12,7 @@ export interface UseSessionsResult {
   refetch: () => void;
 }
 
-const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_POLL_INTERVAL_MS = 15_000;
 
 export function useSessions(
   pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS
@@ -23,6 +23,10 @@ export function useSessions(
   const isMounted = useRef(true);
 
   const fetchSessions = useCallback(async () => {
+    // Skip when tab is hidden — resume when it becomes visible again
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+      return;
+    }
     try {
       const response = await apiFetch("/api/sessions");
       if (!response.ok) {
@@ -49,9 +53,19 @@ export function useSessions(
     fetchSessions();
 
     const interval = setInterval(fetchSessions, pollIntervalMs);
+
+    // Pause/resume polling on visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchSessions();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isMounted.current = false;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fetchSessions, pollIntervalMs]);
 

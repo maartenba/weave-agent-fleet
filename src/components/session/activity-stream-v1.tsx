@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, memo, useMemo, useCallback, useEffect, useRef } from "react";
+import { memo, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -511,11 +512,14 @@ export function ActivityStreamV1({
   initialScrollPosition,
   suppressAutoScrollRef,
 }: ActivityStreamV1Props) {
-  const { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition, getScrollPosition, restoreScrollPosition, suppressAutoScroll: suppressAutoScrollLocalRef } =
+  const { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition, getScrollPosition, restoreScrollPosition, suppressAutoScroll: suppressAutoScrollLocalRef, viewportElement } =
     useScrollAnchor({ messageCount: messages.length, externalSuppressAutoScroll: suppressAutoScrollRef });
 
   // Guard against double-firing onLoadOlder while isNearTop stays true
   const hasFiredLoadOlderRef = useRef(false);
+
+  // Throttle timer ref for the document-level scroll position capture (Task 2)
+  const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset the guard when isNearTop transitions to false
   useEffect(() => {
@@ -562,22 +566,37 @@ export function ActivityStreamV1({
   // This ref is read by useSessionEvents on unmount to save to the cache.
   // We capture position on every scroll event (including between renders)
   // via a document-level capture listener.
+  // Throttled to fire at most once per 100ms to avoid 60+ calls/sec during
+  // smooth scroll — the position is only read on unmount so high frequency is wasteful.
   useEffect(() => {
     if (!scrollPositionRef) return;
-    const handleScroll = () => {
+    const capturePosition = () => {
       const pos = getScrollPosition();
       if (pos !== null) {
         scrollPositionRef.current = pos;
       }
     };
+    const handleScroll = () => {
+      if (scrollThrottleTimerRef.current !== null) return;
+      scrollThrottleTimerRef.current = setTimeout(() => {
+        scrollThrottleTimerRef.current = null;
+        capturePosition();
+      }, 100);
+    };
     // Capture initial position before any scroll events fire.
-    handleScroll();
+    capturePosition();
     // The scroll event fires on the viewport element inside the ScrollArea.
     // We add it on the document level with capture:true to intercept all scroll events
     // since we don't have direct access to the inner viewport here.
     document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener("scroll", handleScroll, { capture: true });
+      // Flush any pending throttle so the final position is captured before unmount.
+      if (scrollThrottleTimerRef.current !== null) {
+        clearTimeout(scrollThrottleTimerRef.current);
+        scrollThrottleTimerRef.current = null;
+        capturePosition();
+      }
     };
   }, [scrollPositionRef, getScrollPosition]);
 
@@ -618,6 +637,16 @@ export function ActivityStreamV1({
     }
     return map;
   }, [messages]);
+
+  // ── Virtualizer for the message list ──────────────────────────────────────
+  // Only renders items visible in the viewport plus an overscan buffer,
+  // keeping DOM node count ~30 regardless of session length.
+  const virtualizer = useVirtualizer({
+    count: groupedEntries.length,
+    getScrollElement: () => viewportElement,
+    estimateSize: () => 120,
+    overscan: 10,
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -701,60 +730,83 @@ export function ActivityStreamV1({
               </div>
             )}
 
-            {groupedEntries.map((entry, index) => {
-              if (entry.type === "inference-summary") {
-                return (
-                  <InferenceStepsSummary
-                    key={`summary-${entry.messages[0].messageId}`}
-                    messages={entry.messages}
-                  />
-                );
-              }
+            {/* Virtualized message list — only ~30 DOM nodes at a time */}
+            {groupedEntries.length > 0 && (
+              <div
+                style={{ position: "relative", height: `${virtualizer.getTotalSize()}px` }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const entry = groupedEntries[virtualItem.index];
 
-              if (entry.type === "thinking") {
-                return (
-                  <CollapsedThinkingIndicator
-                    key={`thinking-${entry.message.messageId}`}
-                    message={entry.message}
-                  />
-                );
-              }
+                  if (entry.type === "inference-summary") {
+                    return (
+                      <div
+                        key={`summary-${entry.messages[0].messageId}`}
+                        data-index={virtualItem.index}
+                        ref={virtualizer.measureElement}
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}
+                      >
+                        <InferenceStepsSummary messages={entry.messages} />
+                      </div>
+                    );
+                  }
 
-              // entry.type === "message"
-              const message = entry.message;
+                  if (entry.type === "thinking") {
+                    return (
+                      <div
+                        key={`thinking-${entry.message.messageId}`}
+                        data-index={virtualItem.index}
+                        ref={virtualizer.measureElement}
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}
+                      >
+                        <CollapsedThinkingIndicator message={entry.message} />
+                      </div>
+                    );
+                  }
 
-              // DurationSeparator: find the previous entry for gap calculation
-              const prevEntry = index > 0 ? groupedEntries[index - 1] : null;
-              const prevMessage = prevEntry
-                ? prevEntry.type === "message"
-                  ? prevEntry.message
-                  : prevEntry.type === "inference-summary"
-                  ? prevEntry.messages[prevEntry.messages.length - 1]
-                  : prevEntry.type === "thinking"
-                  ? prevEntry.message
-                  : null
-                : null;
-              const gap = prevMessage && message.createdAt && (prevMessage.completedAt ?? prevMessage.createdAt)
-                ? message.createdAt - (prevMessage.completedAt ?? prevMessage.createdAt!)
-                : 0;
+                  // entry.type === "message"
+                  const message = entry.message;
+                  const index = virtualItem.index;
 
-              const isMatchingMessage = isFiltering &&
-                message.parts.some((p) => matchingPartIds.has(p.partId));
+                  // DurationSeparator: find the previous entry for gap calculation
+                  const prevEntry = index > 0 ? groupedEntries[index - 1] : null;
+                  const prevMessage = prevEntry
+                    ? prevEntry.type === "message"
+                      ? prevEntry.message
+                      : prevEntry.type === "inference-summary"
+                      ? prevEntry.messages[prevEntry.messages.length - 1]
+                      : prevEntry.type === "thinking"
+                      ? prevEntry.message
+                      : null
+                    : null;
+                  const gap = prevMessage && message.createdAt && (prevMessage.completedAt ?? prevMessage.createdAt)
+                    ? message.createdAt - (prevMessage.completedAt ?? prevMessage.createdAt!)
+                    : 0;
 
-              return (
-                <Fragment key={message.messageId}>
-                  {gap > 30_000 && <DurationSeparator durationMs={gap} />}
-                  <MessageItem
-                    message={message}
-                    agents={agents}
-                    parentCreatedAt={message.parentID ? createdAtByMessageId.get(message.parentID) : undefined}
-                    highlightQuery={isFiltering ? searchQuery : undefined}
-                    isMatchingMessage={isMatchingMessage}
-                    currentSessionId={currentSessionId}
-                  />
-                </Fragment>
-              );
-            })}
+                  const isMatchingMessage = isFiltering &&
+                    message.parts.some((p) => matchingPartIds.has(p.partId));
+
+                  return (
+                    <div
+                      key={message.messageId}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}
+                    >
+                      {gap > 30_000 && <DurationSeparator durationMs={gap} />}
+                      <MessageItem
+                        message={message}
+                        agents={agents}
+                        parentCreatedAt={message.parentID ? createdAtByMessageId.get(message.parentID) : undefined}
+                        highlightQuery={isFiltering ? searchQuery : undefined}
+                        isMatchingMessage={isMatchingMessage}
+                        currentSessionId={currentSessionId}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* "Thinking" indicator when agent is busy but no new message yet */}
             {sessionStatus === "busy" &&

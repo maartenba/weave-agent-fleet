@@ -12,7 +12,7 @@ export interface UseFleetSummaryResult {
   error?: string;
 }
 
-const DEFAULT_POLL_INTERVAL_MS = 10_000;
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
 
 export function useFleetSummary(
   pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS
@@ -23,6 +23,10 @@ export function useFleetSummary(
   const isMounted = useRef(true);
 
   const fetchSummary = useCallback(async () => {
+    // Skip when tab is hidden — resume when it becomes visible again
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+      return;
+    }
     try {
       const response = await apiFetch("/api/fleet/summary");
       if (!response.ok) {
@@ -58,9 +62,19 @@ export function useFleetSummary(
     isMounted.current = true;
     fetchSummary();
     const interval = setInterval(fetchSummary, pollIntervalMs);
+
+    // Pause/resume polling on visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchSummary();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isMounted.current = false;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fetchSummary, pollIntervalMs]);
 

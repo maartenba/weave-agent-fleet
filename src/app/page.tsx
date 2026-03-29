@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, Suspense } from "react";
+import { useCallback, useMemo, useState, useDeferredValue, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header, NewSessionButton } from "@/components/layout/header";
 import { SummaryBar } from "@/components/fleet/summary-bar";
@@ -166,6 +166,10 @@ function FleetPageInner() {
     [allWorkspaces, sortSessions]
   );
 
+  // Defer workspace group rendering so rapid SSE updates don't synchronously
+  // block the UI thread — groups will update with a slight delay instead.
+  const deferredWorkspaceGroups = useDeferredValue(sortedWorkspaceGroups);
+
   const liveCount = liveSummary?.activeSessions ?? sessions.filter((s) => s.activityStatus === "busy").length;
 
   const summary: FleetSummary = {
@@ -182,7 +186,7 @@ function FleetPageInner() {
       : "No active sessions";
 
   // Group by "Session Status" (working / idle)
-  const renderGroupedBySessionStatus = () => {
+  const groupedBySessionStatus = useMemo(() => {
     const groups: Record<string, SessionListItem[]> = {
       working: [],
       idle: [],
@@ -241,10 +245,10 @@ function FleetPageInner() {
          })}
        </div>
      );
-   };
+  }, [searchFiltered, sortSessions, nestSessions, handleTerminate, handleResume, handleDeleteRequest, handleOpen, handleAbort, resumingSessionId]);
 
   // Group by "Connection Status" (connected / disconnected / stopped)
-  const renderGroupedByConnectionStatus = () => {
+  const groupedByConnectionStatus = useMemo(() => {
     const groups: Record<string, SessionListItem[]> = {
       connected: [],
       disconnected: [],
@@ -309,10 +313,10 @@ function FleetPageInner() {
          })}
        </div>
      );
-   };
+  }, [searchFiltered, sortSessions, nestSessions, handleTerminate, handleResume, handleDeleteRequest, handleOpen, handleAbort, resumingSessionId]);
 
    // Group by "Source" (isolationStrategy)
-   const renderGroupedBySource = () => {
+   const groupedBySource = useMemo(() => {
     const sourceMap = new Map<string, SessionListItem[]>();
     for (const s of searchFiltered) {
       const key = s.isolationStrategy ?? "existing";
@@ -369,7 +373,7 @@ function FleetPageInner() {
         })}
       </div>
     );
-  };
+  }, [searchFiltered, sortSessions, nestSessions, handleTerminate, handleResume, handleDeleteRequest, handleOpen, handleAbort, resumingSessionId]);
 
   const renderContent = () => {
     if (searchFiltered.length === 0 && !isLoading) {
@@ -426,21 +430,21 @@ function FleetPageInner() {
     }
 
     if (prefs.groupBy === "session-status") {
-      return renderGroupedBySessionStatus();
+      return groupedBySessionStatus;
     }
 
     if (prefs.groupBy === "connection-status") {
-      return renderGroupedByConnectionStatus();
+      return groupedByConnectionStatus;
     }
 
     if (prefs.groupBy === "source") {
-      return renderGroupedBySource();
+      return groupedBySource;
     }
 
     // Default: "directory" — render SessionGroup per workspace
     return (
       <div className="space-y-2">
-        {sortedWorkspaceGroups.map((group) => (
+        {deferredWorkspaceGroups.map((group) => (
           <SessionGroup
               key={group.workspaceDirectory}
               group={group}
