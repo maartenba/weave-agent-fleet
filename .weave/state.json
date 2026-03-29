@@ -1,11 +1,11 @@
 {
-  "active_plan": "D:\\repos\\damianh\\weave-agent-fleet-worktrees\\repository-scanner\\.weave\\plans\\repository-detail-enrichment.md",
-  "started_at": "2026-03-25T09:21:16.877Z",
+  "active_plan": "D:\\repos\\damianh\\weave-agent-fleet-worktrees\\ui-performances\\.weave\\plans\\ui-performance-fixes.md",
+  "started_at": "2026-03-29T09:16:42.074Z",
   "session_ids": [
-    "ses_2df00787effeph8fXx2ALeel81"
+    "ses_2c8fb403dffeoQ2BcKmlvy63i2"
   ],
-  "plan_name": "repository-detail-enrichment",
+  "plan_name": "ui-performance-fixes",
   "agent": "tapestry",
-  "start_sha": "ff4db164053d2632995f26698b3c985120f1d1c4",
+  "start_sha": "cf73848d7358d868305e0460ffeb9afd334ec662",
   "paused": true
 }

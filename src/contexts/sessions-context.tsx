@@ -125,8 +125,8 @@ export function patchTokenData(
 }
 
 export function SessionsProvider({ children }: { children: React.ReactNode }) {
-  const { sessions: polledSessions, isLoading, error, refetch } = useSessions(5000);
-  const { summary } = useFleetSummary(10000);
+  const { sessions: polledSessions, isLoading, error, refetch } = useSessions(15000);
+  const { summary } = useFleetSummary(30000);
 
   // SSE patches stored in a ref to avoid setState-in-effect lint violations.
   // The ref is mutated by the SSE onmessage handler and read by useMemo.

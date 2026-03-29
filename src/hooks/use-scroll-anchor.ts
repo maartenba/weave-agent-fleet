@@ -59,6 +59,18 @@ export interface UseScrollAnchorReturn {
    * scroll-to-bottom, then clear it after calling restoreScrollPosition.
    */
   suppressAutoScroll: React.MutableRefObject<boolean>;
+  /**
+   * Ref pointing to the inner `[data-slot="scroll-area-viewport"]` element.
+   * Exposed so that consumers (e.g. a virtualizer) can use the same
+   * scrollable element without querying the DOM independently.
+   */
+  viewportRef: React.MutableRefObject<HTMLElement | null>;
+  /**
+   * The viewport element as state — triggers a re-render when set, ensuring
+   * that consumers like `useVirtualizer` receive a non-null scroll element
+   * after mount (the callback-ref fires asynchronously after the first render).
+   */
+  viewportElement: HTMLElement | null;
 }
 
 /**
@@ -79,6 +91,8 @@ export function useScrollAnchor({
   const prevMessageCountRef = useRef(messageCount);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
   const mutationRafRef = useRef<number | null>(null);
+  /** Tracks scrollHeight so the MutationObserver only auto-scrolls when content actually grew. */
+  const lastScrollHeightRef = useRef<number>(0);
   /**
    * Guard flag: set `true` while a programmatic scroll is in progress
    * (auto-scroll or preserveScrollPosition). While set, the scroll
@@ -97,6 +111,7 @@ export function useScrollAnchor({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isNearTop, setIsNearTop] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [viewportElement, setViewportElement] = useState<HTMLElement | null>(null);
 
   // —— Detect whether the viewport is scrolled to the bottom ——————
   const checkIsAtBottom = useCallback((el: HTMLElement): boolean => {
@@ -159,11 +174,16 @@ export function useScrollAnchor({
           '[data-slot="scroll-area-viewport"]',
         );
         viewportRef.current = viewport ?? null;
+        setViewportElement(viewport ?? null);
         viewport?.addEventListener("scroll", handleScroll, { passive: true });
 
         // Observe DOM mutations (streaming text deltas, tool call updates)
         // to auto-scroll when content grows without changing messageCount.
+        // Only auto-scrolls when scrollHeight actually increases — this avoids
+        // fighting with a virtualizer that mounts/unmounts items (which triggers
+        // childList mutations) without changing the total scrollable height.
         if (viewport) {
+          lastScrollHeightRef.current = viewport.scrollHeight;
           const observer = new MutationObserver(() => {
             if (!isAtBottomRef.current || isProgrammaticScrollRef.current) return;
             if (mutationRafRef.current !== null) return;
@@ -172,6 +192,12 @@ export function useScrollAnchor({
               mutationRafRef.current = null;
               const el = viewportRef.current;
               if (!el || !isAtBottomRef.current) return;
+              // Only auto-scroll if content actually grew (e.g. streaming text).
+              // Virtualizer item swaps change childList but keep scrollHeight
+              // constant, so this guard prevents jittery scroll during normal
+              // user scrolling with a virtualized list.
+              if (el.scrollHeight <= lastScrollHeightRef.current) return;
+              lastScrollHeightRef.current = el.scrollHeight;
               isProgrammaticScrollRef.current = true;
               el.scrollTop = el.scrollHeight;
               isProgrammaticScrollRef.current = false;
@@ -186,6 +212,7 @@ export function useScrollAnchor({
         }
       } else {
         viewportRef.current = null;
+        setViewportElement(null);
       }
     },
     [handleScroll],
@@ -314,5 +341,5 @@ export function useScrollAnchor({
     [checkIsAtBottom],
   );
 
-  return { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition, getScrollPosition, restoreScrollPosition, suppressAutoScroll };
+  return { scrollRef, isAtBottom, isNearTop, newMessageCount, scrollToBottom, preserveScrollPosition, getScrollPosition, restoreScrollPosition, suppressAutoScroll, viewportRef, viewportElement };
 }
