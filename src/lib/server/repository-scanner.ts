@@ -13,9 +13,9 @@ import {
   statSync,
   type Dirent,
 } from "fs";
-import { homedir } from "os";
 import { isAbsolute, join, resolve, sep } from "path";
 import { getAllowedRoots } from "@/lib/server/process-manager";
+import { getProfileWorkspaceRoot } from "@/lib/server/profile";
 import type {
   BranchInfo,
   CommitInfo,
@@ -39,9 +39,7 @@ export function invalidateCache(): void {
 // ─── Weave workspace root (excluded from scanning) ───────────────────────────
 
 function getWeaveWorkspaceRoot(): string {
-  return process.env.WEAVE_WORKSPACE_ROOT
-    ? resolve(process.env.WEAVE_WORKSPACE_ROOT)
-    : resolve(homedir(), ".weave", "workspaces");
+  return getProfileWorkspaceRoot();
 }
 
 // ─── Scanning ────────────────────────────────────────────────────────────────

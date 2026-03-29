@@ -15,7 +15,6 @@
 
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "fs";
-import { homedir } from "os";
 import { basename, dirname, join, resolve, sep } from "path";
 import { randomUUID } from "crypto";
 import { promisify } from "util";
@@ -27,6 +26,7 @@ import {
   type DbWorkspace,
 } from "./db-repository";
 import { withTimeout } from "./async-utils";
+import { getProfileWorkspaceRoot } from "./profile";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,10 +45,7 @@ export interface WorkspaceInfo {
 }
 
 function getWorkspaceRoot(): string {
-  if (process.env.WEAVE_WORKSPACE_ROOT) {
-    return resolve(process.env.WEAVE_WORKSPACE_ROOT);
-  }
-  return resolve(homedir(), ".weave", "workspaces");
+  return getProfileWorkspaceRoot();
 }
 
 const DEFAULT_GIT_TIMEOUT_MS = 60_000;

@@ -24,7 +24,9 @@ if not exist "%NODE_BIN%" (
     exit /b 1
 )
 
-rem Parse subcommands
+rem Parse subcommands and flags.
+rem :parse_flags loops back here after consuming a flag pair (e.g. --port N).
+:parse_flags
 if "%~1"=="" goto :start_server
 if /i "%~1"=="version" goto :show_version
 if /i "%~1"=="--version" goto :show_version
@@ -37,6 +39,7 @@ if /i "%~1"=="help" goto :show_help
 if /i "%~1"=="--help" goto :show_help
 if /i "%~1"=="-h" goto :show_help
 if /i "%~1"=="--port" goto :parse_port
+if /i "%~1"=="--profile" goto :parse_profile
 
 echo Unknown command: %~1
 echo Run "weave-fleet help" for usage.
@@ -94,7 +97,7 @@ if exist "%VERSION_FILE%" (
 )
 echo Weave Fleet v!VERSION!
 echo.
-echo Usage: weave-fleet [command] [--port ^<number^>]
+echo Usage: weave-fleet [command] [--port ^<number^>] [--profile ^<name^>]
 echo.
 echo Commands:
 echo   (none)       Start the Weave Fleet server
@@ -106,13 +109,19 @@ echo   uninstall    Remove Weave Fleet
 echo   help         Show this help message
 echo.
 echo Options:
-echo   --port ^<number^>  Server port (overrides PORT env var, default: 3000)
+echo   --port ^<number^>    Server port (overrides PORT env var, default: 3000)
+echo   --profile ^<name^>   Named profile for data isolation (default: 'default')
+echo                       Profile name: lowercase alphanumeric + hyphens, max 32 chars
+echo                       e.g. --profile dev, --profile staging
 echo.
 echo Environment variables:
-echo   PORT             Server port (default: 3000)
-echo   WEAVE_HOSTNAME   Server bind address (default: 0.0.0.0)
-echo   WEAVE_DB_PATH    Database file path (default: %%USERPROFILE%%\.weave\fleet.db)
-echo   OPENCODE_BIN     Full path to opencode binary (if not on PATH)
+echo   PORT                  Server port (default: 3000)
+echo   WEAVE_PROFILE         Profile name (default: unset = 'default')
+echo   WEAVE_HOSTNAME        Server bind address (default: 0.0.0.0)
+echo   WEAVE_DB_PATH         Database file path (default: %%USERPROFILE%%\.weave\fleet.db)
+echo   WEAVE_WORKSPACE_ROOT  Workspace root dir (default: %%USERPROFILE%%\.weave\workspaces)
+echo   WEAVE_PORT_RANGE_START Override OpenCode port range base (escape hatch)
+echo   OPENCODE_BIN          Full path to opencode binary (if not on PATH)
 exit /b 0
 
 :parse_port
@@ -129,7 +138,34 @@ if !ERRORLEVEL! neq 0 (
     exit /b 1
 )
 set "PORT=%~2"
-goto :start_server
+rem Shift two args and loop back to parse remaining flags
+shift
+shift
+goto :parse_flags
+
+:parse_profile
+if "%~2"=="" (
+    echo Error: --profile requires a profile name. >&2
+    echo Usage: weave-fleet [--profile ^<name^>] >&2
+    exit /b 1
+)
+rem Validate: lowercase alphanumeric + hyphens only, must start/end with alphanumeric
+echo %~2| findstr /r "^[a-z0-9][a-z0-9-]*[a-z0-9]$ ^[a-z0-9]$" >nul 2>&1
+if !ERRORLEVEL! neq 0 (
+    echo Error: --profile name must contain only lowercase alphanumeric characters and hyphens, and must start and end with an alphanumeric character, got '%~2'. >&2
+    exit /b 1
+)
+rem Validate length (max 32 chars) — count manually
+set "_pname=%~2"
+if "!_pname:~32,1!" neq "" (
+    echo Error: --profile name must be 32 characters or fewer. >&2
+    exit /b 1
+)
+set "WEAVE_PROFILE=%~2"
+rem Shift two args and loop back to parse remaining flags
+shift
+shift
+goto :parse_flags
 
 :start_server
 
@@ -174,12 +210,31 @@ if defined WEAVE_HOSTNAME (
 rem Ensure data directory exists
 if not exist "%USERPROFILE%\.weave" mkdir "%USERPROFILE%\.weave"
 
+rem If a named profile is active, create its directory and wire derived env vars
+if defined WEAVE_PROFILE (
+    if /i not "%WEAVE_PROFILE%"=="default" (
+        set "WEAVE_PROFILE_DIR=%USERPROFILE%\.weave\profiles\!WEAVE_PROFILE!"
+        if not exist "!WEAVE_PROFILE_DIR!" mkdir "!WEAVE_PROFILE_DIR!"
+        if not defined WEAVE_DB_PATH set "WEAVE_DB_PATH=!WEAVE_PROFILE_DIR!\fleet.db"
+        if not defined WEAVE_WORKSPACE_ROOT set "WEAVE_WORKSPACE_ROOT=!WEAVE_PROFILE_DIR!\workspaces"
+    )
+)
+
 set "VERSION=unknown"
 if exist "%VERSION_FILE%" (
     set /p VERSION=<"%VERSION_FILE%"
 )
 
+rem Build startup message — include profile name if non-default
+if defined WEAVE_PROFILE (
+    if /i not "!WEAVE_PROFILE!"=="default" (
+        echo Weave Fleet v!VERSION! [profile: !WEAVE_PROFILE!] starting on http://localhost:!PORT!
+        goto :launch_server
+    )
+)
 echo Weave Fleet v!VERSION! starting on http://localhost:!PORT!
+
+:launch_server
 
 rem Start the server
 rem On Windows, Ctrl+C is handled natively by the console — Node.js receives SIGINT directly

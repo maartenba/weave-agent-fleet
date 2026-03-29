@@ -41,7 +41,13 @@ afterAll(() => {
 
 describe("allocatePort", () => {
   beforeEach(() => {
+    // Ensure no WEAVE_PROFILE leaks in — port range must be the default (4097–4200)
+    delete process.env.WEAVE_PROFILE;
     _resetForTests();
+  });
+
+  afterEach(() => {
+    delete process.env.WEAVE_PROFILE;
   });
 
   it("AllocatesFirstPortAs4097", () => {

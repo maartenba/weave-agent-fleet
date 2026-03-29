@@ -8,6 +8,8 @@
  * No external dependencies.
  */
 
+import { getProfileName, isDefaultProfile } from "./profile";
+
 type LogLevel = "info" | "warn" | "error";
 
 interface LogEntry {
@@ -41,6 +43,11 @@ function emit(
     context,
     message,
   };
+
+  // Include profile name when non-default — helps correlate logs across simultaneous instances
+  if (!isDefaultProfile()) {
+    entry.profile = getProfileName();
+  }
 
   if (details) {
     for (const [key, value] of Object.entries(details)) {

@@ -1,5 +1,7 @@
 import { join } from "path";
 import { existsSync, rmSync } from "fs";
+import { homedir } from "os";
+import { resolve } from "path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   getIntegrationConfig,
@@ -7,6 +9,7 @@ import {
   removeIntegrationConfig,
   getAllIntegrationConfigs,
 } from "../integration-store";
+import { getProfileIntegrationsPath } from "../profile";
 import { createSecureTempDir, writeTempFile } from "./test-temp-utils";
 
 // Mock the logger to avoid noise in test output
@@ -148,5 +151,25 @@ describe("Integration Store", () => {
       const result = getAllIntegrationConfigs(filePath);
       expect(result).toEqual({});
     });
+  });
+});
+
+describe("Integration Store — profile awareness", () => {
+  afterEach(() => {
+    delete process.env.WEAVE_PROFILE;
+  });
+
+  it("UsesProfileIntegrationsPathWhenWeaveProfileIsSet", () => {
+    process.env.WEAVE_PROFILE = "test-int-profile";
+
+    const expected = resolve(homedir(), ".weave", "profiles", "test-int-profile", "integrations.json");
+    expect(getProfileIntegrationsPath()).toBe(expected);
+  });
+
+  it("DefaultProfileUsesRootWeaveIntegrationsPath", () => {
+    delete process.env.WEAVE_PROFILE;
+
+    const expected = resolve(homedir(), ".weave", "integrations.json");
+    expect(getProfileIntegrationsPath()).toBe(expected);
   });
 });
