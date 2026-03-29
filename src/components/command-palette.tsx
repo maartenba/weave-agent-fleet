@@ -179,7 +179,7 @@ export function CommandPalette() {
         placeholder={currentLevel ? `${currentLevel.parent.label}...` : "Type a command or search..."}
         onKeyDown={handleInputKeyDown}
       />
-      <CommandList>
+      <CommandList className="max-h-[50vh] sm:max-h-[300px]">
         <CommandEmpty>No commands found.</CommandEmpty>
         {/* Back button when in sub-commands */}
         {subStack.length > 0 && (
@@ -205,8 +205,8 @@ export function CommandPalette() {
           </CommandGroup>
         ))}
       </CommandList>
-      {/* Footer with keyboard hints */}
-      <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
+      {/* Footer with keyboard hints — desktop only */}
+      <div className="hidden sm:flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-3">
           <span>
             <kbd className="font-mono">↑↓</kbd> Navigate

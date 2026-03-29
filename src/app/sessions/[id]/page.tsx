@@ -16,7 +16,10 @@ import { useDiffs } from "@/hooks/use-diffs";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight, ArrowUpToLine, ArrowDownToLine, ListTodo, Eraser, ScrollText } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight, ArrowUpToLine, ArrowDownToLine, ListTodo, Eraser, ScrollText, PanelRight, MoreHorizontal } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useFoldableScreen } from "@/hooks/use-foldable-screen";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
 import { useResumeSession } from "@/hooks/use-resume-session";
@@ -103,6 +106,8 @@ export default function SessionDetailPage() {
   const [isResumable, setIsResumable] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showForkDialog, setShowForkDialog] = useState(false);
+  const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
+  const { isFolded } = useFoldableScreen();
 
   const promptFocusRef = useRef<(() => void) | null>(null);
   const { registerCommand, unregisterCommand } = useCommandRegistry();
@@ -547,7 +552,7 @@ export default function SessionDetailPage() {
               {sessionStatus === "busy" ? "Working" : "Idle"}
             </Badge>
             {activeAgentName && (
-              <Badge variant="outline" className="text-xs gap-1">
+              <Badge variant="outline" className="hidden xs:inline-flex text-xs gap-1">
                 <span
                   className="inline-block h-1.5 w-1.5 rounded-full"
                   style={{ backgroundColor: activeAgentMeta?.color ?? "currentColor" }}
@@ -555,10 +560,22 @@ export default function SessionDetailPage() {
                 {activeAgentName.charAt(0).toUpperCase() + activeAgentName.slice(1)}
               </Badge>
             )}
+            {/* Session Info trigger — mobile only */}
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs gap-1"
+              className="h-7 w-7 px-0 fold:hidden"
+              onClick={() => setSessionInfoOpen(true)}
+              title="Session info"
+              aria-label="Open session info"
+            >
+              <PanelRight className="h-3.5 w-3.5" />
+            </Button>
+            {/* Desktop action buttons */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden sm:inline-flex h-7 px-2 text-xs gap-1"
               onClick={() => setShowForkDialog(true)}
               title="New context window — start a fresh session in the same workspace"
             >
@@ -569,7 +586,7 @@ export default function SessionDetailPage() {
               <Button
                 variant={abortConfirm ? "destructive" : "outline"}
                 size="sm"
-                className="h-7 px-2 text-xs gap-1"
+                className="hidden sm:inline-flex h-7 px-2 text-xs gap-1"
                 onClick={handleAbort}
                 disabled={isAborting}
               >
@@ -581,7 +598,7 @@ export default function SessionDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="hidden sm:inline-flex h-7 px-2 text-xs"
                 onClick={() => setAbortConfirm(false)}
                 disabled={isAborting}
               >
@@ -592,7 +609,7 @@ export default function SessionDetailPage() {
               <Button
                 variant={stopConfirm ? "destructive" : "ghost"}
                 size="sm"
-                className="h-7 px-2 text-xs gap-1"
+                className="hidden sm:inline-flex h-7 px-2 text-xs gap-1"
                 onClick={handleStop}
                 disabled={isTerminating}
               >
@@ -604,7 +621,7 @@ export default function SessionDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="hidden sm:inline-flex h-7 px-2 text-xs"
                 onClick={() => setStopConfirm(false)}
                 disabled={isTerminating}
               >
@@ -615,19 +632,73 @@ export default function SessionDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs gap-1 text-red-600 dark:text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                className="hidden sm:inline-flex h-7 px-2 text-xs gap-1 text-red-600 dark:text-red-400 hover:text-red-500 hover:bg-red-500/10"
                 onClick={() => setShowDeleteConfirm(true)}
               >
                 <Trash2 className="h-3 w-3" />
                 Delete
               </Button>
             )}
+            {/* Mobile overflow menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="sm:hidden h-7 w-7 px-0"
+                  aria-label="More actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {!isStopped && sessionStatus === "busy" && (
+                  <DropdownMenuItem
+                    onClick={handleAbort}
+                    disabled={isAborting}
+                    className="gap-2 text-destructive focus:text-destructive"
+                  >
+                    <OctagonX className="h-3.5 w-3.5" />
+                    {abortConfirm ? "Confirm interrupt?" : "Interrupt"}
+                  </DropdownMenuItem>
+                )}
+                {!isStopped && (
+                  <DropdownMenuItem
+                    onClick={handleStop}
+                    disabled={isTerminating}
+                    className="gap-2"
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                    {stopConfirm ? "Confirm stop?" : "Stop"}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => setShowForkDialog(true)}
+                  className="gap-2"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  New context window
+                </DropdownMenuItem>
+                {(isStopped || isResumable) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete session
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className={`flex flex-1 overflow-hidden${isFolded ? " fold-gap" : ""}`}>
         {/* Main content with tabs */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className={`flex flex-1 flex-col overflow-hidden${isFolded ? " fold-left" : ""}`}>
           {isStopped && (
             <div className="px-4 py-2 bg-muted/50 border-b border-border text-sm text-muted-foreground text-center">
               Session stopped — conversation history preserved above.
@@ -745,8 +816,8 @@ export default function SessionDetailPage() {
           </Tabs>
         </div>
 
-        {/* Sidebar — real session metadata */}
-        <aside className="w-72 border-l overflow-auto flex-shrink-0">
+        {/* Sidebar — real session metadata — desktop only (or foldable right pane); mobile uses Sheet */}
+        <aside className={isFolded ? "flex fold-right w-auto border-l overflow-auto flex-shrink-0 flex-col" : "hidden md:flex w-72 border-l overflow-auto flex-shrink-0 flex-col"}>
           <ScrollArea className="h-full">
             <div className="p-4 space-y-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -909,6 +980,171 @@ export default function SessionDetailPage() {
           </ScrollArea>
         </aside>
       </div>
+
+      {/* Session Info Sheet — mobile only */}
+      <Sheet open={sessionInfoOpen} onOpenChange={setSessionInfoOpen}>
+        <SheetContent side="right" className="w-[300px] p-0 md:hidden">
+          <SheetHeader className="px-4 pt-4 pb-2">
+            <SheetTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session Info</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="h-[calc(100%-3rem)]">
+            <div className="px-4 pb-4 space-y-4">
+              {/* Workspace */}
+              {metadata.workspaceDirectory && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Workspace</p>
+                  </div>
+                  <p className="text-xs font-mono break-all">{metadata.workspaceDirectory}</p>
+                </div>
+              )}
+
+              {/* Isolation Strategy */}
+              {metadata.isolationStrategy && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Isolation</p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {metadata.isolationStrategy}
+                  </Badge>
+                </div>
+              )}
+
+              {/* Created At */}
+              {metadata.createdAt && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Created</p>
+                  </div>
+                  <p className="text-xs">{new Date(metadata.createdAt).toLocaleString()}</p>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Tokens & Cost */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokens & Cost</p>
+                </div>
+                <TokenCostBreakdown tokens={tokenBreakdown} cost={totalCost} variant="sidebar" />
+              </div>
+
+              {/* Changes summary */}
+              {diffs.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <GitCompare className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes</p>
+                    </div>
+                    <p className="text-xs font-mono">
+                      {diffs.length} file{diffs.length !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-xs font-mono">
+                      <span className="text-green-500">+{totalDiffAdditions}</span>{" "}
+                      <span className="text-red-500">-{totalDiffDeletions}</span>
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Active Agents */}
+              {participatingAgents.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Agents</p>
+                    {participatingAgents.map(({ name, count, meta }) => (
+                      <div key={name} className="flex items-center gap-1.5">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: meta?.color ?? "var(--muted-foreground)" }}
+                        />
+                        <span className="text-xs flex-1">
+                          {name.charAt(0).toUpperCase() + name.slice(1)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {count} msg{count !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <Separator />
+
+              {/* Connection status */}
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Connection</p>
+                <div className="flex items-center gap-1.5">
+                  {status === "error" ? (
+                    <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                  ) : status === "disconnected" || status === "abandoned" ? (
+                    <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                  ) : (
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                      status === "connected" ? "bg-green-500" :
+                      status === "connecting" ? "bg-amber-500 animate-pulse" :
+                      status === "recovering" ? "bg-blue-500 animate-pulse" :
+                      "bg-red-500"
+                    }`} />
+                  )}
+                  <p className={`text-xs ${
+                    status === "error" ? "text-red-500 font-medium" :
+                    status === "disconnected" || status === "abandoned" ? "text-amber-600 dark:text-amber-400" :
+                    ""
+                  }`}>
+                    {status === "error" ? "Error" :
+                     status === "abandoned"
+                       ? "Instance unreachable"
+                       : status === "disconnected"
+                       ? `Disconnected${reconnectAttempt > 0 ? ` (retry ${reconnectAttempt})` : ""}`
+                       : status === "recovering" ? "Recovering…"
+                       : status === "connecting" ? "Connecting…"
+                       : "Connected"}
+                  </p>
+                </div>
+                {(status === "disconnected" || status === "abandoned") && (
+                  <button
+                    onClick={reconnect}
+                    className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 transition-colors"
+                  >
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    Reconnect
+                  </button>
+                )}
+                {status === "error" && error && (
+                  <p className="text-[10px] text-red-600/70 dark:text-red-400/70 break-words mt-0.5">{error}</p>
+                )}
+              </div>
+
+              {/* Todos — shown when agent has used todowrite */}
+              {latestTodos && latestTodos.length > 0 && (
+                <>
+                  <Separator />
+                  <TodoSidebarPanel todos={latestTodos} />
+                </>
+              )}
+
+              {/* Pull Requests — shown when agent has created PRs in this session */}
+              {detectedPrs.length > 0 && (
+                <>
+                  <Separator />
+                  <PrSidebarPanel prs={detectedPrs} statuses={prStatuses} />
+                </>
+              )}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDeleteSessionDialog
         open={showDeleteConfirm}

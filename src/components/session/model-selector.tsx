@@ -15,7 +15,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronDown, Cpu } from "lucide-react";
+import { Check, Cpu } from "lucide-react";
 import type { AvailableProvider } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 
@@ -81,13 +81,12 @@ export function ModelSelector({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           disabled={disabled}
-          className="h-9 gap-1.5 px-2.5 text-xs max-w-[180px]"
+          className="h-9 w-9 shrink-0"
+          title={label}
         >
-          <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="truncate">{label}</span>
-          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+          <Cpu className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">

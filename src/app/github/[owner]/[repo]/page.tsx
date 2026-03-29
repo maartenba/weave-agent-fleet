@@ -29,7 +29,7 @@ export default function GitHubRepoPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       <Header title={`${owner}/${repo}`} />
-      <div className="flex-1 overflow-auto thin-scrollbar p-6">
+      <div className="flex-1 overflow-auto thin-scrollbar p-3 sm:p-4 lg:p-6">
         {!isGitHubConnected ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <p className="text-sm text-muted-foreground">GitHub is not connected.</p>

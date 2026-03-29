@@ -13,7 +13,55 @@ import { NavigationCommands } from "@/components/commands/navigation-commands";
 import { ViewCommands } from "@/components/commands/view-commands";
 import { SessionCommands } from "@/components/commands/session-commands";
 import { CommandPalette } from "@/components/command-palette";
-import { TauriUpdateDialog } from "@/components/tauri-update-dialog";
+import { useRef, useCallback, lazy, Suspense } from "react";
+import { useSidebar } from "@/contexts/sidebar-context";
+
+// Dynamically import Tauri-only dialog — not needed in mobile web bundle
+const TauriUpdateDialog = lazy(() =>
+  import("@/components/tauri-update-dialog").then((m) => ({ default: m.TauriUpdateDialog }))
+);
+
+function SwipeableLayout({ children }: { children: React.ReactNode }) {
+  const { isMobileNav, mobileDrawerOpen, setMobileDrawerOpen } = useSidebar();
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isMobileNav || mobileDrawerOpen) return;
+    const touch = e.touches[0];
+    // Only track touches starting from the left edge (first 24px)
+    if (touch.clientX <= 24) {
+      touchStartX.current = touch.clientX;
+      touchStartY.current = touch.clientY;
+    } else {
+      touchStartX.current = null;
+    }
+  }, [isMobileNav, mobileDrawerOpen]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartX.current;
+    const dy = Math.abs(touch.clientY - touchStartY.current);
+    // Open if horizontal movement >= 50px and mostly horizontal (not a scroll)
+    if (dx >= 50 && dy < 60) {
+      setMobileDrawerOpen(true);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, [setMobileDrawerOpen]);
+
+  return (
+    <div
+      className="flex h-screen overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <Sidebar />
+      <main className="flex-1 overflow-auto thin-scrollbar">{children}</main>
+    </div>
+  );
+}
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -25,16 +73,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <KeybindingsProvider>
               <CommandRegistryProvider>
                 <TooltipProvider delayDuration={0}>
-                  <div className="flex h-screen overflow-hidden">
-                    <Sidebar />
-                    <main className="flex-1 overflow-auto thin-scrollbar">{children}</main>
-                  </div>
+                  <SwipeableLayout>{children}</SwipeableLayout>
                 </TooltipProvider>
                 <NavigationCommands />
                 <ViewCommands />
                 <SessionCommands />
                 <CommandPalette />
-                <TauriUpdateDialog />
+                <Suspense><TauriUpdateDialog /></Suspense>
               </CommandRegistryProvider>
             </KeybindingsProvider>
           </SidebarProvider>

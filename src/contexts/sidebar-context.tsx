@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePersistedState } from "@/hooks/use-persisted-state";
+import { useIsMobileNav } from "@/hooks/use-media-query";
 
 const SIDEBAR_ACTIVE_VIEW_KEY = "weave:sidebar:activeView";
 const SIDEBAR_WIDTH_KEY = "weave:sidebar:width";
@@ -47,6 +48,12 @@ interface SidebarContextValue {
   setWidth: (value: number | ((prev: number) => number)) => void;
   isResizing: boolean;
   setIsResizing: (value: boolean) => void;
+  /** True when in mobile nav mode (< 717px fold breakpoint) — sidebar renders as a Sheet drawer */
+  isMobileNav: boolean;
+  /** Whether the mobile sidebar drawer is open */
+  mobileDrawerOpen: boolean;
+  /** Open or close the mobile sidebar drawer */
+  setMobileDrawerOpen: (open: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -100,6 +107,10 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
   );
 
   const [isResizing, setIsResizing] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Derive mobile mode from viewport width (< fold breakpoint = 717px)
+  const isMobileNav = useIsMobileNav();
 
   // Track the last panel view so ⌘B can restore it
   const lastPanelViewRef = useRef<SidebarView>(
@@ -120,6 +131,11 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
   );
 
   const toggleSidebar = useCallback(() => {
+    if (isMobileNav) {
+      // On mobile, ⌘B opens/closes the drawer
+      setMobileDrawerOpen((open) => !open);
+      return;
+    }
     if (panelOpen) {
       // Panel is showing → switch to welcome (hides panel)
       setActiveViewState("welcome");
@@ -127,7 +143,7 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
       // Panel is hidden → restore last panel view
       setActiveViewState(lastPanelViewRef.current);
     }
-  }, [panelOpen, setActiveViewState]);
+  }, [isMobileNav, panelOpen, setActiveViewState]);
 
   return (
     <SidebarContext.Provider
@@ -143,6 +159,9 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
         setWidth,
         isResizing,
         setIsResizing,
+        isMobileNav,
+        mobileDrawerOpen,
+        setMobileDrawerOpen,
       }}
     >
       {children}

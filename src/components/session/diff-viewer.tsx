@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, Loader2, Columns2, AlignLeft } from "lucide-react";
 import type { FileDiffItem } from "@/lib/api-types";
 import { useTheme } from "@/contexts/theme-context";
 import type { Theme } from "@/contexts/theme-context";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 interface DiffViewerProps {
   diffs: FileDiffItem[];
@@ -131,9 +133,11 @@ function getDiffStyleOverride(theme: Theme): ReactDiffViewerStylesOverride {
 function FileDiffSection({
   diff,
   defaultOpen,
+  splitView,
 }: {
   diff: FileDiffItem;
   defaultOpen: boolean;
+  splitView: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const badge = STATUS_BADGE_MAP[diff.status];
@@ -169,7 +173,7 @@ function FileDiffSection({
           <ReactDiffViewer
             oldValue={diff.before}
             newValue={diff.after}
-            splitView={false}
+            splitView={splitView}
             useDarkTheme={resolvedTheme !== "light"}
             styles={styles}
             hideLineNumbers={false}
@@ -181,6 +185,12 @@ function FileDiffSection({
 }
 
 export function DiffViewer({ diffs, isLoading, error, totalAdditions: propAdditions, totalDeletions: propDeletions }: DiffViewerProps) {
+  const isMobile = useIsMobile();
+  const [splitView, setSplitView] = useState(false);
+
+  // On mobile always unified; on desktop respect user toggle
+  const effectiveSplitView = isMobile ? false : splitView;
+
   const { totalAdditions, totalDeletions } = useMemo(() => {
     // Use pre-computed values from parent if available
     if (propAdditions !== undefined && propDeletions !== undefined) {
@@ -231,6 +241,22 @@ export function DiffViewer({ diffs, isLoading, error, totalAdditions: propAdditi
         </span>
         <span className="text-green-500 font-mono">+{totalAdditions}</span>
         <span className="text-red-500 font-mono">-{totalDeletions}</span>
+        {/* Split/unified toggle — desktop only */}
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 px-2 text-xs gap-1"
+            onClick={() => setSplitView((v) => !v)}
+            title={splitView ? "Switch to unified view" : "Switch to split view"}
+          >
+            {splitView ? (
+              <><AlignLeft className="h-3 w-3" />Unified</>
+            ) : (
+              <><Columns2 className="h-3 w-3" />Split</>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* File diff sections */}
@@ -240,6 +266,7 @@ export function DiffViewer({ diffs, isLoading, error, totalAdditions: propAdditi
             key={diff.file}
             diff={diff}
             defaultOpen={defaultOpen}
+            splitView={effectiveSplitView}
           />
         ))}
       </div>

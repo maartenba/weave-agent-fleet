@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { AutocompleteAgent } from "@/lib/api-types";
 import { resolveAgentColor } from "@/lib/agent-colors";
-import { ChevronDownIcon } from "lucide-react";
+import { Bot } from "lucide-react";
 
 interface AgentSelectorProps {
   agents: AutocompleteAgent[];
@@ -51,18 +51,19 @@ export function AgentSelector({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           disabled={disabled}
-          className="h-9 gap-1.5 px-2.5 text-xs"
+          className="h-9 w-9 shrink-0"
+          title={label}
         >
-          {currentAgent && (
+          {currentAgent ? (
             <span
               className="inline-block h-2 w-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: resolveAgentColor(currentAgent.name, currentAgent.color) }}
             />
+          ) : (
+            <Bot className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
-          {label}
-          <ChevronDownIcon className="h-3 w-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">

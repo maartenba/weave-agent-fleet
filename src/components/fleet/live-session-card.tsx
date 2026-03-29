@@ -154,7 +154,7 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-none pointer-coarse:opacity-100 pointer-coarse:h-9 pointer-coarse:w-9"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -169,7 +169,7 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-10 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+          className="absolute top-2 right-10 h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 touch-none pointer-coarse:opacity-100 pointer-coarse:h-9 pointer-coarse:w-9"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -184,7 +184,7 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 dark:text-red-400 hover:text-red-500 hover:bg-red-500/10"
+          className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-red-600 dark:text-red-400 hover:text-red-500 hover:bg-red-500/10 touch-none pointer-coarse:opacity-100 pointer-coarse:h-9 pointer-coarse:w-9"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -199,10 +199,10 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
         <Button
           variant="ghost"
           size="icon"
-          className={`absolute top-2 right-10 h-6 w-6 transition-opacity text-muted-foreground ${
+          className={`absolute top-2 right-10 h-8 w-8 transition-opacity text-muted-foreground pointer-coarse:h-9 pointer-coarse:w-9 ${
             isResuming
               ? "opacity-100 cursor-not-allowed"
-              : "opacity-0 group-hover:opacity-100 hover:text-green-500 hover:bg-green-500/10"
+              : "opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-green-500 hover:bg-green-500/10 pointer-coarse:opacity-100"
           }`}
           disabled={isResuming}
           onClick={(e) => {

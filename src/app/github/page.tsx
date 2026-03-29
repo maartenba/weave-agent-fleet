@@ -17,7 +17,7 @@ export default function GitHubPage() {
         title="GitHub"
         subtitle="Browse issues and pull requests for your repositories"
       />
-      <div className="flex-1 overflow-auto thin-scrollbar p-6">
+      <div className="flex-1 overflow-auto thin-scrollbar p-3 sm:p-4 lg:p-6">
         {!isGitHubConnected ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <Github className="h-10 w-10 text-muted-foreground/40" />

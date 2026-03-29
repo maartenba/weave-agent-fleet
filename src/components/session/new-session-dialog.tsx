@@ -312,7 +312,7 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="sm:max-w-md top-[10%] translate-y-0">
+      <DialogContent className="sm:max-w-md top-[10%] translate-y-0 max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>

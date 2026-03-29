@@ -90,9 +90,9 @@ export function FleetToolbar({
   }, [groupBy, sortBy]);
 
   return (
-    <div className="flex items-center gap-3">
-      {/* Search */}
-      <div className="relative flex-1 max-w-xs">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+      {/* Search — full width on mobile */}
+      <div className="relative flex-1 sm:max-w-xs">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <Input
           placeholder="Search sessions…"
@@ -102,51 +102,54 @@ export function FleetToolbar({
         />
       </div>
 
-      {/* Group By */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            <Group className="h-3.5 w-3.5" />
-            Group: {GROUP_BY_LABELS[groupBy]}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {(Object.keys(GROUP_BY_LABELS) as GroupBy[]).map((key) => (
-            <DropdownMenuItem
-              key={key}
-              onClick={() => onGroupByChange(key)}
-              className="text-xs gap-2"
-            >
-              {groupBy === key && <Check className="h-3.5 w-3.5" />}
-              {groupBy !== key && <span className="w-3.5" />}
-              {GROUP_BY_LABELS[key]}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Group By + Sort By — row on all sizes */}
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs flex-1 sm:flex-none">
+              <Group className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">Group: {GROUP_BY_LABELS[groupBy]}</span>
+              <span className="xs:hidden">Group</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {(Object.keys(GROUP_BY_LABELS) as GroupBy[]).map((key) => (
+              <DropdownMenuItem
+                key={key}
+                onClick={() => onGroupByChange(key)}
+                className="text-xs gap-2"
+              >
+                {groupBy === key && <Check className="h-3.5 w-3.5" />}
+                {groupBy !== key && <span className="w-3.5" />}
+                {GROUP_BY_LABELS[key]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-      {/* Sort By */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            <ArrowUpDown className="h-3.5 w-3.5" />
-            Sort: {SORT_BY_LABELS[sortBy]}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {(Object.keys(SORT_BY_LABELS) as SortBy[]).map((key) => (
-            <DropdownMenuItem
-              key={key}
-              onClick={() => onSortByChange(key)}
-              className="text-xs gap-2"
-            >
-              {sortBy === key && <Check className="h-3.5 w-3.5" />}
-              {sortBy !== key && <span className="w-3.5" />}
-              {SORT_BY_LABELS[key]}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs flex-1 sm:flex-none">
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">Sort: {SORT_BY_LABELS[sortBy]}</span>
+              <span className="xs:hidden">Sort</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {(Object.keys(SORT_BY_LABELS) as SortBy[]).map((key) => (
+              <DropdownMenuItem
+                key={key}
+                onClick={() => onSortByChange(key)}
+                className="text-xs gap-2"
+              >
+                {sortBy === key && <Check className="h-3.5 w-3.5" />}
+                {sortBy !== key && <span className="w-3.5" />}
+                {SORT_BY_LABELS[key]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

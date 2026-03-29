@@ -29,6 +29,11 @@ export function generateMetadata(): Metadata {
   return {
     title,
     description: "Multi-agent orchestration dashboard for Weave — spawn, manage, and coordinate OpenCode sessions across projects.",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "Weave",
+    },
     icons: {
       icon: [
         {
@@ -36,6 +41,7 @@ export function generateMetadata(): Metadata {
           type: "image/svg+xml",
         },
       ],
+      apple: "/weave_logo.png",
     },
   };
 }
@@ -48,6 +54,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#0F172A" />
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=JSON.parse(localStorage.getItem('weave-theme'));var h=document.documentElement;if(t==='black'){h.classList.add('dark','theme-black');}else if(t==='light'){h.classList.remove('dark');h.classList.add('theme-light');}else{h.classList.add('dark');}}catch(e){}})();` }} />
       </head>
       <body
