@@ -1,5 +1,7 @@
 # UI Performance Fixes — Browser Tab Freeze Prevention
 
+**PR**: https://github.com/pgermishuys/weave-agent-fleet/pull/151
+
 ## TL;DR
 > **Summary**: Fix browser tab freezes caused by unvirtualized 500+ message rendering, unthrottled scroll listeners, aggressive 5s polling, and broken React.memo chains in the fleet dashboard. Two-phase approach: quick wins first (~80% improvement), then structural changes for the remaining 10%.
 > **Estimated Effort**: Medium
