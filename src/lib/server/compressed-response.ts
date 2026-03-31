@@ -9,7 +9,7 @@
  *   return compressedJson(request, data, { status: 200, headers: { ... } });
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { gzipSync, brotliCompressSync, constants } from "zlib";
 
 interface CompressedJsonOptions {
@@ -49,14 +49,14 @@ export function compressedJson(
   request: NextRequest,
   data: unknown,
   options: CompressedJsonOptions = {}
-): Response {
+): NextResponse {
   const { status = 200, headers: extraHeaders = {} } = options;
   const json = JSON.stringify(data);
   const jsonBytes = Buffer.from(json, "utf-8");
 
   // Don't bother compressing small payloads
   if (jsonBytes.length < MIN_COMPRESS_SIZE) {
-    return new Response(json, {
+    return new NextResponse(json, {
       status,
       headers: {
         "Content-Type": "application/json",
@@ -70,7 +70,7 @@ export function compressedJson(
   );
 
   if (!encoding) {
-    return new Response(json, {
+    return new NextResponse(json, {
       status,
       headers: {
         "Content-Type": "application/json",
@@ -92,7 +92,7 @@ export function compressedJson(
       compressed = gzipSync(jsonBytes, { level: 6 });
     }
 
-    return new Response(compressed, {
+    return new NextResponse(new Uint8Array(compressed), {
       status,
       headers: {
         "Content-Type": "application/json",
@@ -103,7 +103,7 @@ export function compressedJson(
     });
   } catch {
     // Compression failed — fall back to uncompressed
-    return new Response(json, {
+    return new NextResponse(json, {
       status,
       headers: {
         "Content-Type": "application/json",
