@@ -8,6 +8,7 @@ import { FleetToolbar } from "@/components/fleet/fleet-toolbar";
 import type { GroupBy, SortBy } from "@/components/fleet/fleet-toolbar";
 import { SessionGroup } from "@/components/fleet/session-group";
 import { LiveSessionCard } from "@/components/fleet/live-session-card";
+import { useFoldableScreen } from "@/hooks/use-foldable-screen";
 import { useSessionsContext } from "@/contexts/sessions-context";
 import { useTerminateSession } from "@/hooks/use-terminate-session";
 import { useAbortSession } from "@/hooks/use-abort-session";
@@ -32,6 +33,7 @@ function FleetPageInner() {
   const { resumeSession, resumingSessionId } = useResumeSession();
   const { deleteSession, isDeleting } = useDeleteSession();
   const { openDirectory } = useOpenDirectory();
+  const { isFolded } = useFoldableScreen();
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceFilter = searchParams.get("workspace");
@@ -211,7 +213,7 @@ function FleetPageInner() {
                 </span>
                 <span className="text-xs text-muted-foreground">({items.length})</span>
               </div>
-               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+               <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  {nestSessions(items).map(({ item, children }) => (
                    <div key={`${item.instanceId}-${item.session.id}`} className="contents">
                      <LiveSessionCard
@@ -279,7 +281,7 @@ function FleetPageInner() {
                 </span>
                 <span className="text-xs text-muted-foreground">({items.length})</span>
               </div>
-               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+               <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  {nestSessions(items).map(({ item, children }) => (
                    <div key={`${item.instanceId}-${item.session.id}`} className="contents">
                      <LiveSessionCard
@@ -339,7 +341,7 @@ function FleetPageInner() {
                 </span>
                 <span className="text-xs text-muted-foreground">({sorted.length})</span>
               </div>
-               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+               <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  {nestSessions(sorted).map(({ item, children }) => (
                    <div key={`${item.instanceId}-${item.session.id}`} className="contents">
                      <LiveSessionCard
@@ -397,7 +399,7 @@ function FleetPageInner() {
     if (prefs.groupBy === "none") {
       const nested = nestSessions(sortSessions(searchFiltered));
       return (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {nested.map(({ item, children }) => (
             <div key={`${item.instanceId}-${item.session.id}`} className="contents">
               <LiveSessionCard
@@ -468,7 +470,7 @@ function FleetPageInner() {
         subtitle={subtitle}
         actions={<NewSessionButton />}
       />
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className={`flex-1 overflow-auto p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6${isFolded ? " fold-left" : ""}`}>
         <SummaryBar summary={summary} />
 
         <FleetToolbar

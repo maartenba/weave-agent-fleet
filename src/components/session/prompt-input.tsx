@@ -261,7 +261,23 @@ export function PromptInput({
     });
   }, []);
 
-  // ─── Auto-resize textarea ────────────────────────────────────────────────
+  // ─── Mobile keyboard handling ────────────────────────────────────────────
+  // When the virtual keyboard opens on mobile, visualViewport shrinks.
+  // We scroll the textarea into view so it's not hidden behind the keyboard.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const handleResize = () => {
+      // If the input is focused, scroll it into view after the viewport resizes
+      if (document.activeElement === inputRef.current) {
+        setTimeout(() => {
+          inputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }, 50);
+      }
+    };
+    vv.addEventListener("resize", handleResize);
+    return () => vv.removeEventListener("resize", handleResize);
+  }, []);
   const maxHeight = 150;
 
   useLayoutEffect(() => {

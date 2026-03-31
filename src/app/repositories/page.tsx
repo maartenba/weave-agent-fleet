@@ -14,7 +14,7 @@ export default function RepositoriesPage() {
         title="Repositories"
         subtitle="Browse local git repositories"
       />
-      <div className="flex-1 overflow-auto thin-scrollbar p-6">
+      <div className="flex-1 overflow-auto thin-scrollbar p-3 sm:p-4 lg:p-6">
         {isLoading ? null : repositories.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <FolderGit2 className="h-10 w-10 text-muted-foreground/40" />

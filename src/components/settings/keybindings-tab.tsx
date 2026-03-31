@@ -263,8 +263,9 @@ export function KeybindingsTab() {
               {category}
             </p>
 
+            <div className="overflow-x-auto">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_140px_auto] gap-3 items-center pb-2 border-b border-white/10">
+            <div className="grid grid-cols-[1fr_100px_140px_auto] gap-3 items-center pb-2 border-b border-white/10 min-w-[420px]">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Command</p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Palette Key</p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Global Shortcut</p>
@@ -291,7 +292,7 @@ export function KeybindingsTab() {
               return (
                 <div
                   key={cmd.id}
-                  className="grid grid-cols-[1fr_100px_140px_auto] gap-3 items-center py-2 border-b border-white/5 last:border-0"
+                  className="grid grid-cols-[1fr_100px_140px_auto] gap-3 items-center py-2 border-b border-white/5 last:border-0 min-w-[420px]"
                 >
                   {/* Label */}
                   <div className="flex items-center gap-2">
@@ -340,6 +341,7 @@ export function KeybindingsTab() {
                 </div>
               );
             })}
+            </div>{/* end overflow-x-auto */}
           </CardContent>
         </Card>
       ))}

@@ -4,7 +4,7 @@ import Image from "next/image";
 
 export default function WelcomePage() {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8">
+    <div className="flex flex-col items-center justify-center h-full p-4 sm:p-8">
       <div className="flex flex-col items-center gap-4 max-w-md text-center">
         <Image
           src="/weave_logo.png"

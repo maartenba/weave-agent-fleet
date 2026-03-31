@@ -33,7 +33,7 @@ export default function RepositoryDetailPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       <Header title={repoName} subtitle={repoPath} />
-      <div className="flex-1 overflow-auto thin-scrollbar p-6">
+      <div className="flex-1 overflow-auto thin-scrollbar p-3 sm:p-4 lg:p-6">
         {isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground py-8">
             <Loader2 className="h-4 w-4 animate-spin" />

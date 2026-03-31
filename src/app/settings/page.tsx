@@ -15,7 +15,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col h-full">
       <Header title="Settings" subtitle="Manage skills, agents, providers, keybindings, and configuration" />
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
         <Tabs defaultValue="skills">
           <TabsList variant="line">
             <TabsTrigger value="skills">Skills</TabsTrigger>

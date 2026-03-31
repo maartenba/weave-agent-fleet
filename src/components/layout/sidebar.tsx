@@ -6,11 +6,34 @@ import {
 } from "@/contexts/sidebar-context";
 import { SidebarIconRail } from "@/components/layout/sidebar-icon-rail";
 import { ContextualPanel } from "@/components/layout/sidebar-panel";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 export function Sidebar() {
-  const { panelOpen, width } = useSidebar();
+  const { panelOpen, width, isMobileNav, mobileDrawerOpen, setMobileDrawerOpen } = useSidebar();
   const totalWidth = panelOpen ? SIDEBAR_RAIL_WIDTH + width : SIDEBAR_RAIL_WIDTH;
 
+  // Mobile: render sidebar as a Sheet drawer
+  if (isMobileNav) {
+    return (
+      <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          className="p-0 w-[280px] bg-sidebar border-sidebar-border flex flex-row gap-0"
+        >
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SidebarIconRail />
+          <ContextualPanel />
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  // Desktop: render inline aside as before
   return (
     <aside
       className="relative flex h-screen flex-row border-r border-sidebar-border bg-sidebar overflow-hidden"

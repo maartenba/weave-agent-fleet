@@ -17,7 +17,6 @@ import {
   type SidebarView,
 } from "@/contexts/sidebar-context";
 
-
 // ── Default routes per view ──────────────────────────────────────────────────
 
 const VIEW_DEFAULT_ROUTE: Record<SidebarView, string> = {
@@ -74,7 +73,7 @@ function IconRailButton({ icon: Icon, label, view, onSwitch }: IconRailButtonPro
           aria-label={label}
           onClick={() => onSwitch(view)}
           className={cn(
-            "relative flex h-10 w-full items-center justify-center rounded-sm transition-colors",
+            "relative flex h-11 w-full items-center justify-center rounded-sm transition-colors active:scale-95",
             isActive
               ? "text-sidebar-accent-foreground"
               : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
@@ -113,7 +112,7 @@ function IconRailLink({ icon: Icon, label, href }: IconRailLinkProps) {
           aria-label={label}
           aria-current={isActive ? "page" : undefined}
           className={cn(
-            "relative flex h-10 w-full items-center justify-center rounded-sm transition-colors",
+            "relative flex h-11 w-full items-center justify-center rounded-sm transition-colors active:scale-95",
             isActive
               ? "text-sidebar-accent-foreground"
               : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
@@ -192,7 +191,7 @@ function ProfileBadge() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SidebarIconRail() {
-  const { activeView, panelOpen, setActiveView } = useSidebar();
+  const { activeView, panelOpen, setActiveView, isMobileNav, setMobileDrawerOpen } = useSidebar();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -226,6 +225,17 @@ export function SidebarIconRail() {
       setActiveView(owningView);
     }
   }, [activeView, pathname, setActiveView]);
+
+  // Close mobile drawer when user navigates to a new route.
+  // Track previous pathname so this only fires on actual navigation,
+  // not on initial mount or when isMobileNav changes.
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (isMobileNav && prevPathnameRef.current !== pathname) {
+      setMobileDrawerOpen(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobileNav, setMobileDrawerOpen]);
 
   // Navigate when activeView changes (handles both clicks AND ⌘B toggle).
   // We use a ref to track the previous view so this only fires on actual changes,
@@ -273,7 +283,7 @@ export function SidebarIconRail() {
               aria-label="Weave Agent Fleet"
               onClick={() => handleSwitch("welcome")}
               className={cn(
-                "relative flex h-10 w-full items-center justify-center rounded-sm transition-opacity hover:opacity-80",
+                "relative flex h-11 w-full items-center justify-center rounded-sm transition-opacity hover:opacity-80 active:scale-95",
                 isWelcome && "ring-1 ring-icon-rail-active/30 rounded-md"
               )}
             >

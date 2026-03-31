@@ -97,6 +97,49 @@
   }
 }
 
+/* Safe area inset utilities for notch / home indicator support */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility safe-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+@utility safe-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Foldable device CSS utilities */
+/* --fold-gap is set from JS via useFoldableScreen when dual-screen is detected */
+:root {
+  --fold-gap: 0px;
+}
+
+@utility fold-left {
+  @media (horizontal-viewport-segments: 2) {
+    width: env(viewport-segment-width 0 0, 50%);
+    max-width: env(viewport-segment-width 0 0, 50%);
+  }
+}
+
+@utility fold-right {
+  @media (horizontal-viewport-segments: 2) {
+    width: env(viewport-segment-width 1 0, 50%);
+    max-width: env(viewport-segment-width 1 0, 50%);
+  }
+}
+
+@utility fold-gap {
+  @media (horizontal-viewport-segments: 2) {
+    gap: var(--fold-gap);
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -140,6 +183,10 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Custom breakpoints for mobile and foldable screens */
+  --breakpoint-xs: 360px;
+  --breakpoint-fold: 717px;
 
   /* Icon rail — semantic aliases of sidebar tokens (work across all themes) */
   --color-icon-rail: var(--sidebar);
@@ -664,7 +711,13 @@
   background-color: #ffeef0;
 }
 
-/* Thin styled scrollbar — regular class because @utility doesn't support pseudo-elements */
+/* Mobile typography: scale up 10px labels to 12px for readability */
+@media (max-width: 716px) {
+  .text-\[10px\] {
+    font-size: 0.75rem; /* 12px */
+  }
+}
+
 .thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;
