@@ -4,6 +4,7 @@ import { createWorkspace } from "@/lib/server/workspace-manager";
 import { insertSession, listSessions, countSessions, getWorkspace, getInstance, getSessionByOpencodeId, insertSessionCallback, getSessionIdsWithActiveChildren } from "@/lib/server/db-repository";
 import { startMonitoring } from "@/lib/server/callback-monitor";
 import { formatContextAsPrompt } from "@/lib/server/context-formatter";
+import { compressedJson } from "@/lib/server/compressed-response";
 import { randomUUID } from "crypto";
 import { log } from "@/lib/server/logger";
 import { withTimeout, getSDKCallTimeoutMs } from "@/lib/server/async-utils";
@@ -212,7 +213,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       })
     );
-    return NextResponse.json(items, { status: 200 });
+    return compressedJson(request, items);
   }
 
   const items: SessionListItem[] = [];
@@ -352,11 +353,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const total = countSessions(statuses);
-  const response = NextResponse.json(items, { status: 200 });
-  response.headers.set("X-Total-Count", String(total));
-  response.headers.set("X-Limit", String(limit));
-  response.headers.set("X-Offset", String(offset));
-  return response;
+  return compressedJson(request, items, {
+    headers: {
+      "X-Total-Count": String(total),
+      "X-Limit": String(limit),
+      "X-Offset": String(offset),
+    },
+  });
 }
 
 // ─── Status derivation helpers ────────────────────────────────────────────────

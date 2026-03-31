@@ -21,6 +21,7 @@ function getAppVersion(): string {
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  compress: true,
   serverExternalPackages: ["@opencode-ai/sdk", "better-sqlite3"],
   env: {
     NEXT_PUBLIC_APP_VERSION: getAppVersion(),
