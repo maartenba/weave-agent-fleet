@@ -14,6 +14,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command";
 import { Check, Cpu } from "lucide-react";
 import type { AvailableProvider } from "@/lib/api-types";
@@ -33,7 +34,7 @@ interface ModelSelectorProps {
 
 const DEFAULT_VALUE = "__default__";
 
-function modelValue(providerID: string, modelID: string): string {
+export function modelValue(providerID: string, modelID: string): string {
   return `${providerID}::${modelID}`;
 }
 
@@ -90,29 +91,32 @@ export function ModelSelector({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
-        {/* Default option — outside Command so it's never filtered by search */}
-        <div
-          role="option"
-          aria-selected={currentValue === DEFAULT_VALUE}
-          className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-accent rounded-sm mx-1 mt-1"
-          onClick={() => {
-            onSelect(null);
-            setOpen(false);
-          }}
-        >
-          <Check
-            className={cn(
-              "h-3 w-3 shrink-0",
-              currentValue === DEFAULT_VALUE ? "opacity-100" : "opacity-0"
-            )}
-          />
-          Default
-        </div>
-        <div className="bg-border -mx-1 h-px my-1" />
         <Command>
           <CommandInput placeholder="Search models…" />
           <CommandList className="max-h-72 thin-scrollbar">
             <CommandEmpty>No matching models</CommandEmpty>
+            <CommandGroup forceMount>
+              <CommandItem
+                value={DEFAULT_VALUE}
+                forceMount
+                onSelect={() => {
+                  onSelect(null);
+                  setOpen(false);
+                }}
+                className="text-xs"
+              >
+                <Check
+                  className={cn(
+                    "h-3 w-3 shrink-0",
+                    currentValue === DEFAULT_VALUE
+                      ? "opacity-100"
+                      : "opacity-0"
+                  )}
+                />
+                Default
+              </CommandItem>
+            </CommandGroup>
+            {providers.length > 0 && <CommandSeparator />}
             {providers.map((provider) => (
               <CommandGroup key={provider.id} heading={provider.name}>
                 {provider.models.map((model) => {
@@ -120,11 +124,8 @@ export function ModelSelector({
                   return (
                     <CommandItem
                       key={model.id}
-                      value={composeSearchValue(
-                        provider.name,
-                        model.name,
-                        model.id
-                      )}
+                      value={value}
+                      keywords={[provider.name, model.name, model.id]}
                       onSelect={() => {
                         onSelect({
                           providerID: provider.id,
@@ -137,7 +138,9 @@ export function ModelSelector({
                       <Check
                         className={cn(
                           "h-3 w-3 shrink-0",
-                          currentValue === value ? "opacity-100" : "opacity-0"
+                          currentValue === value
+                            ? "opacity-100"
+                            : "opacity-0"
                         )}
                       />
                       {model.name}

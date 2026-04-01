@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { composeSearchValue, parseModelValue } from "../model-selector";
+import {
+  composeSearchValue,
+  modelValue,
+  parseModelValue,
+} from "../model-selector";
 
 describe("composeSearchValue", () => {
   it("includes provider name, model name, and model ID", () => {
@@ -44,6 +48,39 @@ describe("parseModelValue", () => {
     expect(parseModelValue("aws::us.anthropic.claude-3:5")).toEqual({
       providerID: "aws",
       modelID: "us.anthropic.claude-3:5",
+    });
+  });
+});
+
+describe("modelValue", () => {
+  it("encodes providerID::modelID", () => {
+    expect(modelValue("openai", "gpt-4")).toBe("openai::gpt-4");
+  });
+
+  it("round-trips through parseModelValue", () => {
+    const encoded = modelValue("anthropic", "claude-3.5-sonnet");
+    const decoded = parseModelValue(encoded);
+    expect(decoded).toEqual({
+      providerID: "anthropic",
+      modelID: "claude-3.5-sonnet",
+    });
+  });
+
+  it("round-trips with colons in model ID", () => {
+    const encoded = modelValue("aws", "us.anthropic.claude-3:5");
+    const decoded = parseModelValue(encoded);
+    expect(decoded).toEqual({
+      providerID: "aws",
+      modelID: "us.anthropic.claude-3:5",
+    });
+  });
+
+  it("round-trips with slashes in model ID", () => {
+    const encoded = modelValue("openrouter", "anthropic/claude-3.5-sonnet");
+    const decoded = parseModelValue(encoded);
+    expect(decoded).toEqual({
+      providerID: "openrouter",
+      modelID: "anthropic/claude-3.5-sonnet",
     });
   });
 });
