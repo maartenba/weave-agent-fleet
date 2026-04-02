@@ -144,7 +144,7 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
                 />
               )}
               <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">
-                {session.id.slice(0, 8)}…
+                {(session.id ?? instanceId).slice(0, 8)}…
               </span>
             </div>
           </CardContent>
