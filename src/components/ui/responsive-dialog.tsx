@@ -51,7 +51,7 @@ export function ResponsiveDialog({
           <SheetHeader>
             <SheetTitle>{title}</SheetTitle>
           </SheetHeader>
-          <div className="overflow-y-auto max-h-[75dvh] pb-safe-bottom">
+          <div className="overflow-y-auto max-h-[calc(var(--visual-vh,100dvh)*0.75)] pb-safe-bottom">
             {children}
           </div>
         </SheetContent>
