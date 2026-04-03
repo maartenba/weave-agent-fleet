@@ -18,6 +18,8 @@ import {
   renameFile,
   deleteFile,
 } from "@/lib/file-operations";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Folder } from "lucide-react";
 import type { FileTreeNode } from "@/hooks/use-file-tree";
 
 // ─── Discriminated union for dialog state ────────────────────────────────────
@@ -27,7 +29,8 @@ export type DialogState =
   | { type: "create-file"; parentPath: string }
   | { type: "create-folder"; parentPath: string }
   | { type: "rename"; node: FileTreeNode }
-  | { type: "delete"; node: FileTreeNode };
+  | { type: "delete"; node: FileTreeNode }
+  | { type: "move"; node: FileTreeNode };
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -36,13 +39,15 @@ export interface FileOperationDialogsProps {
   onClose: () => void;
   /**
    * Called after a successful operation.
-   * @param action  One of: "create-file" | "create-folder" | "rename" | "delete"
+   * @param action  One of: "create-file" | "create-folder" | "rename" | "delete" | "move"
    * @param path    The primary path affected (new path for create/rename, deleted path for delete)
-   * @param newPath Only set for rename — the new path of the renamed item
+   * @param newPath Only set for rename/move — the new path of the item
    */
   onSuccess: (action: string, path: string, newPath?: string) => void;
   sessionId: string;
   instanceId: string;
+  /** Full file tree — used by MoveDialog for directory selection */
+  tree?: FileTreeNode[];
 }
 
 // ─── Create dialog (file or folder) ─────────────────────────────────────────
@@ -333,6 +338,149 @@ function DeleteDialog({
   );
 }
 
+// ─── Move dialog ─────────────────────────────────────────────────────────────
+
+/** Recursively collect all directory paths from a tree. */
+function collectDirectories(nodes: FileTreeNode[]): string[] {
+  const dirs: string[] = [];
+  for (const node of nodes) {
+    if (node.type === "directory") {
+      dirs.push(node.path);
+      if (node.children) {
+        dirs.push(...collectDirectories(node.children));
+      }
+    }
+  }
+  return dirs;
+}
+
+function MoveDialog({
+  dialogState,
+  onClose,
+  onSuccess,
+  sessionId,
+  instanceId,
+  tree,
+}: FileOperationDialogsProps & {
+  dialogState: { type: "move"; node: FileTreeNode };
+}) {
+  const { node } = dialogState;
+  const [selectedDir, setSelectedDir] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | undefined>();
+
+  // Current parent directory of the node
+  const currentParent = node.path.includes("/")
+    ? node.path.substring(0, node.path.lastIndexOf("/"))
+    : "";
+
+  // Build list of target directories, including root
+  const directories = ["", ...collectDirectories(tree ?? [])];
+
+  // Filter out: the node itself (if directory), and any descendants of the node
+  const validDirectories = directories.filter((dir) => {
+    if (node.type === "directory") {
+      // Can't move a directory into itself or its children
+      if (dir === node.path || dir.startsWith(node.path + "/")) return false;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    setSelectedDir(null);
+    setApiError(undefined);
+    setIsLoading(false);
+  }, [node.path]);
+
+  const isSameLocation = selectedDir === currentParent;
+  const canMove = selectedDir !== null && !isSameLocation;
+
+  async function handleMove() {
+    if (selectedDir === null) return;
+
+    const newPath = selectedDir ? `${selectedDir}/${node.name}` : node.name;
+
+    if (newPath === node.path) {
+      onClose();
+      return;
+    }
+
+    setIsLoading(true);
+    setApiError(undefined);
+    try {
+      await renameFile(sessionId, instanceId, node.path, newPath);
+      onSuccess("move", node.path, newPath);
+      onClose();
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Move {node.name}</DialogTitle>
+          <DialogDescription>
+            Select a destination directory
+          </DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-64 rounded border border-border">
+          <div className="flex flex-col py-1">
+            {validDirectories.map((dir) => {
+              const isSelected = selectedDir === dir;
+              const isCurrent = dir === currentParent;
+              const label = dir || "/ (root)";
+
+              return (
+                <button
+                  key={dir}
+                  type="button"
+                  className={`flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+                    isSelected
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-accent/50"
+                  } ${isCurrent ? "text-muted-foreground" : ""}`}
+                  onClick={() => setSelectedDir(dir)}
+                >
+                  <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate font-mono">{label}</span>
+                  {isCurrent && (
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                      (current)
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {validDirectories.length === 0 && (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                No valid destinations
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+
+        {apiError && (
+          <p className="text-destructive text-xs">{apiError}</p>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleMove} disabled={isLoading || !canMove}>
+            {isLoading ? "Moving…" : "Move"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Composed orchestrator ───────────────────────────────────────────────────
 
 /**
@@ -362,6 +510,10 @@ export function FileOperationDialogs(props: FileOperationDialogsProps) {
 
   if (dialogState.type === "delete") {
     return <DeleteDialog {...props} dialogState={dialogState} />;
+  }
+
+  if (dialogState.type === "move") {
+    return <MoveDialog {...props} dialogState={dialogState} />;
   }
 
   return null;

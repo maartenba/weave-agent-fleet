@@ -1,6 +1,6 @@
 "use client";
 
-import { FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { FilePlus, FolderPlus, FolderInput, Pencil, Trash2 } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -18,6 +18,7 @@ export interface FileTreeContextMenuProps {
   onNewFolder: (parentPath: string) => void;
   onRename: (node: FileTreeNode) => void;
   onDelete: (node: FileTreeNode) => void;
+  onMove?: (node: FileTreeNode) => void;
   children: React.ReactNode;
 }
 
@@ -35,6 +36,7 @@ export function FileTreeContextMenu({
   onNewFolder,
   onRename,
   onDelete,
+  onMove,
   children,
 }: FileTreeContextMenuProps) {
   /** Parent path for "new file/folder" actions — empty string = workspace root. */
@@ -74,6 +76,12 @@ export function FileTreeContextMenu({
               Rename
               <ContextMenuShortcut>F2</ContextMenuShortcut>
             </ContextMenuItem>
+            {onMove && (
+              <ContextMenuItem onSelect={() => onMove(node)}>
+                <FolderInput />
+                Move to…
+              </ContextMenuItem>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem
               variant="destructive"

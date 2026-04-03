@@ -209,3 +209,29 @@ Renames or moves a file or directory. Parent directories for the destination are
 ```
 
 **Errors**: `400` (missing instanceId, invalid JSON, missing newPath), `403` (path traversal / .git on source or destination), `404` (instance or source not found), `409` (destination already exists)
+
+---
+
+## Git Status Coloring & Inline Diff Decorations
+
+The Files tab uses data from the **Diffs API** (`GET /api/sessions/:id/diffs?instanceId=<instanceId>`) to power two visual features:
+
+### File Tree Git Status Coloring
+
+File and folder names in the tree are colored based on their git status:
+- **Green** (`text-green-500`) — added files/folders
+- **Amber** (`text-amber-500`) — modified files/folders
+- **Red** (`text-red-500`) — deleted files/folders
+
+Directory status is aggregated from descendants: all children added → green; any child deleted → red; mixed → amber.
+
+Implemented via `buildGitStatusMap()` in `src/lib/git-status-utils.ts`, which takes `FileDiffItem[]` and returns a `GitStatusMap` (`Map<string, "added" | "modified" | "deleted">`).
+
+### Monaco Editor Inline Diff Decorations
+
+When a file has a corresponding diff entry, the Monaco editor shows gutter decorations (colored bars in the glyph margin) and subtle line backgrounds for changed lines:
+- **Green bar** — added lines
+- **Amber bar** — modified lines
+- **Red bar** — deleted line markers
+
+Line changes are computed by comparing the diff's `before` content against the current editor content using `computeLineChanges()` from `src/lib/line-diff.ts` (LCS-based algorithm, no external dependencies). Content changes are debounced (300ms) to avoid lag during typing.

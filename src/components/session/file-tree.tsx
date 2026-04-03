@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FileTreeNode } from "@/hooks/use-file-tree";
+import type { GitStatusMap } from "@/lib/git-status-utils";
 import { cn } from "@/lib/utils";
 import { FileTreeContextMenu } from "@/components/session/file-tree-context-menu";
 
@@ -55,6 +56,17 @@ function getFileIcon(fileName: string): React.ReactNode {
 // Suppress unused import warning — File is referenced via JSX above in getFileIcon fallback
 void File;
 
+// ─── Git status color helper ─────────────────────────────────────────────────
+
+function gitStatusColorClass(status: "added" | "modified" | "deleted" | undefined): string {
+  switch (status) {
+    case "added": return "text-green-500 dark:text-green-400";
+    case "modified": return "text-amber-500 dark:text-amber-400";
+    case "deleted": return "text-red-500 dark:text-red-400";
+    default: return "";
+  }
+}
+
 // ─── TreeNode component ──────────────────────────────────────────────────────
 
 interface TreeNodeProps {
@@ -62,12 +74,14 @@ interface TreeNodeProps {
   depth: number;
   activeFilePath: string | null;
   dirtyFilePaths: Set<string>;
+  gitStatusMap?: GitStatusMap;
   onFileSelect: (path: string) => void;
   onToggleExpand: (path: string) => void;
   onNewFile?: (parentPath: string) => void;
   onNewFolder?: (parentPath: string) => void;
   onRename?: (node: FileTreeNode) => void;
   onDelete?: (node: FileTreeNode) => void;
+  onMove?: (node: FileTreeNode) => void;
 }
 
 const TreeNode = memo(function TreeNode({
@@ -75,12 +89,14 @@ const TreeNode = memo(function TreeNode({
   depth,
   activeFilePath,
   dirtyFilePaths,
+  gitStatusMap,
   onFileSelect,
   onToggleExpand,
   onNewFile,
   onNewFolder,
   onRename,
   onDelete,
+  onMove,
 }: TreeNodeProps) {
   const isActive = node.path === activeFilePath;
   const isDirty = dirtyFilePaths.has(node.path);
@@ -91,6 +107,7 @@ const TreeNode = memo(function TreeNode({
   const handleNewFolder = onNewFolder ?? (() => {});
   const handleRename = onRename ?? (() => {});
   const handleDelete = onDelete ?? (() => {});
+  const handleMove = onMove ?? (() => {});
 
   if (node.type === "directory") {
     return (
@@ -101,6 +118,7 @@ const TreeNode = memo(function TreeNode({
           onNewFolder={handleNewFolder}
           onRename={handleRename}
           onDelete={handleDelete}
+          onMove={handleMove}
         >
           <button
             type="button"
@@ -122,7 +140,7 @@ const TreeNode = memo(function TreeNode({
             ) : (
               <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className="truncate font-medium">{node.name}</span>
+            <span className={cn("truncate font-medium", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
           </button>
         </FileTreeContextMenu>
         {node.isExpanded && node.children && (
@@ -134,12 +152,14 @@ const TreeNode = memo(function TreeNode({
                 depth={depth + 1}
                 activeFilePath={activeFilePath}
                 dirtyFilePaths={dirtyFilePaths}
+                gitStatusMap={gitStatusMap}
                 onFileSelect={onFileSelect}
                 onToggleExpand={onToggleExpand}
                 onNewFile={onNewFile}
                 onNewFolder={onNewFolder}
                 onRename={onRename}
                 onDelete={onDelete}
+                onMove={onMove}
               />
             ))}
           </div>
@@ -156,6 +176,7 @@ const TreeNode = memo(function TreeNode({
       onNewFolder={handleNewFolder}
       onRename={handleRename}
       onDelete={handleDelete}
+      onMove={handleMove}
     >
       <button
         type="button"
@@ -170,7 +191,7 @@ const TreeNode = memo(function TreeNode({
         onClick={() => onFileSelect(node.path)}
       >
         {getFileIcon(node.name)}
-        <span className="flex-1 truncate font-mono">{node.name}</span>
+        <span className={cn("flex-1 truncate font-mono", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
         {isDirty && (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
@@ -188,6 +209,7 @@ interface FileTreeProps {
   tree: FileTreeNode[];
   activeFilePath: string | null;
   dirtyFilePaths: Set<string>;
+  gitStatusMap?: GitStatusMap;
   onFileSelect: (path: string) => void;
   onToggleExpand: (path: string) => void;
   className?: string;
@@ -195,12 +217,14 @@ interface FileTreeProps {
   onNewFolder?: (parentPath: string) => void;
   onRename?: (node: FileTreeNode) => void;
   onDelete?: (node: FileTreeNode) => void;
+  onMove?: (node: FileTreeNode) => void;
 }
 
 export function FileTree({
   tree,
   activeFilePath,
   dirtyFilePaths,
+  gitStatusMap,
   onFileSelect,
   onToggleExpand,
   className,
@@ -208,6 +232,7 @@ export function FileTree({
   onNewFolder,
   onRename,
   onDelete,
+  onMove,
 }: FileTreeProps) {
   if (tree.length === 0) {
     return (
@@ -230,6 +255,7 @@ export function FileTree({
   const handleNewFolder = onNewFolder ?? (() => {});
   const handleRename = onRename ?? (() => {});
   const handleDelete = onDelete ?? (() => {});
+  const handleMove = onMove ?? (() => {});
 
   return (
     <FileTreeContextMenu
@@ -238,6 +264,7 @@ export function FileTree({
       onNewFolder={handleNewFolder}
       onRename={handleRename}
       onDelete={handleDelete}
+      onMove={handleMove}
     >
       <ScrollArea className={cn("flex-1", className)}>
         <div className="py-1 pr-1">
@@ -248,12 +275,14 @@ export function FileTree({
               depth={0}
               activeFilePath={activeFilePath}
               dirtyFilePaths={dirtyFilePaths}
+              gitStatusMap={gitStatusMap}
               onFileSelect={onFileSelect}
               onToggleExpand={onToggleExpand}
               onNewFile={onNewFile}
               onNewFolder={onNewFolder}
               onRename={onRename}
               onDelete={onDelete}
+              onMove={onMove}
             />
           ))}
         </div>

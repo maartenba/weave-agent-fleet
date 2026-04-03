@@ -136,7 +136,9 @@ Inspect the file changes each session produced with a side-by-side diff viewer. 
 Browse and edit workspace files directly from the session view. The Files tab provides:
 
 - **File tree** — collapsible tree view of the session's workspace, excluding `node_modules` and `.git` directories.
+- **Git status coloring** — file and folder names are colored based on git status: green for added, amber for modified, red for deleted. Directory colors are aggregated from their children.
 - **Monaco editor** — syntax-highlighted code editor with theme support for viewing and editing files.
+- **Inline diff decorations** — the Monaco editor shows gutter indicators (colored bars) for added, modified, and deleted lines compared to the git baseline, similar to VS Code's inline change markers.
 - **Image & Markdown preview** — inline previews for images (PNG, JPEG, SVG, etc.) and Markdown files.
 - **Context menu commands** — right-click any file or folder in the tree to:
   - **Create File** / **Create Folder** — add new files or directories.

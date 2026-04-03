@@ -101,6 +101,14 @@ export default function SessionDetailPage() {
   const { deleteSession: permanentDelete, isDeleting } = useDeleteSession();
   const router = useRouter();
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
+
+  // Auto-fetch diffs when instanceId changes (e.g. after session resume)
+  useEffect(() => {
+    if (instanceId) {
+      fetchDiffs();
+    }
+  }, [instanceId, fetchDiffs]);
+
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
   const [abortConfirm, setAbortConfirm] = useState(false);
@@ -840,6 +848,7 @@ export default function SessionDetailPage() {
                 sessionId={sessionId}
                 instanceId={instanceId}
                 fetchDiffs={fetchDiffs}
+                diffs={diffs}
                 recentParts={messages.flatMap((m) => m.parts)}
               />
             </TabsContent>

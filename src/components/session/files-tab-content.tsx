@@ -15,8 +15,9 @@ import {
   FileOperationDialogs,
   type DialogState,
 } from "./file-operation-dialogs";
-import type { AccumulatedPart } from "@/lib/api-types";
+import type { AccumulatedPart, FileDiffItem } from "@/lib/api-types";
 import type { FileTreeNode } from "@/hooks/use-file-tree";
+import { buildGitStatusMap } from "@/lib/git-status-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ interface FilesTabContentProps {
   instanceId: string;
   /** Called after a file is saved so the Changes tab diffs can refresh */
   fetchDiffs: () => void;
+  /** Git diff items for status coloring and inline diff decorations */
+  diffs?: FileDiffItem[];
   /** Recent session messages/parts for SSE-driven tree refresh */
   recentParts?: AccumulatedPart[];
   className?: string;
@@ -40,6 +43,7 @@ export function FilesTabContent({
   sessionId,
   instanceId,
   fetchDiffs,
+  diffs,
   recentParts,
   className,
 }: FilesTabContentProps) {
@@ -109,6 +113,10 @@ export function FilesTabContent({
     setDialogState({ type: "delete", node });
   }, []);
 
+  const handleMove = useCallback((node: FileTreeNode) => {
+    setDialogState({ type: "move", node });
+  }, []);
+
   // ── Post-mutation success handler ──────────────────────────────────────────
   const handleDialogSuccess = useCallback(
     async (action: string, path: string, newPath?: string) => {
@@ -122,6 +130,9 @@ export function FilesTabContent({
       } else if (action === "create-folder") {
         expandTo(path);
       } else if (action === "rename" && newPath) {
+        renameOpenFile(path, newPath);
+        expandTo(newPath);
+      } else if (action === "move" && newPath) {
         renameOpenFile(path, newPath);
         expandTo(newPath);
       } else if (action === "delete") {
@@ -139,7 +150,7 @@ export function FilesTabContent({
     if (!recentParts || recentParts.length === prevPartsLengthRef.current) return;
     prevPartsLengthRef.current = recentParts.length;
 
-    // Check if any new completed write/edit tool parts appeared
+    // Check if any new completed tool parts appeared that could affect files or git state
     const hasFileWrite = recentParts.some(
       (part) =>
         part.type === "tool" &&
@@ -147,31 +158,41 @@ export function FilesTabContent({
         (part.state as { status?: string })?.status === "completed"
     );
 
-    if (hasFileWrite) {
+    const hasBash = recentParts.some(
+      (part) =>
+        part.type === "tool" &&
+        part.tool === "bash" &&
+        (part.state as { status?: string })?.status === "completed"
+    );
+
+    if (hasFileWrite || hasBash) {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         fetchTree();
-        // Reload any open clean files that may have changed
-        recentParts.forEach((part) => {
-          if (
-            part.type === "tool" &&
-            (part.tool === "write" || part.tool === "edit") &&
-            (part.state as { status?: string })?.status === "completed"
-          ) {
-            const input = (part.state as { input?: { filePath?: string } })?.input;
-            const changedPath = input?.filePath;
-            if (changedPath && openFiles.has(changedPath)) {
-              const openFile_ = openFiles.get(changedPath);
-              if (openFile_ && !openFile_.isDirty) {
-                // reloadFile is exposed on the extended result
-                (fileContent as unknown as { reloadFile?: (p: string) => void }).reloadFile?.(changedPath);
+        fetchDiffs();
+        // Reload any open clean files that may have changed (write/edit only)
+        if (hasFileWrite) {
+          recentParts.forEach((part) => {
+            if (
+              part.type === "tool" &&
+              (part.tool === "write" || part.tool === "edit") &&
+              (part.state as { status?: string })?.status === "completed"
+            ) {
+              const input = (part.state as { input?: { filePath?: string } })?.input;
+              const changedPath = input?.filePath;
+              if (changedPath && openFiles.has(changedPath)) {
+                const openFile_ = openFiles.get(changedPath);
+                if (openFile_ && !openFile_.isDirty) {
+                  // reloadFile is exposed on the extended result
+                  (fileContent as unknown as { reloadFile?: (p: string) => void }).reloadFile?.(changedPath);
+                }
               }
             }
-          }
-        });
+          });
+        }
       }, 2000);
     }
-  }, [recentParts, fetchTree, openFiles, fileContent]);
+  }, [recentParts, fetchTree, fetchDiffs, openFiles, fileContent]);
 
   // Drag-to-resize tree panel
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -216,6 +237,19 @@ export function FilesTabContent({
     openFiles.forEach((f) => { if (f.isDirty) set.add(f.path); });
     return set;
   }, [openFiles]);
+
+  // Compute git status map from diffs for file tree coloring
+  const gitStatusMap = useMemo(
+    () => buildGitStatusMap(diffs ?? []),
+    [diffs]
+  );
+
+  // Find the git "before" content for the active file (for inline diff decorations)
+  const gitBeforeContent = useMemo(() => {
+    if (!activeFilePath || !diffs) return undefined;
+    const diff = diffs.find((d) => d.file === activeFilePath);
+    return diff?.before;
+  }, [activeFilePath, diffs]);
 
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
 
@@ -265,6 +299,7 @@ export function FilesTabContent({
             tree={tree}
             activeFilePath={activeFilePath}
             dirtyFilePaths={dirtyFilePaths}
+            gitStatusMap={gitStatusMap}
             onFileSelect={openFile}
             onToggleExpand={toggleExpand}
             className="flex-1"
@@ -272,6 +307,7 @@ export function FilesTabContent({
             onNewFolder={handleNewFolder}
             onRename={handleRename}
             onDelete={handleDelete}
+            onMove={handleMove}
           />
         )}
       </div>
@@ -392,6 +428,7 @@ export function FilesTabContent({
               readOnly={activeFile.isLoading}
               onChange={(value) => updateContent(activeFile.path, value)}
               onSave={() => handleSave(activeFile.path)}
+              gitBeforeContent={gitBeforeContent}
             />
           )}
         </div>
@@ -404,6 +441,7 @@ export function FilesTabContent({
         onSuccess={handleDialogSuccess}
         sessionId={sessionId}
         instanceId={instanceId}
+        tree={tree}
       />
     </div>
   );
