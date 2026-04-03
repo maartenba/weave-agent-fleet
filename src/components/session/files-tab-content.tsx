@@ -170,7 +170,10 @@ export function FilesTabContent({
       debounceTimerRef.current = setTimeout(() => {
         fetchTree();
         fetchDiffs();
-        // Reload any open clean files that may have changed (write/edit only)
+
+        const reloadFn = (fileContent as unknown as { reloadFile?: (p: string) => void }).reloadFile;
+
+        // Reload open clean files that were explicitly written/edited
         if (hasFileWrite) {
           recentParts.forEach((part) => {
             if (
@@ -183,10 +186,19 @@ export function FilesTabContent({
               if (changedPath && openFiles.has(changedPath)) {
                 const openFile_ = openFiles.get(changedPath);
                 if (openFile_ && !openFile_.isDirty) {
-                  // reloadFile is exposed on the extended result
-                  (fileContent as unknown as { reloadFile?: (p: string) => void }).reloadFile?.(changedPath);
+                  reloadFn?.(changedPath);
                 }
               }
+            }
+          });
+        }
+
+        // Bash commands can modify any file (rm, mv, sed, git checkout, etc.)
+        // so reload all open non-dirty files to pick up external changes
+        if (hasBash && reloadFn) {
+          openFiles.forEach((file, path) => {
+            if (!file.isDirty) {
+              reloadFn(path);
             }
           });
         }
@@ -244,11 +256,13 @@ export function FilesTabContent({
     [diffs]
   );
 
-  // Find the git "before" content for the active file (for inline diff decorations)
+  // Find the git "before" content for the active file (for inline diff decorations).
+  // Skip entirely-new files (status "added") — highlighting every line green is just noise.
   const gitBeforeContent = useMemo(() => {
     if (!activeFilePath || !diffs) return undefined;
     const diff = diffs.find((d) => d.file === activeFilePath);
-    return diff?.before;
+    if (!diff || diff.status === "added") return undefined;
+    return diff.before;
   }, [activeFilePath, diffs]);
 
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
