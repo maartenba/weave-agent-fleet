@@ -63,7 +63,7 @@ async function walkDir(
     const relativePath = fullPath.slice(rootDir.length + 1); // strip root + separator
 
     if (item.isDirectory()) {
-      if (EXCLUDED_DIRS.has(name.toLowerCase())) {
+      if (EXCLUDED_DIRS.has(name.toLowerCase()) && name.toLowerCase() !== ".weave") {
         continue;
       }
       entries.push({ path: relativePath, type: "directory" });
