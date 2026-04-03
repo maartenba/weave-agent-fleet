@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { tmpdir } from "os";
-import { mkdtemp, rm, symlink, mkdir } from "fs/promises";
+import { mkdtemp, rm, symlink, mkdir, realpath } from "fs/promises";
 import { join } from "path";
 
 // ─── Import under test ────────────────────────────────────────────────────────
@@ -17,9 +17,11 @@ let tmpRoot: string;
 let outsideDir: string;
 
 beforeEach(async () => {
-  // Create a real temp directory for each test so realpath works
-  tmpRoot = await mkdtemp(join(tmpdir(), "path-sec-root-"));
-  outsideDir = await mkdtemp(join(tmpdir(), "path-sec-outside-"));
+  // Create a real temp directory for each test so realpath works.
+  // Canonicalise with realpath so assertions match the validated paths
+  // (e.g. on macOS /var → /private/var).
+  tmpRoot = await realpath(await mkdtemp(join(tmpdir(), "path-sec-root-")));
+  outsideDir = await realpath(await mkdtemp(join(tmpdir(), "path-sec-outside-")));
 });
 
 afterEach(async () => {
@@ -102,15 +104,14 @@ describe("validatePathWithinRoot (async)", () => {
     expect(result).toBe(join(tmpRoot, "new-dir/new-file.ts"));
   });
 
-  it("ResolvesRealPathForExistingFile", async () => {
+  it("ResolvesPathForExistingFile", async () => {
     // Create a real file
     const { writeFile } = await import("fs/promises");
     await mkdir(join(tmpRoot, "sub"), { recursive: true });
     await writeFile(join(tmpRoot, "sub", "real.ts"), "content");
 
     const result = await validatePathWithinRoot(tmpRoot, "sub/real.ts");
-    // Real path should be returned (tmpdir on macOS may resolve through /private)
-    expect(result.endsWith("sub/real.ts")).toBe(true);
+    expect(result).toBe(join(tmpRoot, "sub/real.ts"));
   });
 });
 

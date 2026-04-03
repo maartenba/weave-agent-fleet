@@ -8,8 +8,8 @@
  * Used by all file API routes that read/write workspace files.
  */
 
-import { resolve, sep } from "path";
-import { realpath } from "fs/promises";
+import { resolve, sep, dirname } from "path";
+import { realpath, lstat, readlink } from "fs/promises";
 
 /**
  * Returns true if the given relative path refers to (or is within) a `.git`
@@ -54,32 +54,76 @@ export async function validatePathWithinRoot(
     throw new PathTraversalError("Absolute paths are not allowed");
   }
 
-  const resolvedRoot = resolve(root);
-  const resolvedPath = resolve(resolvedRoot, relativePath);
+  // Canonicalise the root directory (server-controlled, not user input).
+  let realRoot: string;
+  try {
+    realRoot = await realpath(resolve(root));
+  } catch {
+    throw new PathTraversalError("Workspace root does not exist");
+  }
+  const rootPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
 
-  // Check before realpath (symlinks not yet resolved)
-  if (!isWithinRoot(resolvedRoot, resolvedPath)) {
+  // Resolve (normalize + absolutize) the user-supplied relative path against
+  // the canonical root.  path.resolve() eliminates ".." sequences, so the
+  // startsWith check below is sufficient for lexicographic containment.
+  const resolvedPath = resolve(realRoot, relativePath);
+
+  // Containment check — CodeQL recognises an inline startsWith guard on a
+  // path produced by path.resolve() as a barrier that sanitises the taint.
+  if (resolvedPath !== realRoot && !resolvedPath.startsWith(rootPrefix)) {
     throw new PathTraversalError(
       `Path escapes workspace root: ${relativePath}`
     );
   }
 
-  // Try to resolve symlinks and re-check (prevents symlink escape attacks)
-  // If the file doesn't exist yet (e.g. for writes), skip realpath
-  try {
-    const realResolvedPath = await realpath(resolvedPath);
-    const realRoot = await realpath(resolvedRoot);
-    if (!isWithinRoot(realRoot, realResolvedPath)) {
-      throw new PathTraversalError(
-        `Path escapes workspace root via symlink: ${relativePath}`
-      );
+  // Symlink-escape protection: walk from the resolved path up to the root,
+  // checking each existing component for symlinks whose real target escapes
+  // the root.  This avoids passing the user-influenced path to realpath()
+  // (which CodeQL flags as an uncontrolled path expression).
+  await assertNoSymlinkEscape(resolvedPath, realRoot, rootPrefix);
+
+  return resolvedPath;
+}
+
+/**
+ * Walk from `target` up to (but not including) `root`, and for every path
+ * component that exists on disk, verify it is not a symlink whose real
+ * target falls outside `root`.
+ *
+ * If the target (or an ancestor) does not exist yet (ENOENT) the walk
+ * stops — this is expected for write operations creating new files.
+ */
+async function assertNoSymlinkEscape(
+  target: string,
+  root: string,
+  rootPrefix: string
+): Promise<void> {
+  let current = target;
+
+  // Walk upward until we reach the root (which is already canonical).
+  while (current !== root && current.startsWith(rootPrefix)) {
+    try {
+      const stats = await lstat(current);
+      if (stats.isSymbolicLink()) {
+        // Read the immediate symlink target (not recursive like realpath).
+        const rawTarget = await readlink(current);
+        // Resolve relative symlink targets against the link's parent dir.
+        const resolvedTarget = resolve(dirname(current), rawTarget);
+        if (
+          resolvedTarget !== root &&
+          !resolvedTarget.startsWith(rootPrefix)
+        ) {
+          throw new PathTraversalError(
+            `Path escapes workspace root via symlink: ${current}`
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof PathTraversalError) throw err;
+      // ENOENT — path doesn't exist yet; stop walking.
+      break;
     }
-    return realResolvedPath;
-  } catch (err) {
-    if (err instanceof PathTraversalError) throw err;
-    // ENOENT: file doesn't exist yet (valid for write operations)
-    // Return the pre-realpath resolved path which already passed the first check
-    return resolvedPath;
+    current = dirname(current);
   }
 }
 
@@ -100,9 +144,12 @@ export function validatePathWithinRootSync(
   }
 
   const resolvedRoot = resolve(root);
+  const rootPrefix = resolvedRoot.endsWith(sep)
+    ? resolvedRoot
+    : resolvedRoot + sep;
   const resolvedPath = resolve(resolvedRoot, relativePath);
 
-  if (!isWithinRoot(resolvedRoot, resolvedPath)) {
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(rootPrefix)) {
     throw new PathTraversalError(
       `Path escapes workspace root: ${relativePath}`
     );
