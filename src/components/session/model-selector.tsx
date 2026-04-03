@@ -86,12 +86,14 @@ export function ModelSelector({
           disabled={disabled}
           className="h-9 w-9 shrink-0"
           title={label}
+          aria-haspopup="listbox"
+          aria-expanded={open}
         >
           <Cpu className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
-        <Command>
+        <Command aria-label="Select model">
           <CommandInput placeholder="Search models…" />
           <CommandList className="max-h-72 thin-scrollbar">
             <CommandEmpty>No matching models</CommandEmpty>
