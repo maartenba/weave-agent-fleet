@@ -40,7 +40,7 @@ export function LabelFilter({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
           <Tag className="h-3 w-3" />
-          Label
+          <span className="hidden sm:inline">Label</span>
           {selected.length > 0 && (
             <Badge variant="secondary" className="text-[10px] ml-0.5 px-1 py-0">
               {selected.length}

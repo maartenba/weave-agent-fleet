@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { CircleDot, CircleCheck, Loader2 } from "lucide-react";
 import { useGitHubPulls } from "../hooks/use-github-pulls";
 import { PrRow } from "./pr-row";
 
@@ -27,18 +27,20 @@ export function PrList({ owner, repo }: PrListProps) {
         <Button
           variant={stateFilter === "open" ? "default" : "ghost"}
           size="sm"
-          className="gap-1.5 h-7"
+          className="gap-1 h-7 text-xs"
           onClick={() => setStateFilter("open")}
         >
-          Open
+          <CircleDot className="h-3 w-3" />
+          <span className="hidden sm:inline">Open</span>
         </Button>
         <Button
           variant={stateFilter === "closed" ? "default" : "ghost"}
           size="sm"
-          className="gap-1.5 h-7"
+          className="gap-1 h-7 text-xs"
           onClick={() => setStateFilter("closed")}
         >
-          Closed
+          <CircleCheck className="h-3 w-3" />
+          <span className="hidden sm:inline">Closed</span>
         </Button>
         <Button
           variant="ghost"
