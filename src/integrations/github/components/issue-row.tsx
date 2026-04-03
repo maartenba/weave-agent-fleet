@@ -20,6 +20,7 @@ interface IssueRowProps {
   issue: GitHubIssue;
   owner: string;
   repo: string;
+  onLabelClick?: (label: string) => void;
 }
 
 function formatAge(dateStr: string): string {
@@ -32,7 +33,7 @@ function formatAge(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function IssueRow({ issue, owner, repo }: IssueRowProps) {
+export function IssueRow({ issue, owner, repo, onLabelClick }: IssueRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { comments, isLoading, fetch: fetchComments } =
     useGitHubComments(owner, repo, "issues", issue.number);
@@ -67,61 +68,71 @@ export function IssueRow({ issue, owner, repo }: IssueRowProps) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-muted/50 transition-colors group">
-        <CollapsibleTrigger className="flex items-center gap-3 flex-1 min-w-0 text-left">
+      <div className="flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group">
+        <CollapsibleTrigger className="flex items-start gap-2 flex-1 min-w-0 text-left pt-0.5">
           <ChevronRight
             className={cn(
-              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform mt-0.5",
               isOpen && "rotate-90"
             )}
           />
-          <span className="text-xs text-muted-foreground font-mono shrink-0">
-            #{issue.number}
-          </span>
-          <span className="text-sm truncate">{issue.title}</span>
-          <div className="flex items-center gap-1 shrink-0">
-            {issue.labels.map((l) => (
-              <Badge
-                key={l.name}
-                variant="outline"
-                className="text-[10px] px-1.5 py-0"
-                style={{ borderColor: `#${l.color}`, color: `#${l.color}` }}
-              >
-                {l.name}
-              </Badge>
-            ))}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground font-mono shrink-0">
+                #{issue.number}
+              </span>
+              <span className="text-sm truncate">{issue.title}</span>
+            </div>
+            {issue.labels.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {issue.labels.map((l) => (
+                  <Badge
+                    key={l.name}
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 cursor-pointer hover:opacity-70 transition-opacity"
+                    style={{ borderColor: `#${l.color}`, color: `#${l.color}` }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLabelClick?.(l.name);
+                    }}
+                  >
+                    {l.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </CollapsibleTrigger>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
           {issue.comments > 0 && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <MessageSquare className="h-3 w-3" />
               {issue.comments}
             </span>
           )}
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
             {issue.user.login}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
             {formatAge(issue.created_at)}
           </span>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          <div className="flex items-center gap-0.5 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-opacity">
             <a
               href={issue.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               aria-label="Open on GitHub"
               onClick={(e) => e.stopPropagation()}
             >
               <Github className="h-3.5 w-3.5" />
             </a>
-            <CreateSessionButton contextSource={contextSource} />
+            <CreateSessionButton contextSource={contextSource} iconOnly />
           </div>
         </div>
       </div>
       <CollapsibleContent>
-        <div className="ml-9 mr-3 mb-3 p-4 rounded-md border bg-muted/30 space-y-3">
+        <div className="ml-7 mr-2 mb-2 p-3 rounded-md border bg-muted/30 space-y-3">
           {issue.body ? (
             <MarkdownRenderer content={issue.body} />
           ) : (

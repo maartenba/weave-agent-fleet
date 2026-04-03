@@ -51,7 +51,7 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0 gap-0 sm:max-w-md top-[10%] translate-y-0" showCloseButton={false}>
+        <DialogContent className="p-0 gap-0 sm:max-w-md" showCloseButton={false}>
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle>Add Repository</DialogTitle>
         </DialogHeader>

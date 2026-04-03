@@ -88,6 +88,13 @@
   }
 }
 
+/* Hover-capable devices only (mouse/trackpad). Touch-only devices get hover: none. */
+@custom-variant can-hover {
+  @media (hover: hover) {
+    @slot;
+  }
+}
+
 @utility no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

@@ -171,7 +171,6 @@ export function CommandPalette() {
       title="Command Palette"
       description="Search for a command to run..."
       showCloseButton={false}
-      className="top-[10%] translate-y-0"
     >
       <CommandInput
         value={search}

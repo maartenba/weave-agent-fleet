@@ -312,7 +312,7 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="sm:max-w-md top-[10%] translate-y-0 max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
@@ -337,14 +337,14 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
                 onClick={() => hasRepos && setSourceMode("repository")}
                 disabled={isLoading || !hasRepos}
                 title={!hasRepos ? "No repositories scanned — configure workspace roots in Settings" : undefined}
-                className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   sourceMode === "repository"
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
-                <GitBranch className="h-4 w-4" />
-                <span className="text-xs mt-1">Repository</span>
+                <GitBranch className="h-4 w-4 shrink-0" />
+                <span className="text-xs">Repository</span>
               </button>
               <button
                 type="button"
@@ -353,14 +353,14 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
                 tabIndex={sourceMode === "directory" ? 0 : -1}
                 onClick={() => setSourceMode("directory")}
                 disabled={isLoading}
-                className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   sourceMode === "directory"
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
-                <FolderOpen className="h-4 w-4" />
-                <span className="text-xs mt-1">Directory</span>
+                <FolderOpen className="h-4 w-4 shrink-0" />
+                <span className="text-xs">Directory</span>
               </button>
             </div>
           </div>
@@ -451,14 +451,14 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange, 
                         tabIndex={isActive ? 0 : -1}
                         onClick={() => setRepoStrategy(s)}
                         disabled={isLoading}
-                        className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                           isActive
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                         }`}
                       >
-                        <Icon className="h-4 w-4" />
-                        <span className="text-xs mt-1">{REPO_STRATEGY_SHORT_LABELS[s]}</span>
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="text-xs">{REPO_STRATEGY_SHORT_LABELS[s]}</span>
                       </button>
                     );
                   })}

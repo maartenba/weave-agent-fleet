@@ -21,7 +21,7 @@ export function PrList({ owner, repo }: PrListProps) {
     useGitHubPulls(owner, repo, { state: stateFilter });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Filter bar */}
       <div className="flex items-center gap-2">
         <Button

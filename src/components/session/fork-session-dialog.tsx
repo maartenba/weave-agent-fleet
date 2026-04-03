@@ -61,7 +61,7 @@ export function ForkSessionDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="sm:max-w-sm top-[10%] translate-y-0 max-h-[85vh] overflow-y-auto"
+        className="sm:max-w-sm"
         onOpenAutoFocus={(e) => {
           // Prevent Radix from focusing the first focusable element (the close
           // button) and instead focus the title input directly.

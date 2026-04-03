@@ -14,6 +14,7 @@ import { ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES } from "@/lib/image-validation";
 import type { AutocompleteAgent, AvailableProvider, ImageAttachment } from "@/lib/api-types";
 import type { SelectedModel } from "@/components/session/model-selector";
 import { useDraftState } from "@/hooks/use-draft-state";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 // ─── Pending Attachment (client-side, with preview URL) ────────────────────
 
@@ -71,6 +72,7 @@ export function PromptInput({
   const { text: persistedDraft, setText: persistDraft, clearDraft } = useDraftState(sessionId);
   const [value, setValue] = useState(persistedDraft);
   const [isSending, setIsSending] = useState(false);
+  const isMobile = useIsMobile();
   const [cursorPos, setCursorPos] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -341,8 +343,9 @@ export function PromptInput({
 
   // ─── Keyboard handling ───────────────────────────────────────────────────
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter without Shift: send (unless autocomplete is open)
-    if (e.key === "Enter" && !e.shiftKey) {
+    // On mobile, Enter inserts a newline (user taps Send button instead).
+    // On desktop, Enter without Shift sends the message.
+    if (e.key === "Enter" && !e.shiftKey && !isMobile) {
       if (!autocomplete.isOpen) {
         e.preventDefault();
         void handleSend();
