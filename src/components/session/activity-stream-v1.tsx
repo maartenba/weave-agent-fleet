@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useCallback, useEffect, useRef } from "react";
+import { memo, useMemo, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +21,7 @@ import { ToolCardRouter } from "./tool-cards/tool-card-router";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { RelativeTimestamp } from "./relative-timestamp";
 import { ActivityStreamToolbar } from "./activity-stream-toolbar";
+import { ImageLightbox } from "./image-lightbox";
 
 interface ActivityStreamV1Props {
   messages: AccumulatedMessage[];
@@ -365,6 +366,8 @@ const MessageItem = memo(function MessageItem({
     (p): p is AccumulatedFilePart => p.type === "file"
   );
 
+  const [lightboxImage, setLightboxImage] = useState<AccumulatedFilePart | null>(null);
+
   const fullText = textParts
     .map((p) => (p.type === "text" ? p.text : ""))
     .join("");
@@ -442,22 +445,29 @@ const MessageItem = memo(function MessageItem({
         {fileParts.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             {fileParts.map((part) => (
-              <a
+              <button
                 key={part.partId}
-                href={part.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
+                type="button"
+                className="block cursor-pointer"
+                onClick={() => setLightboxImage(part)}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={part.url}
                   alt={part.filename ?? "Image attachment"}
-                  className="max-h-48 max-w-xs rounded-md border border-border object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                  className="max-h-48 max-w-xs rounded-md border border-border object-contain hover:opacity-90 transition-opacity"
                 />
-              </a>
+              </button>
             ))}
           </div>
+        )}
+        {lightboxImage && (
+          <ImageLightbox
+            src={lightboxImage.url}
+            alt={lightboxImage.filename ?? "Image attachment"}
+            open
+            onOpenChange={(open) => { if (!open) setLightboxImage(null); }}
+          />
         )}
 
         {/* Text content */}
