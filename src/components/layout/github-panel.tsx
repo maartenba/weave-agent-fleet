@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Github, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { GithubIcon as Github } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
