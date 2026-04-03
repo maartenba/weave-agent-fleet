@@ -13,6 +13,7 @@ import { useIsMobileNav } from "@/hooks/use-media-query";
 
 const SIDEBAR_ACTIVE_VIEW_KEY = "weave:sidebar:activeView";
 const SIDEBAR_WIDTH_KEY = "weave:sidebar:width";
+const SIDEBAR_COLLAPSED_KEY = "weave:sidebar:isCollapsed";
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;
@@ -36,14 +37,20 @@ export function viewHasPanel(view: SidebarView): boolean {
 interface SidebarContextValue {
   /** Which view icon is active in the icon rail */
   activeView: SidebarView;
-  /** Whether the contextual panel is visible (derived from activeView) */
+  /** Whether the contextual panel is visible (derived from activeView AND isCollapsed) */
   readonly panelOpen: boolean;
   /** Set the active view — panel visibility is derived automatically */
   setActiveView: (view: SidebarView) => void;
-  /** Toggle sidebar panel (⌘B): switches between welcome and last panel view */
+  /** Toggle sidebar panel (⌘B): toggles isCollapsed on desktop */
   toggleSidebar: () => void;
   /** Read-only backwards-compat alias: collapsed === !panelOpen */
   readonly collapsed: boolean;
+  /** Whether the sidebar panel is explicitly collapsed (persisted) */
+  isCollapsed: boolean;
+  /** Directly set the collapsed state */
+  setCollapsed: (value: boolean) => void;
+  /** Toggle isCollapsed (desktop only; mobile toggles the drawer instead) */
+  toggleCollapse: () => void;
   width: number;
   setWidth: (value: number | ((prev: number) => number)) => void;
   isResizing: boolean;
@@ -106,6 +113,11 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
     SIDEBAR_DEFAULT_WIDTH
   );
 
+  const [isCollapsed, setIsCollapsed] = usePersistedState<boolean>(
+    SIDEBAR_COLLAPSED_KEY,
+    false
+  );
+
   const [isResizing, setIsResizing] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
@@ -117,8 +129,8 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
     viewHasPanel(activeView) ? activeView : "fleet"
   );
 
-  // Derive panel visibility from the active view
-  const panelOpen = viewHasPanel(activeView);
+  // Derive panel visibility from the active view AND collapse state
+  const panelOpen = viewHasPanel(activeView) && !isCollapsed;
 
   const setActiveView = useCallback(
     (view: SidebarView) => {
@@ -130,20 +142,29 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
     [setActiveViewState]
   );
 
+  const toggleCollapse = useCallback(() => {
+    if (isMobileNav) {
+      setMobileDrawerOpen((open) => !open);
+      return;
+    }
+    setIsCollapsed((prev) => !prev);
+  }, [isMobileNav, setIsCollapsed, setMobileDrawerOpen]);
+
   const toggleSidebar = useCallback(() => {
     if (isMobileNav) {
       // On mobile, ⌘B opens/closes the drawer
       setMobileDrawerOpen((open) => !open);
       return;
     }
-    if (panelOpen) {
-      // Panel is showing → switch to welcome (hides panel)
-      setActiveViewState("welcome");
-    } else {
-      // Panel is hidden → restore last panel view
+    if (activeView === "welcome") {
+      // On the welcome page, ⌘B restores last panel view and expands
       setActiveViewState(lastPanelViewRef.current);
+      setIsCollapsed(false);
+    } else {
+      // On any panel view, ⌘B toggles collapse
+      setIsCollapsed((prev) => !prev);
     }
-  }, [isMobileNav, panelOpen, setActiveViewState]);
+  }, [isMobileNav, activeView, setActiveViewState, setIsCollapsed, setMobileDrawerOpen]);
 
   return (
     <SidebarContext.Provider
@@ -153,8 +174,11 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
         setActiveView,
         toggleSidebar,
         get collapsed() {
-          return !panelOpen;
+          return isCollapsed;
         },
+        isCollapsed,
+        setCollapsed: setIsCollapsed,
+        toggleCollapse,
         width,
         setWidth,
         isResizing,
