@@ -21,6 +21,7 @@ A fleet orchestrator for managing multiple [OpenCode](https://opencode.ai) AI ag
   - [Workspace Isolation](#workspace-isolation)
   - [Completion Callbacks](#completion-callbacks)
   - [Diff Viewer](#diff-viewer)
+  - [Files Tab](#files-tab)
   - [Notifications](#notifications)
   - [Command Palette](#command-palette)
   - [Desktop App](#desktop-app)
@@ -130,6 +131,21 @@ Parent sessions can register an `onComplete` callback when spawning child sessio
 
 Inspect the file changes each session produced with a side-by-side diff viewer. View added, modified, and deleted files at a glance after a session completes.
 
+### Files Tab
+
+Browse and edit workspace files directly from the session view. The Files tab provides:
+
+- **File tree** — collapsible tree view of the session's workspace, excluding `node_modules` and `.git` directories.
+- **Git status coloring** — file and folder names are colored based on git status: green for added, amber for modified, red for deleted. Directory colors are aggregated from their children.
+- **Monaco editor** — syntax-highlighted code editor with theme support for viewing and editing files.
+- **Inline diff decorations** — the Monaco editor shows gutter indicators (colored bars) for added, modified, and deleted lines compared to the git baseline, similar to VS Code's inline change markers.
+- **Image & Markdown preview** — inline previews for images (PNG, JPEG, SVG, etc.) and Markdown files.
+- **Context menu commands** — right-click any file or folder in the tree to:
+  - **Create File** / **Create Folder** — add new files or directories.
+  - **Rename** — rename a file or folder (with filename validation).
+  - **Delete** — remove a file or directory (with confirmation dialog, `.git` protected).
+- **Path security** — all file operations are validated against path traversal attacks, symlink escapes, null-byte injection, and `.git` directory access.
+
 ### Notifications
 
 Real-time notification system with SSE streaming. Get notified when sessions complete, encounter errors, or require attention. Unread counts are tracked per-session.
@@ -182,6 +198,11 @@ The Fleet exposes a REST API for programmatic session management and orchestrati
 | `/api/sessions/:id/abort` | `POST` | Abort a running operation |
 | `/api/sessions/:id/status` | `GET` | Get session status |
 | `/api/sessions/:id/diffs` | `GET` | Get file diffs for a session |
+| `/api/sessions/:id/files` | `GET` | List all files in the session workspace |
+| `/api/sessions/:id/files/*path` | `GET` | Read a file's content (text or binary/base64) |
+| `/api/sessions/:id/files/*path` | `POST` | Write a file or create a directory |
+| `/api/sessions/:id/files/*path` | `DELETE` | Delete a file or directory |
+| `/api/sessions/:id/files/*path` | `PATCH` | Rename/move a file or directory |
 | `/api/sessions/:id/events` | `GET` | SSE stream of session events |
 | `/api/sessions/:id/messages` | `GET` | Get session messages |
 | `/api/sessions/:id/command` | `POST` | Execute a command in a session |

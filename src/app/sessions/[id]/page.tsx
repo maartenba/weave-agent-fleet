@@ -16,7 +16,7 @@ import { useDiffs } from "@/hooks/use-diffs";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight, ArrowUpToLine, ArrowDownToLine, ListTodo, Eraser, ScrollText, PanelRight, MoreHorizontal } from "lucide-react";
+import { FolderOpen, GitBranch, GitCompare, GitFork, Server, Clock, Hash, Square, RotateCcw, Trash2, MessageSquare, OctagonX, AlertTriangle, RefreshCw, ArrowLeft, ChevronRight, ArrowUpToLine, ArrowDownToLine, ListTodo, Eraser, ScrollText, PanelRight, MoreHorizontal, FileCode } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFoldableScreen } from "@/hooks/use-foldable-screen";
@@ -33,6 +33,7 @@ import { PrSidebarPanel } from "@/components/session/pr-sidebar-panel";
 import { usePrStatus } from "@/hooks/use-pr-status";
 import { sessionCache } from "@/lib/session-cache";
 import { DiffViewer } from "@/components/session/diff-viewer";
+import { FilesTabContent } from "@/components/session/files-tab-content";
 import { TokenCostBreakdown } from "@/components/session/token-cost-breakdown";
 import { useCommandRegistry } from "@/contexts/command-registry-context";
 import { useKeybindings } from "@/contexts/keybindings-context";
@@ -100,6 +101,14 @@ export default function SessionDetailPage() {
   const { deleteSession: permanentDelete, isDeleting } = useDeleteSession();
   const router = useRouter();
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
+
+  // Auto-fetch diffs when instanceId changes (e.g. after session resume)
+  useEffect(() => {
+    if (instanceId) {
+      fetchDiffs();
+    }
+  }, [instanceId, fetchDiffs]);
+
   const [isStopped, setIsStopped] = useState(false);
   const [stopConfirm, setStopConfirm] = useState(false);
   const [abortConfirm, setAbortConfirm] = useState(false);
@@ -204,6 +213,22 @@ export default function SessionDetailPage() {
       },
     });
     registerCommand({
+      id: "toggle-files-view",
+      label: "Toggle Files View",
+      icon: FileCode,
+      category: "Session",
+      keywords: ["files", "editor", "tree", "browse", "monaco"],
+      action: () => {
+        const tabList = document.querySelector('[role="tablist"]');
+        const filesTab = tabList?.querySelector('[value="files"]') as HTMLElement | null;
+        const activityTab = tabList?.querySelector('[value="activity"]') as HTMLElement | null;
+        if (filesTab && activityTab) {
+          const isFilesActive = filesTab.getAttribute("data-state") === "active";
+          (isFilesActive ? activityTab : filesTab).click();
+        }
+      },
+    });
+    registerCommand({
       id: "scroll-to-top",
       label: "Scroll to Top",
       icon: ArrowUpToLine,
@@ -241,6 +266,7 @@ export default function SessionDetailPage() {
       unregisterCommand("copy-session-url");
       unregisterCommand("fork-session");
       unregisterCommand("toggle-diff-view");
+      unregisterCommand("toggle-files-view");
       unregisterCommand("scroll-to-top");
       unregisterCommand("scroll-to-bottom");
       unregisterCommand("clear-conversation");
@@ -763,6 +789,10 @@ export default function SessionDetailPage() {
                 <GitCompare className="h-3.5 w-3.5" />
                 Changes
               </TabsTrigger>
+              <TabsTrigger value="files" className="gap-1.5">
+                <FileCode className="h-3.5 w-3.5" />
+                Files
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="activity" className="flex-1 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-hidden">
@@ -812,6 +842,15 @@ export default function SessionDetailPage() {
             </TabsContent>
             <TabsContent value="changes" className="flex-1 overflow-hidden">
               <DiffViewer diffs={diffs} isLoading={diffsLoading} error={diffsError} totalAdditions={totalDiffAdditions} totalDeletions={totalDiffDeletions} />
+            </TabsContent>
+            <TabsContent value="files" className="flex-1 overflow-hidden">
+              <FilesTabContent
+                sessionId={sessionId}
+                instanceId={instanceId}
+                fetchDiffs={fetchDiffs}
+                diffs={diffs}
+                recentParts={messages.flatMap((m) => m.parts)}
+              />
             </TabsContent>
           </Tabs>
         </div>

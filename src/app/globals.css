@@ -733,3 +733,31 @@
   background: var(--muted);
   border-radius: 3px;
 }
+
+/* ─── Git diff gutter & line decorations (Monaco editor) ────────────────── */
+
+.glyph-margin-git-added {
+  background-color: #22c55e;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.glyph-margin-git-modified {
+  background-color: #f59e0b;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.glyph-margin-git-deleted {
+  background-color: #ef4444;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.line-git-added {
+  background-color: rgba(34, 197, 94, 0.08);
+}
+
+.line-git-modified {
+  background-color: rgba(245, 158, 11, 0.08);
+}

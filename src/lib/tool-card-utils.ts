@@ -138,6 +138,61 @@ export function parseGrepOutput(output: string): { file: string; line: number }[
 }
 
 /**
+ * Map highlight.js language IDs (or common aliases) to Monaco Editor language IDs.
+ * Monaco uses slightly different identifiers for some languages.
+ */
+const HLJS_TO_MONACO_MAP: Record<string, string> = {
+  typescript: "typescript",
+  javascript: "javascript",
+  python: "python",
+  ruby: "ruby",
+  rust: "rust",
+  go: "go",
+  java: "java",
+  kotlin: "kotlin",
+  csharp: "csharp",
+  fsharp: "fsharp",
+  css: "css",
+  scss: "scss",
+  less: "less",
+  html: "html",
+  xml: "xml",
+  json: "json",
+  yaml: "yaml",
+  // highlight.js uses "ini" for TOML; Monaco has a proper "ini" as well
+  ini: "ini",
+  markdown: "markdown",
+  bash: "shell",
+  powershell: "powershell",
+  sql: "sql",
+  graphql: "graphql",
+  dockerfile: "dockerfile",
+  // highlight.js calls it "makefile", Monaco calls it "makefile" too
+  makefile: "makefile",
+  cmake: "cmake",
+  c: "c",
+  cpp: "cpp",
+  swift: "swift",
+  php: "php",
+  lua: "lua",
+  r: "r",
+  scala: "scala",
+  // Monaco doesn't have built-in Zig support — fall back to plaintext
+  zig: "plaintext",
+  hcl: "hcl",
+};
+
+/**
+ * Detect the Monaco Editor language identifier from a file path.
+ * Returns "plaintext" if the language cannot be determined.
+ */
+export function getMonacoLanguageFromPath(filePath: string): string {
+  const hljs = getLanguageFromPath(filePath);
+  if (!hljs) return "plaintext";
+  return HLJS_TO_MONACO_MAP[hljs] ?? hljs;
+}
+
+/**
  * Parse glob output into a list of file paths.
  * Expected format: one path per line.
  */
