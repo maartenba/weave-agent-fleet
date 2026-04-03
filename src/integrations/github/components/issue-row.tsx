@@ -8,7 +8,8 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, MessageSquare, Loader2, Github } from "lucide-react";
+import { ChevronRight, MessageSquare, Loader2 } from "lucide-react";
+import { GithubIcon as Github } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import { useGitHubComments } from "../hooks/use-github-comments";
 import { CreateSessionButton } from "./create-session-button";

@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { Github } from "lucide-react";
+import { GithubIcon as Github } from "@/components/icons/github";
 import type { IntegrationManifest, ContextSource } from "@/integrations/types";
 import type {
   GitHubIssue,

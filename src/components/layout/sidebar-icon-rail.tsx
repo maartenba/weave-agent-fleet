@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, Github, Settings, FolderGit2 } from "lucide-react";
+import { LayoutGrid, Settings, FolderGit2 } from "lucide-react";
+import { GithubIcon as Github } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,

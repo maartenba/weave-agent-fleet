@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Github } from "lucide-react";
+import { GithubIcon as Github } from "@/components/icons/github";
 import { Header } from "@/components/layout/header";
 import { useIntegrationsContext } from "@/contexts/integrations-context";
 import { useBookmarkedRepos } from "@/integrations/github/hooks/use-bookmarked-repos";
