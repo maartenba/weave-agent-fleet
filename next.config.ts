@@ -22,6 +22,8 @@ function getAppVersion(): string {
 const nextConfig: NextConfig = {
   output: 'standalone',
   compress: true,
+  // Allow any local-network device (e.g. phone on Tailscale / LAN) to use HMR
+  allowedDevOrigins: ["100.*.*.*", "192.168.*.*", "10.*.*.*", "172.*.*.*"],
   serverExternalPackages: ["@opencode-ai/sdk", "better-sqlite3"],
   env: {
     NEXT_PUBLIC_APP_VERSION: getAppVersion(),

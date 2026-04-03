@@ -77,7 +77,7 @@ export function IssueFilterBar({
           onClick={() => setFilter({ state: "open" })}
         >
           <CircleDot className="h-3 w-3" />
-          Open
+          <span className="hidden sm:inline">Open</span>
         </Button>
         <Button
           variant={filter.state === "closed" ? "default" : "ghost"}
@@ -86,7 +86,7 @@ export function IssueFilterBar({
           onClick={() => setFilter({ state: "closed" })}
         >
           <CircleCheck className="h-3 w-3" />
-          Closed
+          <span className="hidden sm:inline">Closed</span>
         </Button>
 
         {/* Separator */}

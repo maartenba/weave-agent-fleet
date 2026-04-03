@@ -40,7 +40,7 @@ export function SortControl({ sort, direction, onChange }: SortControlProps) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
           <ArrowUpDown className="h-3 w-3" />
-          {currentLabel}
+          <span className="hidden sm:inline">{currentLabel}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">

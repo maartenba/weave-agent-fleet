@@ -55,26 +55,71 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Extract DialogHeader from children so we can render it in a sticky
+  // title bar alongside the close button — both stay pinned while
+  // the rest of the content scrolls.
+  //
+  // When no DialogHeader is found (e.g. CommandDialog puts it outside
+  // DialogContent), we skip the sticky bar and fall back to an
+  // absolute-positioned close button so custom layouts with p-0 work.
+  const headerChildren: React.ReactNode[] = []
+  const bodyChildren: React.ReactNode[] = []
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child) && child.type === DialogHeader) {
+      headerChildren.push(child)
+    } else {
+      bodyChildren.push(child)
+    }
+  })
+
+  const hasStickyHeader = headerChildren.length > 0
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-0 sm:top-[50%] sm:translate-y-[-50%] left-[50%] z-50 w-full max-w-full sm:max-w-[calc(100%-2rem)] translate-x-[-50%] rounded-b-lg sm:rounded-lg border shadow-lg duration-200 outline-none sm:max-w-lg max-h-[var(--visual-vh,100dvh)] sm:max-h-[calc(var(--visual-vh,100dvh)*0.85)] overflow-y-auto",
+          hasStickyHeader ? "px-6 pb-6" : "p-6",
           className
         )}
         {...props}
       >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
+        {hasStickyHeader ? (
+          <>
+            {/* Sticky title bar: header + close button pinned at top while content scrolls */}
+            <div data-slot="dialog-title-bar" className="flex items-center justify-between gap-4 sticky top-0 z-10 bg-background -mx-6 px-6 py-4">
+              {headerChildren}
+              {showCloseButton && (
+                <DialogPrimitive.Close
+                  data-slot="dialog-close"
+                  className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground shrink-0 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+                >
+                  <XIcon />
+                  <span className="sr-only">Close</span>
+                </DialogPrimitive.Close>
+              )}
+            </div>
+            {/* Body content — scrolls naturally within the overflow-y-auto parent */}
+            <div className="flex flex-col gap-4">
+              {bodyChildren}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* No DialogHeader found — render children directly with absolute close button */}
+            {children}
+            {showCloseButton && (
+              <DialogPrimitive.Close
+                data-slot="dialog-close"
+                className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              >
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            )}
+          </>
         )}
       </DialogPrimitive.Content>
     </DialogPortal>

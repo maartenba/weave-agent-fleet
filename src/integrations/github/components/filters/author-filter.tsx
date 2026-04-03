@@ -41,7 +41,7 @@ export function AuthorFilter({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
           <User className="h-3 w-3" />
-          Author
+          <span className="hidden sm:inline">Author</span>
           {selected && (
             <Badge variant="secondary" className="text-[10px] ml-0.5 px-1 py-0">
               1

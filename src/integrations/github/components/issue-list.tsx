@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -34,8 +34,20 @@ export function IssueList({ owner, repo }: IssueListProps) {
 
   const hasActiveFilters = serializeFilterExpression(filter).length > 0;
 
+  const handleLabelClick = useCallback(
+    (label: string) => {
+      setFilter((prev) => ({
+        ...prev,
+        labels: prev.labels.includes(label)
+          ? prev.labels.filter((l) => l !== label)
+          : [...prev.labels, label],
+      }));
+    },
+    []
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Filter bar */}
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
@@ -81,7 +93,7 @@ export function IssueList({ owner, repo }: IssueListProps) {
 
       <div className="space-y-1">
         {issues.map((issue) => (
-          <IssueRow key={issue.id} issue={issue} owner={owner} repo={repo} />
+          <IssueRow key={issue.id} issue={issue} owner={owner} repo={repo} onLabelClick={handleLabelClick} />
         ))}
       </div>
 

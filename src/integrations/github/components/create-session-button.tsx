@@ -76,9 +76,11 @@ function generateBranchName(text: string): string {
 interface CreateSessionButtonProps {
   contextSource: ContextSource;
   directory?: string;
+  /** Render as a compact icon-only button (for use in row actions) */
+  iconOnly?: boolean;
 }
 
-export function CreateSessionButton({ contextSource, directory: defaultDir }: CreateSessionButtonProps) {
+export function CreateSessionButton({ contextSource, directory: defaultDir, iconOnly }: CreateSessionButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [directory, setDirectory] = usePersistedState("weave:new-session:lastDirectory", defaultDir ?? "");
@@ -379,20 +381,21 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
   return (
     <>
       <Button
-        size="xs"
+        size={iconOnly ? "icon-xs" : "xs"}
         variant="outline"
-        className="gap-1"
+        className={iconOnly ? "" : "gap-1"}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
         }}
+        aria-label="Create session"
       >
         <Rocket className="h-3 w-3" />
-        Create Session
+        {!iconOnly && "Create Session"}
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md top-[10%] translate-y-0">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create Session From Context</DialogTitle>
           </DialogHeader>
@@ -427,14 +430,14 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
                   onClick={() => hasRepos && setSourceMode("repository")}
                   disabled={isLoading || !hasRepos}
                   title={!hasRepos ? "No repositories scanned — configure workspace roots in Settings" : undefined}
-                  className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                     sourceMode === "repository"
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   }`}
                 >
-                  <GitBranch className="h-4 w-4" />
-                  <span className="text-xs mt-1">Repository</span>
+                  <GitBranch className="h-4 w-4 shrink-0" />
+                  <span className="text-xs">Repository</span>
                 </button>
                 <button
                   type="button"
@@ -443,14 +446,14 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
                   tabIndex={sourceMode === "directory" ? 0 : -1}
                   onClick={() => setSourceMode("directory")}
                   disabled={isLoading}
-                  className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                     sourceMode === "directory"
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   }`}
                 >
-                  <FolderOpen className="h-4 w-4" />
-                  <span className="text-xs mt-1">Directory</span>
+                  <FolderOpen className="h-4 w-4 shrink-0" />
+                  <span className="text-xs">Directory</span>
                 </button>
               </div>
             </div>
@@ -540,14 +543,14 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
                           tabIndex={isActive ? 0 : -1}
                           onClick={() => setRepoStrategy(s)}
                           disabled={isLoading}
-                          className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                             isActive
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                           }`}
                         >
-                          <Icon className="h-4 w-4" />
-                          <span className="text-xs mt-1">{REPO_STRATEGY_LABELS[s]}</span>
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="text-xs">{REPO_STRATEGY_LABELS[s]}</span>
                         </button>
                       );
                     })}
@@ -585,14 +588,14 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
                           tabIndex={isActive ? 0 : -1}
                           onClick={() => setDirStrategy(s)}
                           disabled={isLoading}
-                          className={`flex-1 flex flex-col items-center justify-center rounded-md border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                             isActive
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                           }`}
                         >
-                          <Icon className="h-4 w-4" />
-                          <span className="text-xs mt-1">{DIR_STRATEGY_LABELS[s]}</span>
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="text-xs">{DIR_STRATEGY_LABELS[s]}</span>
                         </button>
                       );
                     })}

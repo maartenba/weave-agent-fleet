@@ -6,7 +6,6 @@ import { Loader2, Lock, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -51,10 +50,10 @@ export function AddRepoDialog({ trigger }: AddRepoDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0 gap-0 sm:max-w-md top-[10%] translate-y-0" showCloseButton={false}>
-        <DialogHeader className="px-4 pt-4 pb-2">
+        <DialogContent className="p-0 gap-0 sm:max-w-md" showCloseButton={false}>
+        <div className="px-4 pt-4 pb-2">
           <DialogTitle>Add Repository</DialogTitle>
-        </DialogHeader>
+        </div>
 
         {!isGitHubConnected ? (
           <div className="px-4 pb-4 text-sm text-muted-foreground space-y-2">

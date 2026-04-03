@@ -40,7 +40,7 @@ export function MilestoneFilter({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
           <Milestone className="h-3 w-3" />
-          Milestone
+          <span className="hidden sm:inline">Milestone</span>
           {selected && (
             <Badge variant="secondary" className="text-[10px] ml-0.5 px-1 py-0">
               1

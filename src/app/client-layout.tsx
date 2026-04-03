@@ -15,6 +15,7 @@ import { SessionCommands } from "@/components/commands/session-commands";
 import { CommandPalette } from "@/components/command-palette";
 import { useRef, useCallback, lazy, Suspense } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useVisualViewport } from "@/hooks/use-visual-viewport";
 
 // Dynamically import Tauri-only dialog — not needed in mobile web bundle
 const TauriUpdateDialog = lazy(() =>
@@ -64,6 +65,10 @@ function SwipeableLayout({ children }: { children: React.ReactNode }) {
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
+  // Keep --visual-vh CSS property in sync with the actual visible viewport
+  // (shrinks when the mobile virtual keyboard opens, unlike dvh on Android)
+  useVisualViewport();
+
   return (
     <ThemeProvider>
       <SessionsProvider>
