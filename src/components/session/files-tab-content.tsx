@@ -279,7 +279,7 @@ export function FilesTabContent({
     <div className={cn("flex h-full overflow-hidden", className)}>
       {/* ── File Tree Panel ─────────────────────────────────────────────── */}
       <div
-        className="flex flex-col border-r border-border/50"
+        className="flex min-h-0 flex-col border-r border-border/50"
         style={{ width: `${treeWidth}px`, minWidth: `${treeWidth}px` }}
       >
         {/* Tree header */}

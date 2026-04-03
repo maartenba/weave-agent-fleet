@@ -267,7 +267,7 @@ export function FileTree({
       onDelete={handleDelete}
       onMove={handleMove}
     >
-      <ScrollArea className={cn("flex-1", className)}>
+      <ScrollArea className={cn("flex-1 overflow-hidden", className)}>
         <div className="py-1 pr-1">
           {tree.map((node) => (
             <TreeNode

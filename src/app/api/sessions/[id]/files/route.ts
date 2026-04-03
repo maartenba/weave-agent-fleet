@@ -60,7 +60,9 @@ async function walkDir(
 
     const name = item.name;
     const fullPath = join(currentDir, name);
-    const relativePath = fullPath.slice(rootDir.length + 1); // strip root + separator
+    // Normalize to forward slashes so the client can split on "/" consistently
+    // (path.join uses backslashes on Windows).
+    const relativePath = fullPath.slice(rootDir.length + 1).replaceAll("\\", "/");
 
     if (item.isDirectory()) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) && name.toLowerCase() !== ".weave") {
