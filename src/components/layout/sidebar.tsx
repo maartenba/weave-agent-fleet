@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 
 export function Sidebar() {
-  const { panelOpen, width, isMobileNav, mobileDrawerOpen, setMobileDrawerOpen } = useSidebar();
+  const { panelOpen, width, isMobileNav, mobileDrawerOpen, setMobileDrawerOpen, isResizing } = useSidebar();
   const totalWidth = panelOpen ? SIDEBAR_RAIL_WIDTH + width : SIDEBAR_RAIL_WIDTH;
 
   // Mobile: render sidebar as a Sheet drawer
@@ -37,7 +37,10 @@ export function Sidebar() {
   return (
     <aside
       className="relative flex h-screen flex-row border-r border-sidebar-border bg-sidebar overflow-hidden"
-      style={{ width: totalWidth }}
+      style={{
+        width: totalWidth,
+        transition: isResizing ? 'none' : 'width 150ms ease-in-out',
+      }}
     >
       <SidebarIconRail />
       {panelOpen && <ContextualPanel />}

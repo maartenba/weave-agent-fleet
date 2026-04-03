@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, Settings, FolderGit2 } from "lucide-react";
+import { LayoutGrid, Settings, FolderGit2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { GithubIcon as Github } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import {
@@ -192,7 +192,7 @@ function ProfileBadge() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SidebarIconRail() {
-  const { activeView, panelOpen, setActiveView, isMobileNav, setMobileDrawerOpen } = useSidebar();
+  const { activeView, panelOpen, setActiveView, isMobileNav, setMobileDrawerOpen, isCollapsed, toggleCollapse, setCollapsed } = useSidebar();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -256,9 +256,19 @@ export function SidebarIconRail() {
   // Switch to a view (used by icon rail buttons)
   const handleSwitch = useCallback(
     (view: SidebarView) => {
+      if (isCollapsed && viewHasPanel(view)) {
+        if (activeView === view) {
+          // Re-clicking the active icon while collapsed → expand
+          setCollapsed(false);
+        } else {
+          // Switching to a different panel icon while collapsed → just switch view, stay collapsed
+          setActiveView(view);
+        }
+        return;
+      }
       setActiveView(nextViewForSwitch(activeView, view));
     },
-    [activeView, setActiveView]
+    [activeView, isCollapsed, setActiveView, setCollapsed]
   );
 
   return (
@@ -316,6 +326,31 @@ export function SidebarIconRail() {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Collapse/expand toggle — desktop only */}
+      {!isMobileNav && (
+        <div className="flex flex-col items-center px-1 mb-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={toggleCollapse}
+                className="flex h-8 w-full items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+              >
+                {isCollapsed ? (
+                  <PanelLeft className="h-4 w-4 shrink-0" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4 shrink-0" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isCollapsed ? "Expand sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
 
       {/* Bottom section: page links + version */}
       <div className="flex flex-col gap-0.5 px-1">
