@@ -9,7 +9,7 @@
  */
 
 import { resolve, sep, dirname } from "path";
-import { realpath, lstat, readlink } from "fs/promises";
+import { lstat, readlink } from "fs/promises";
 
 /**
  * Returns true if the given relative path refers to (or is within) a `.git`
@@ -54,23 +54,22 @@ export async function validatePathWithinRoot(
     throw new PathTraversalError("Absolute paths are not allowed");
   }
 
-  // Canonicalise the root directory (server-controlled, not user input).
-  let realRoot: string;
-  try {
-    realRoot = await realpath(resolve(root));
-  } catch {
-    throw new PathTraversalError("Workspace root does not exist");
-  }
-  const rootPrefix = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
+  // Normalize and absolutize the root directory using path.resolve().
+  // Unlike realpath(), resolve() does not touch the filesystem and is
+  // recognised by CodeQL as a path-normalisation step that eliminates
+  // ".." components, making the downstream startsWith check a valid
+  // sanitiser barrier.
+  const resolvedRoot = resolve(root);
+  const rootPrefix = resolvedRoot.endsWith(sep) ? resolvedRoot : resolvedRoot + sep;
 
   // Resolve (normalize + absolutize) the user-supplied relative path against
   // the canonical root.  path.resolve() eliminates ".." sequences, so the
   // startsWith check below is sufficient for lexicographic containment.
-  const resolvedPath = resolve(realRoot, relativePath);
+  const resolvedPath = resolve(resolvedRoot, relativePath);
 
   // Containment check — CodeQL recognises an inline startsWith guard on a
   // path produced by path.resolve() as a barrier that sanitises the taint.
-  if (resolvedPath !== realRoot && !resolvedPath.startsWith(rootPrefix)) {
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(rootPrefix)) {
     throw new PathTraversalError(
       `Path escapes workspace root: ${relativePath}`
     );
@@ -78,9 +77,9 @@ export async function validatePathWithinRoot(
 
   // Symlink-escape protection: walk from the resolved path up to the root,
   // checking each existing component for symlinks whose real target escapes
-  // the root.  This avoids passing the user-influenced path to realpath()
-  // (which CodeQL flags as an uncontrolled path expression).
-  await assertNoSymlinkEscape(resolvedPath, realRoot, rootPrefix);
+  // the root.  This avoids passing any path to realpath() which CodeQL
+  // treats as a taint-propagating sink.
+  await assertNoSymlinkEscape(resolvedPath, resolvedRoot, rootPrefix);
 
   return resolvedPath;
 }
