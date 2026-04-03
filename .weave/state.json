@@ -1,11 +1,13 @@
 {
-  "active_plan": "D:\\repos\\damianh\\weave-agent-fleet-worktrees\\ui-performances\\.weave\\plans\\ui-performance-fixes.md",
-  "started_at": "2026-03-29T09:16:42.074Z",
+  "active_plan": "/Users/maartenba/Desktop/weave2/.weave/plans/session-tree-features.md",
+  "started_at": "2026-04-03T11:05:40.308Z",
   "session_ids": [
-    "ses_2c8fb403dffeoQ2BcKmlvy63i2"
+    "ses_2ad0c25c5ffeHggbgXCukPms2t"
   ],
-  "plan_name": "ui-performance-fixes",
+  "plan_name": "session-tree-features",
   "agent": "tapestry",
-  "start_sha": "cf73848d7358d868305e0460ffeb9afd334ec662",
+  "start_sha": "44681961d5cfd25505baf7b3cc14c7fa8c3daac5",
+  "continuation_completed_snapshot": 21,
+  "stale_continuation_count": 0,
   "paused": true
 }

@@ -50,6 +50,15 @@ The app currently runs entirely on **mock data** — no backend, no OpenCode pro
 | `/alerts` | Alerts | Unread / Read notification list with type-specific icons |
 | `/history` | History | Searchable table of all sessions (past + current) |
 
+### Sidebar
+
+The sidebar session tree (`src/components/layout/fleet-panel.tsx` + `sidebar-workspace-item.tsx`) supports:
+
+- **Collapsible workspace groups** — chevron button per workspace collapses/expands its session list; state persisted to `weave:sidebar:collapsed` (independent from the fleet page's `weave:fleet:collapsed`)
+- **Inactive session filter** — eye/EyeOff toggle in the sidebar header hides sessions with lifecycle status `completed`, `stopped`, `error`, or `disconnected`; persisted to `weave:sidebar:hideInactive`; empty workspaces are hidden when filter is active
+- **Bulk remove inactive** — global trash button in the sidebar header (shown only when inactive sessions exist) permanently deletes all inactive sessions with AlertDialog confirmation; per-workspace "Remove N Inactive" also available via right-click context menu
+- **Keyboard navigation** — ArrowRight expands a collapsed workspace or moves focus to its first session; ArrowLeft collapses an expanded workspace or navigates from a session back to its parent workspace
+
 ## Branding
 
 Dark-only theme matching the [Weave website](https://weave.pgermishuys.dev).
