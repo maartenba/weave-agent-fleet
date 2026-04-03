@@ -63,8 +63,7 @@ async function walkDir(
     const relativePath = fullPath.slice(rootDir.length + 1); // strip root + separator
 
     if (item.isDirectory()) {
-      if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.startsWith(".")) {
-        // Skip hidden dirs and excluded dirs — but allow .env files (they are files, not dirs)
+      if (EXCLUDED_DIRS.has(name.toLowerCase())) {
         continue;
       }
       entries.push({ path: relativePath, type: "directory" });

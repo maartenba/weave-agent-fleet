@@ -100,6 +100,7 @@ const TreeNode = memo(function TreeNode({
 }: TreeNodeProps) {
   const isActive = node.path === activeFilePath;
   const isDirty = dirtyFilePaths.has(node.path);
+  const isHidden = node.name.startsWith(".");
   const indent = depth * 12; // 12px per level
 
   // Provide no-op defaults so FileTreeContextMenu callbacks are always functions
@@ -140,7 +141,7 @@ const TreeNode = memo(function TreeNode({
             ) : (
               <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className={cn("truncate font-medium", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
+            <span className={cn("truncate font-medium", isHidden && "opacity-60", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
           </button>
         </FileTreeContextMenu>
         {node.isExpanded && node.children && (
@@ -191,7 +192,7 @@ const TreeNode = memo(function TreeNode({
         onClick={() => onFileSelect(node.path)}
       >
         {getFileIcon(node.name)}
-        <span className={cn("flex-1 truncate font-mono", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
+        <span className={cn("flex-1 truncate font-mono", isHidden && "opacity-60", gitStatusColorClass(gitStatusMap?.get(node.path)))}>{node.name}</span>
         {isDirty && (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
