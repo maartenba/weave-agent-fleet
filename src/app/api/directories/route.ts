@@ -78,7 +78,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const response: DirectoryListResponse = {
       entries: filtered.slice(0, MAX_ENTRIES),
-      currentPath: "/",
+      currentPath: null,
       parentPath: null,
       roots,
     };

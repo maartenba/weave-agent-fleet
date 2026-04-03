@@ -88,7 +88,7 @@ describe("GET /api/directories", () => {
       expect(data.entries).toHaveLength(2);
       expect(data.entries[0].path).toBe("/home/user");
       expect(data.entries[1].path).toBe("/projects");
-      expect(data.currentPath).toBe("/");
+      expect(data.currentPath).toBeNull();
       expect(data.parentPath).toBeNull();
     });
 
