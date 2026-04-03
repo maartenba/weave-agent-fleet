@@ -1,4 +1,15 @@
 import type { SessionListItem } from "@/lib/api-types";
+import type { SessionLifecycleStatus } from "@/lib/types";
+
+/** Lifecycle statuses considered "inactive" — the session is no longer running. */
+export const INACTIVE_LIFECYCLE_STATUSES: SessionLifecycleStatus[] = [
+  "completed", "stopped", "error", "disconnected",
+];
+
+/** Returns true if a session is in an inactive lifecycle state. */
+export function isInactiveSession(item: SessionListItem): boolean {
+  return (INACTIVE_LIFECYCLE_STATUSES as readonly string[]).includes(item.lifecycleStatus);
+}
 
 export interface NestedSession {
   item: SessionListItem;

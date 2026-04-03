@@ -17,6 +17,7 @@ A fleet orchestrator for managing multiple [OpenCode](https://opencode.ai) AI ag
   - [Uninstall](#uninstall)
 - [Features](#features)
   - [Session Management](#session-management)
+  - [Sidebar Navigation](#sidebar-navigation)
   - [Workspace Isolation](#workspace-isolation)
   - [Completion Callbacks](#completion-callbacks)
   - [Diff Viewer](#diff-viewer)
@@ -101,9 +102,19 @@ Create, monitor, fork, resume, abort, and terminate agent sessions from the web 
 | **Terminate** | Stop a session and its underlying process. |
 | **Delete** | Remove a session and its history permanently. |
 
-### Workspace Isolation
+### Sidebar Navigation
 
-When running multiple sessions against the same repository, isolation prevents conflicts:
+The sidebar provides a tree view of all workspaces and sessions:
+
+| Feature | Description |
+| :--- | :--- |
+| **Collapse/Expand** | Click the chevron next to a workspace to collapse or expand its sessions. State persists across reloads. |
+| **Hide Inactive** | Toggle the eye icon in the sidebar header to hide completed, stopped, errored, and disconnected sessions. |
+| **Remove Inactive** | Click the trash icon to permanently delete all inactive sessions, or right-click a workspace to remove only its inactive sessions. |
+| **Pin Workspaces** | Right-click a workspace to pin it to the top of the list. |
+| **Rename** | Right-click a workspace or session to rename it, or press F2. |
+
+### Workspace Isolation
 
 | Strategy | Use When | Parallel-Safe |
 | :--- | :--- | :--- |
