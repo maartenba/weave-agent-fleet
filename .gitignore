@@ -53,3 +53,6 @@ weave-fleet-*.zip.sha256
 /src-tauri/frontend-dist/
 /src-tauri/app-bundle/
 /src-tauri/gen/
+
+# .run
+/.run/
