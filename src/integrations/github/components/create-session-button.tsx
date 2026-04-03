@@ -152,15 +152,22 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
         setSelectedRepo(matchedRepo);
         setRepoSearch(matchedRepo.name);
       }
+      // Auto-select worktree strategy for PRs (the user wants the PR branch)
+      if (contextSource.type === "github-pr") {
+        setRepoStrategy("worktree");
+      }
     });
   }, [open, reposLoading, hasRepos, repositories, contextSource.metadata, defaultDir]);
 
-  // Auto-generate initial branch from context title
+  // Auto-generate initial branch from context title (or use PR head branch)
   useEffect(() => {
     if (open && !branchManuallyEdited) {
-      queueMicrotask(() => setBranch(generateBranchName(contextSource.title)));
+      const prHead = contextSource.type === "github-pr"
+        ? (contextSource.metadata?.head as string | undefined)
+        : undefined;
+      queueMicrotask(() => setBranch(prHead ?? generateBranchName(contextSource.title)));
     }
-  }, [open, contextSource.title, branchManuallyEdited]);
+  }, [open, contextSource.title, contextSource.type, contextSource.metadata, branchManuallyEdited]);
 
   // ── Filtered repos ──────────────────────────────────────────────────────
 
@@ -640,9 +647,11 @@ export function CreateSessionButton({ contextSource, directory: defaultDir }: Cr
                   disabled={isLoading}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {branchManuallyEdited
-                    ? "A unique branch name will be generated if left blank."
-                    : "Auto-generated from title. Edit to override."}
+                  {contextSource.type === "github-pr" && !branchManuallyEdited
+                    ? "Pre-filled from PR branch. Edit to override."
+                    : branchManuallyEdited
+                      ? "A unique branch name will be generated if left blank."
+                      : "Auto-generated from title. Edit to override."}
                 </p>
               </div>
             )}

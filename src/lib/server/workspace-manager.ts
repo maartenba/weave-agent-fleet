@@ -175,10 +175,30 @@ export async function createWorkspace(
 
       mkdirSync(worktreesRoot, { recursive: true });
 
-      await execGitAsync(
-        ["worktree", "add", workspaceDir, "-b", branchName],
-        { cwd: sourceDirectory }
-      );
+      // Check if the branch already exists (e.g. PR head branch).
+      // If it does, check out the existing branch; otherwise create a new one.
+      let branchExists = false;
+      try {
+        await execGitAsync(
+          ["rev-parse", "--verify", branchName],
+          { cwd: sourceDirectory }
+        );
+        branchExists = true;
+      } catch {
+        // Branch doesn't exist locally — will be created
+      }
+
+      if (branchExists) {
+        await execGitAsync(
+          ["worktree", "add", workspaceDir, branchName],
+          { cwd: sourceDirectory }
+        );
+      } else {
+        await execGitAsync(
+          ["worktree", "add", workspaceDir, "-b", branchName],
+          { cwd: sourceDirectory }
+        );
+      }
 
       insertWorkspace({
         id,
