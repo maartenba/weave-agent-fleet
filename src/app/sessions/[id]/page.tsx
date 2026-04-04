@@ -111,7 +111,10 @@ export default function SessionDetailPage() {
     [messages]
   );
 
-  const effectiveMessageID = diffMode === "session" ? (firstUserMessageId ?? undefined) : undefined;
+  const effectiveMessageID = useMemo(
+    () => diffMode === "session" ? (firstUserMessageId ?? undefined) : undefined,
+    [diffMode, firstUserMessageId]
+  );
   const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId, effectiveMessageID);
 
   // Auto-fetch diffs when instanceId changes (e.g. after session resume)
