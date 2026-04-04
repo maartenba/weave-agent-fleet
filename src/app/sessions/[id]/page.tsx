@@ -34,6 +34,8 @@ import { usePrStatus } from "@/hooks/use-pr-status";
 import { sessionCache } from "@/lib/session-cache";
 import { DiffViewer } from "@/components/session/diff-viewer";
 import { FilesTabContent } from "@/components/session/files-tab-content";
+import { DiffModeToggle } from "@/components/session/diff-mode-toggle";
+import type { DiffMode } from "@/components/session/diff-mode-toggle";
 import { TokenCostBreakdown } from "@/components/session/token-cost-breakdown";
 import { useCommandRegistry } from "@/contexts/command-registry-context";
 import { useKeybindings } from "@/contexts/keybindings-context";
@@ -100,7 +102,17 @@ export default function SessionDetailPage() {
   const { resumeSession, isResuming } = useResumeSession();
   const { deleteSession: permanentDelete, isDeleting } = useDeleteSession();
   const router = useRouter();
-  const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId);
+  const [diffMode, setDiffMode] = useState<DiffMode>("session");
+  const [activeTab, setActiveTab] = useState("activity");
+
+  // Derive the first user message ID for session-scoped diffs
+  const firstUserMessageId = useMemo(
+    () => messages.find((m) => m.role === "user")?.messageId ?? null,
+    [messages]
+  );
+
+  const effectiveMessageID = diffMode === "session" ? (firstUserMessageId ?? undefined) : undefined;
+  const { diffs, isLoading: diffsLoading, error: diffsError, fetchDiffs } = useDiffs(sessionId, instanceId, effectiveMessageID);
 
   // Auto-fetch diffs when instanceId changes (e.g. after session resume)
   useEffect(() => {
@@ -780,7 +792,8 @@ export default function SessionDetailPage() {
             defaultValue="activity"
             className="flex flex-1 flex-col overflow-hidden"
             onValueChange={(value) => {
-              if (value === "changes") fetchDiffs();
+              setActiveTab(value);
+              if (value === "changes" || value === "files") fetchDiffs();
             }}
           >
             <TabsList variant="line" className="px-4 border-b border-border/50">
@@ -793,6 +806,11 @@ export default function SessionDetailPage() {
                 <FileCode className="h-3.5 w-3.5" />
                 Files
               </TabsTrigger>
+              {(activeTab === "changes" || activeTab === "files") && (
+                <div className="ml-auto flex items-center">
+                  <DiffModeToggle mode={diffMode} onModeChange={setDiffMode} />
+                </div>
+              )}
             </TabsList>
             <TabsContent value="activity" className="flex-1 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-hidden">
@@ -916,7 +934,7 @@ export default function SessionDetailPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5">
                       <GitCompare className="h-3 w-3 text-muted-foreground" />
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes {diffMode === "session" ? "(session)" : "(uncommitted)"}</p>
                     </div>
                     <p className="text-xs font-mono">
                       {diffs.length} file{diffs.length !== 1 ? "s" : ""}
@@ -1081,7 +1099,7 @@ export default function SessionDetailPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5">
                       <GitCompare className="h-3 w-3 text-muted-foreground" />
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Changes {diffMode === "session" ? "(session)" : "(uncommitted)"}</p>
                     </div>
                     <p className="text-xs font-mono">
                       {diffs.length} file{diffs.length !== 1 ? "s" : ""}

@@ -1,23 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Loader2, FolderOpen, AlertCircle, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, FolderOpen, AlertCircle, RefreshCw, Undo2, GitCompareArrows } from "lucide-react";
+import { cn, getFileName } from "@/lib/utils";
 import { useFileTree } from "@/hooks/use-file-tree";
 import { useFileContent } from "@/hooks/use-file-content";
 import { FileTree } from "./file-tree";
 import { FileTabBar } from "./file-tab-bar";
 import { MonacoEditorWrapper } from "./monaco-editor-wrapper";
+import { MonacoDiffEditorWrapper } from "./monaco-diff-editor-wrapper";
 import { MarkdownPreview } from "./markdown-preview";
 import { ImagePreview } from "./image-preview";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   FileOperationDialogs,
   type DialogState,
 } from "./file-operation-dialogs";
 import type { AccumulatedPart, FileDiffItem } from "@/lib/api-types";
 import type { FileTreeNode } from "@/hooks/use-file-tree";
-import { buildGitStatusMap } from "@/lib/git-status-utils";
+import { buildGitStatusMap, buildFileChangeCounts } from "@/lib/git-status-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +71,7 @@ export function FilesTabContent({
     setActiveFilePath,
     updateContent,
     saveFile,
+    discardChanges,
     isSaving,
     saveError,
     renameOpenFile,
@@ -70,6 +83,18 @@ export function FilesTabContent({
 
   // Markdown preview toggle per file
   const [markdownPreviewPaths, setMarkdownPreviewPaths] = useState<Set<string>>(new Set());
+
+  // Diff view toggle per file (shows Monaco DiffEditor instead of normal editor)
+  const [diffViewPaths, setDiffViewPaths] = useState<Set<string>>(new Set());
+
+  const toggleDiffView = useCallback((filePath: string) => {
+    setDiffViewPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) next.delete(filePath);
+      else next.add(filePath);
+      return next;
+    });
+  }, []);
 
   // Tree panel resizing
   const [treeWidth, setTreeWidth] = useState(TREE_DEFAULT_WIDTH);
@@ -256,6 +281,12 @@ export function FilesTabContent({
     [diffs]
   );
 
+  // Compute per-file change counts (additions/deletions) for tab badges
+  const fileChangeCounts = useMemo(
+    () => buildFileChangeCounts(diffs ?? []),
+    [diffs]
+  );
+
   // Find the git "before" content for the active file (for inline diff decorations).
   // Skip entirely-new files (status "added") — highlighting every line green is just noise.
   const gitBeforeContent = useMemo(() => {
@@ -264,6 +295,18 @@ export function FilesTabContent({
     if (!diff || diff.status === "added") return undefined;
     return diff.before;
   }, [activeFilePath, diffs]);
+
+  // Auto-disable diff view for files that lose their git context
+  useEffect(() => {
+    if (activeFilePath && gitBeforeContent === undefined) {
+      setDiffViewPaths((prev) => {
+        if (!prev.has(activeFilePath)) return prev;
+        const next = new Set(prev);
+        next.delete(activeFilePath);
+        return next;
+      });
+    }
+  }, [activeFilePath, gitBeforeContent]);
 
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
 
@@ -274,6 +317,11 @@ export function FilesTabContent({
     activeFilePath !== null &&
     isMarkdown(activeFilePath) &&
     markdownPreviewPaths.has(activeFilePath);
+
+  const showDiffView =
+    activeFilePath !== null &&
+    diffViewPaths.has(activeFilePath) &&
+    gitBeforeContent !== undefined;
 
   return (
     <div className={cn("flex h-full overflow-hidden", className)}>
@@ -341,6 +389,7 @@ export function FilesTabContent({
           activeFilePath={activeFilePath}
           onActivate={setActiveFilePath}
           onClose={closeFile}
+          fileChangeCounts={fileChangeCounts}
         />
 
         {/* Editor toolbar */}
@@ -350,7 +399,7 @@ export function FilesTabContent({
               {activeFile.path}
             </span>
             <div className="flex items-center gap-1">
-              {isMarkdown(activeFile.path) && (
+              {isMarkdown(activeFile.path) && !showDiffView && (
                 <button
                   type="button"
                   className={cn(
@@ -363,6 +412,54 @@ export function FilesTabContent({
                 >
                   {markdownPreviewPaths.has(activeFile.path) ? "Edit" : "Preview"}
                 </button>
+              )}
+              {gitBeforeContent !== undefined && !showMarkdownPreview && (
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors",
+                    diffViewPaths.has(activeFile.path)
+                      ? "bg-primary/20 text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                  onClick={() => toggleDiffView(activeFile.path)}
+                  title={diffViewPaths.has(activeFile.path) ? "Exit diff view" : "Show inline diff"}
+                >
+                  <GitCompareArrows className="h-3 w-3" />
+                  {diffViewPaths.has(activeFile.path) ? "Editor" : "Diff"}
+                </button>
+              )}
+              {activeFile.isDirty && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      title="Discard all unsaved changes"
+                    >
+                      <Undo2 className="h-3 w-3" />
+                      Discard
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent data-size="sm">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will revert all unsaved changes to{" "}
+                        <strong>{getFileName(activeFile.path)}</strong>.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        onClick={() => discardChanges(activeFile.path)}
+                      >
+                        Discard
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
               {activeFile.isDirty && (
                 <button
@@ -434,6 +531,13 @@ export function FilesTabContent({
             </div>
           ) : showMarkdownPreview ? (
             <MarkdownPreview content={activeFile.content} className="flex-1" />
+          ) : showDiffView ? (
+            <MonacoDiffEditorWrapper
+              original={gitBeforeContent!}
+              modified={activeFile.content}
+              language={activeFile.language}
+              onChange={(value) => updateContent(activeFile.path, value)}
+            />
           ) : (
             <MonacoEditorWrapper
               content={activeFile.content}

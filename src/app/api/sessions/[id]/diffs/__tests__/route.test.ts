@@ -187,4 +187,37 @@ describe("GET /api/sessions/[id]/diffs", () => {
     expect(res.status).toBe(200);
     expect(body).toEqual([]);
   });
+
+  it("ForwardsMessageIDToSdkWhenProvided", async () => {
+    const client = makeMockClient({ data: [] });
+    mockGetClientForInstance.mockReturnValue(client as never);
+
+    const req = makeRequest("http://localhost/api/sessions/sess-1/diffs?instanceId=inst-abc&messageID=msg-42");
+    const context = makeContext("sess-1");
+
+    const res = await GET(req, context);
+
+    expect(res.status).toBe(200);
+    expect(client.session.diff).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionID: "sess-1", messageID: "msg-42" })
+    );
+  });
+
+  it("OmitsMessageIDFromSdkCallWhenNotProvided", async () => {
+    const client = makeMockClient({ data: [] });
+    mockGetClientForInstance.mockReturnValue(client as never);
+
+    const req = makeRequest("http://localhost/api/sessions/sess-1/diffs?instanceId=inst-abc");
+    const context = makeContext("sess-1");
+
+    const res = await GET(req, context);
+
+    expect(res.status).toBe(200);
+    expect(client.session.diff).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionID: "sess-1" })
+    );
+    expect(client.session.diff).not.toHaveBeenCalledWith(
+      expect.objectContaining({ messageID: expect.anything() })
+    );
+  });
 });

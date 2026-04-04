@@ -14,8 +14,9 @@ export interface UseDiffsResult {
 /**
  * Fetches file diffs for a session on demand (not auto-polling).
  * Call `fetchDiffs()` when the user activates the "Changes" tab.
+ * Pass `messageID` to fetch session-scoped diffs (cumulative from that message).
  */
-export function useDiffs(sessionId: string, instanceId: string): UseDiffsResult {
+export function useDiffs(sessionId: string, instanceId: string, messageID?: string): UseDiffsResult {
   const [diffs, setDiffs] = useState<FileDiffItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -27,7 +28,7 @@ export function useDiffs(sessionId: string, instanceId: string): UseDiffsResult 
     setError(undefined);
 
     try {
-      const url = `/api/sessions/${encodeURIComponent(sessionId)}/diffs?instanceId=${encodeURIComponent(instanceId)}`;
+      const url = `/api/sessions/${encodeURIComponent(sessionId)}/diffs?instanceId=${encodeURIComponent(instanceId)}${messageID ? `&messageID=${encodeURIComponent(messageID)}` : ""}`;
       const response = await apiFetch(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -46,7 +47,7 @@ export function useDiffs(sessionId: string, instanceId: string): UseDiffsResult 
         setIsLoading(false);
       }
     }
-  }, [sessionId, instanceId]);
+  }, [sessionId, instanceId, messageID]);
 
   return { diffs, isLoading, error, fetchDiffs };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { X, Circle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getFileName } from "@/lib/utils";
 import type { OpenFile } from "@/hooks/use-file-content";
 
 interface FileTabBarProps {
@@ -9,10 +9,7 @@ interface FileTabBarProps {
   activeFilePath: string | null;
   onActivate: (path: string) => void;
   onClose: (path: string) => void;
-}
-
-function getFileName(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
+  fileChangeCounts?: Map<string, { additions: number; deletions: number }>;
 }
 
 export function FileTabBar({
@@ -20,6 +17,7 @@ export function FileTabBar({
   activeFilePath,
   onActivate,
   onClose,
+  fileChangeCounts,
 }: FileTabBarProps) {
   const files = Array.from(openFiles.values());
 
@@ -76,6 +74,21 @@ export function FileTabBar({
               </button>
             )}
             <span className="truncate font-mono">{fileName}</span>
+            {/* Change count badge */}
+            {(() => {
+              const counts = fileChangeCounts?.get(file.path);
+              if (!counts || (counts.additions === 0 && counts.deletions === 0)) return null;
+              return (
+                <span className="ml-0.5 flex shrink-0 items-center gap-0.5 font-mono text-[10px] opacity-60">
+                  {counts.additions > 0 && (
+                    <span className="text-green-500">+{counts.additions}</span>
+                  )}
+                  {counts.deletions > 0 && (
+                    <span className="text-red-500">-{counts.deletions}</span>
+                  )}
+                </span>
+              );
+            })()}
           </div>
         );
       })}
