@@ -29,6 +29,8 @@ export interface UseFileContentResult {
   setActiveFilePath: (path: string) => void;
   updateContent: (path: string, content: string) => void;
   saveFile: (path: string) => Promise<void>;
+  /** Resets content to originalContent (unsaved edits only — no API call) */
+  discardChanges: (path: string) => void;
   isSaving: boolean;
   saveError?: string;
   /**
@@ -236,6 +238,21 @@ export function useFileContent(
     setActiveFilePath((prev) => (prev === oldPath ? newPath : prev));
   }, []);
 
+  /** Reset content to originalContent — pure local state, no API call. */
+  const discardChanges = useCallback((filePath: string) => {
+    setOpenFiles((prev) => {
+      const file = prev.get(filePath);
+      if (!file) return prev;
+      const next = new Map(prev);
+      next.set(filePath, {
+        ...file,
+        content: file.originalContent,
+        isDirty: false,
+      });
+      return next;
+    });
+  }, []);
+
   const closeFilesUnderPath = useCallback(
     (pathPrefix: string) => {
       const prefix = pathPrefix.endsWith("/") ? pathPrefix : pathPrefix + "/";
@@ -320,6 +337,7 @@ export function useFileContent(
       closeFile,
       setActiveFilePath,
       updateContent,
+      discardChanges,
       saveFile,
       isSaving,
       saveError,

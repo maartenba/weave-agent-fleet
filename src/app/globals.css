@@ -768,3 +768,27 @@
 .line-git-modified {
   background-color: rgba(245, 158, 11, 0.08);
 }
+
+/* ─── Hunk revert icon in lines decoration margin (Monaco editor) ─────────── */
+
+/* The icon sits in Monaco's "lines decorations" column (between line numbers and code).
+   It shows a circular undo arrow on hover over a changed line. */
+.lines-decoration-git-revert {
+  width: 16px !important;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  /* Circular undo arrow (Lucide RotateCcw-style) as inline SVG */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Reveal on hover — Monaco wraps each margin line in a div; we hook into that */
+.monaco-editor .margin-view-overlays > div:hover .lines-decoration-git-revert {
+  opacity: 0.6;
+}
+.lines-decoration-git-revert:hover {
+  opacity: 1 !important;
+}

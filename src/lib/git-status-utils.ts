@@ -61,3 +61,20 @@ export function buildGitStatusMap(diffs: FileDiffItem[]): GitStatusMap {
 
   return map;
 }
+
+/**
+ * Build a map from file path → { additions, deletions } counts.
+ * Uses pre-computed counts from the FileDiffItem API response.
+ */
+export function buildFileChangeCounts(
+  diffs: FileDiffItem[]
+): Map<string, { additions: number; deletions: number }> {
+  const map = new Map<string, { additions: number; deletions: number }>();
+  for (const diff of diffs) {
+    map.set(diff.file, {
+      additions: diff.additions,
+      deletions: diff.deletions,
+    });
+  }
+  return map;
+}

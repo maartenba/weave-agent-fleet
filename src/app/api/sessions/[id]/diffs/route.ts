@@ -14,6 +14,7 @@ export async function GET(
 ): Promise<NextResponse> {
   const { id: sessionId } = await context.params;
   const instanceId = request.nextUrl.searchParams.get("instanceId");
+  const messageID = request.nextUrl.searchParams.get("messageID");
 
   if (!instanceId) {
     return NextResponse.json(
@@ -34,7 +35,7 @@ export async function GET(
 
   try {
     const result = await withTimeout(
-      client.session.diff({ sessionID: sessionId }),
+      client.session.diff({ sessionID: sessionId, ...(messageID ? { messageID } : {}) }),
       getSDKCallTimeoutMs(),
       `session.diff for ${sessionId}`,
     );
