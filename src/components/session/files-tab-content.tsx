@@ -296,17 +296,21 @@ export function FilesTabContent({
     return diff.before;
   }, [activeFilePath, diffs]);
 
-  // Auto-disable diff view for files that lose their git context
-  useEffect(() => {
-    if (activeFilePath && gitBeforeContent === undefined) {
-      setDiffViewPaths((prev) => {
-        if (!prev.has(activeFilePath)) return prev;
-        const next = new Set(prev);
-        next.delete(activeFilePath);
-        return next;
-      });
-    }
-  }, [activeFilePath, gitBeforeContent]);
+  // Whether a file's diff toggle is logically active — combines explicit user
+  // toggle state with the availability of git context (no `before` content
+  // means there's nothing to diff against).
+  const isDiffViewActive = useCallback(
+    (filePath: string) => diffViewPaths.has(filePath) && (() => {
+      if (!diffs) return false;
+      const diff = diffs.find((d) => d.file === filePath);
+      return !!diff && diff.status !== "added" && diff.before !== undefined;
+    })(),
+    [diffViewPaths, diffs]
+  );
+
+  const showDiffView =
+    activeFilePath !== null &&
+    isDiffViewActive(activeFilePath);
 
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
 
@@ -317,11 +321,6 @@ export function FilesTabContent({
     activeFilePath !== null &&
     isMarkdown(activeFilePath) &&
     markdownPreviewPaths.has(activeFilePath);
-
-  const showDiffView =
-    activeFilePath !== null &&
-    diffViewPaths.has(activeFilePath) &&
-    gitBeforeContent !== undefined;
 
   return (
     <div className={cn("flex h-full overflow-hidden", className)}>
@@ -418,15 +417,15 @@ export function FilesTabContent({
                   type="button"
                   className={cn(
                     "flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors",
-                    diffViewPaths.has(activeFile.path)
+                    isDiffViewActive(activeFile.path)
                       ? "bg-primary/20 text-primary"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   )}
                   onClick={() => toggleDiffView(activeFile.path)}
-                  title={diffViewPaths.has(activeFile.path) ? "Exit diff view" : "Show inline diff"}
+                  title={isDiffViewActive(activeFile.path) ? "Exit diff view" : "Show inline diff"}
                 >
                   <GitCompareArrows className="h-3 w-3" />
-                  {diffViewPaths.has(activeFile.path) ? "Editor" : "Diff"}
+                  {isDiffViewActive(activeFile.path) ? "Editor" : "Diff"}
                 </button>
               )}
               {activeFile.isDirty && (
