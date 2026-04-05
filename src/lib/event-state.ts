@@ -33,7 +33,33 @@ export function ensureMessage(
     modelID: info.modelID,
     parentID: info.parentID,
   };
-  return [...prev, newMsg];
+  return insertChronologically(prev, newMsg);
+}
+
+/**
+ * Insert a message into an array sorted by createdAt.
+ * Messages without a createdAt are appended at the end (assumed newest).
+ */
+function insertChronologically(
+  messages: AccumulatedMessage[],
+  newMsg: AccumulatedMessage,
+): AccumulatedMessage[] {
+  const ts = newMsg.createdAt;
+  // No timestamp — append at the end (assume newest / currently streaming)
+  if (ts == null) return [...messages, newMsg];
+
+  // Walk backwards from the end — most inserts are at or near the tail
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const existing = messages[i].createdAt;
+    if (existing != null && existing <= ts) {
+      // Insert right after this message
+      const result = messages.slice();
+      result.splice(i + 1, 0, newMsg);
+      return result;
+    }
+  }
+  // ts is older than every message — prepend
+  return [newMsg, ...messages];
 }
 
 /**
@@ -99,7 +125,7 @@ export function applyPartUpdate(
   const messageId: string = part.messageID;
   const sessionId: string = part.sessionID;
 
-  // Ensure the message exists
+  // Ensure the message exists (inserted chronologically when possible)
   let msgs = prev;
   if (!msgs.find((m) => m.messageId === messageId)) {
     const newMsg: AccumulatedMessage = {
@@ -107,8 +133,9 @@ export function applyPartUpdate(
       sessionId,
       role: "assistant",
       parts: [],
+      createdAt: part.time?.created,
     };
-    msgs = [...prev, newMsg];
+    msgs = insertChronologically(prev, newMsg);
   }
 
   return msgs.map((msg) => {
@@ -198,14 +225,14 @@ export function applyTextDelta(
   const msgIndex = prev.findIndex((m) => m.messageId === messageId);
 
   if (msgIndex === -1) {
-    // Message doesn't exist — append new message with the delta as first part
+    // Message doesn't exist — insert chronologically with the delta as first part
     const newMsg: AccumulatedMessage = {
       messageId,
       sessionId,
       role: "assistant",
       parts: [{ partId, type: "text", text: delta }],
     };
-    return [...prev, newMsg];
+    return insertChronologically(prev, newMsg);
   }
 
   const msg = prev[msgIndex];

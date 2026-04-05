@@ -188,7 +188,11 @@ export function useSessionEvents(
         // Append new messages, avoiding duplicates
         const existingIds = new Set(prev.map((m: AccumulatedMessage) => m.messageId));
         const newMessages = accumulated.filter((m: AccumulatedMessage) => !existingIds.has(m.messageId));
+        if (newMessages.length === 0) return prev;
         const merged = [...prev, ...newMessages];
+        // Re-sort by createdAt so gap-fill messages land in the right position.
+        // Messages without timestamps are kept in their relative order at the end.
+        merged.sort((a, b) => (a.createdAt ?? Infinity) - (b.createdAt ?? Infinity));
         // Apply MAX_MESSAGES cap. When hydrated from cache (up to MAX_MESSAGES entries)
         // and gap-fill appends new messages, the oldest are trimmed from the front.
         // The cached oldestMessageId pagination cursor may now point to a trimmed message —
@@ -474,6 +478,12 @@ export function handleEvent(
     if (!part?.messageID) return;
     const normalizedSessionId = part.sessionID ?? properties?.sessionID ?? sessionId;
     if (!normalizedSessionId || normalizedSessionId !== sessionId) return;
+    // Keep lastMessageIdRef fresh — part events often arrive before the
+    // message.updated event, so relying solely on message.updated leaves
+    // the gap-fill cursor stale.
+    if (part.messageID && (!lastMessageIdRef.current || part.messageID !== lastMessageIdRef.current)) {
+      lastMessageIdRef.current = part.messageID;
+    }
     setMessages((prev) => applyPartUpdate(prev, { ...part, sessionID: normalizedSessionId }));
 
     // Auto-switch agent on plan_exit/plan_enter tool completions (matching TUI behavior)
