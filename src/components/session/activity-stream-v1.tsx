@@ -358,19 +358,53 @@ const MessageItem = memo(function MessageItem({
   currentSessionId,
 }: MessageItemProps) {
   const isUser = message.role === "user";
-  const textParts = message.parts.filter((p) => p.type === "text");
-  const toolParts = message.parts.filter(
-    (p): p is AccumulatedPart & { type: "tool" } => p.type === "tool"
-  );
-  const fileParts = message.parts.filter(
-    (p): p is AccumulatedFilePart => p.type === "file"
-  );
 
   const [lightboxImage, setLightboxImage] = useState<AccumulatedFilePart | null>(null);
 
-  const fullText = textParts
-    .map((p) => (p.type === "text" ? p.text : ""))
-    .join("");
+  // Group consecutive parts of the same type into runs for rendering.
+  // This preserves the original interleaved order from the LLM (text→tool→text→tool)
+  // instead of separating by type which causes visual interleaving bugs.
+  const partRuns = useMemo(() => {
+    const runs: Array<
+      | { type: "text"; text: string }
+      | { type: "tools"; parts: Array<AccumulatedPart & { type: "tool" }> }
+      | { type: "files"; parts: AccumulatedFilePart[] }
+    > = [];
+
+    for (const part of message.parts) {
+      if (part.type === "text") {
+        const trimmed = part.text;
+        if (!trimmed) continue;
+        // Merge consecutive text parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "text") {
+          last.text += trimmed;
+        } else {
+          runs.push({ type: "text", text: trimmed });
+        }
+      } else if (part.type === "tool") {
+        // Merge consecutive tool parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "tools") {
+          last.parts.push(part as AccumulatedPart & { type: "tool" });
+        } else {
+          runs.push({ type: "tools", parts: [part as AccumulatedPart & { type: "tool" }] });
+        }
+      } else if (part.type === "file") {
+        // Merge consecutive file parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "files") {
+          last.parts.push(part as AccumulatedFilePart);
+        } else {
+          runs.push({ type: "files", parts: [part as AccumulatedFilePart] });
+        }
+      }
+    }
+
+    return runs;
+  }, [message.parts]);
+
+  const hasContent = partRuns.length > 0;
 
   // Look up agent metadata for color (with fallback)
   const agentMeta = message.agent ? agents?.find((a) => a.name === message.agent) : undefined;
@@ -432,35 +466,42 @@ const MessageItem = memo(function MessageItem({
           ) : null}
         </div>
 
-        {/* Tool calls */}
-        {toolParts.length > 0 && (
-          <div className="space-y-0.5">
-            {toolParts.map((part) => (
-              <ToolCallItem key={part.partId} part={part} currentSessionId={currentSessionId} />
-            ))}
-          </div>
-        )}
+        {/* Render parts in their original interleaved order */}
+        {partRuns.map((run, i) => {
+          if (run.type === "tools") {
+            return (
+              <div key={`tools-${i}`} className="space-y-0.5">
+                {run.parts.map((part) => (
+                  <ToolCallItem key={part.partId} part={part} currentSessionId={currentSessionId} />
+                ))}
+              </div>
+            );
+          }
+          if (run.type === "files") {
+            return (
+              <div key={`files-${i}`} className="flex gap-2 flex-wrap">
+                {run.parts.map((part) => (
+                  <button
+                    key={part.partId}
+                    type="button"
+                    className="block cursor-pointer"
+                    onClick={() => setLightboxImage(part)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={part.url}
+                      alt={part.filename ?? "Image attachment"}
+                      className="max-h-48 max-w-xs rounded-md border border-border object-contain hover:opacity-90 transition-opacity"
+                    />
+                  </button>
+                ))}
+              </div>
+            );
+          }
+          // run.type === "text"
+          return <MarkdownRenderer key={`text-${i}`} content={run.text} />;
+        })}
 
-        {/* Image attachments */}
-        {fileParts.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            {fileParts.map((part) => (
-              <button
-                key={part.partId}
-                type="button"
-                className="block cursor-pointer"
-                onClick={() => setLightboxImage(part)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={part.url}
-                  alt={part.filename ?? "Image attachment"}
-                  className="max-h-48 max-w-xs rounded-md border border-border object-contain hover:opacity-90 transition-opacity"
-                />
-              </button>
-            ))}
-          </div>
-        )}
         {lightboxImage && (
           <ImageLightbox
             src={lightboxImage.url}
@@ -470,13 +511,8 @@ const MessageItem = memo(function MessageItem({
           />
         )}
 
-        {/* Text content */}
-        {fullText && (
-          <MarkdownRenderer content={fullText} />
-        )}
-
         {/* Empty state for assistant — still streaming (only show for incomplete messages) */}
-        {!isUser && !message.completedAt && !fullText && toolParts.length === 0 && fileParts.length === 0 && (
+        {!isUser && !message.completedAt && !hasContent && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>
@@ -703,12 +739,23 @@ export function ActivityStreamV1({
   // Re-measure when messages stream in — their parts array changes
   // as SSE text deltas and tool-call updates arrive, altering the
   // rendered height of individual items.
+  // Include text content length so that streaming text deltas (which
+  // append to existing parts without changing parts.length) also
+  // trigger a re-measure.  We bucket text length into 50-char steps
+  // to avoid re-measuring on every single character delta.
   const partsFingerprint = useMemo(() => {
-    let total = 0;
+    let totalParts = 0;
+    let textBucket = 0;
     for (const msg of messages) {
-      total += msg.parts.length;
+      totalParts += msg.parts.length;
+      for (const part of msg.parts) {
+        if (part.type === "text") {
+          // Bucket into 50-char steps to throttle re-measures
+          textBucket += Math.floor(part.text.length / 50);
+        }
+      }
     }
-    return `${messages.length}-${total}`;
+    return `${messages.length}-${totalParts}-${textBucket}`;
   }, [messages]);
 
   const prevPartsFingerprintRef = useRef(partsFingerprint);
