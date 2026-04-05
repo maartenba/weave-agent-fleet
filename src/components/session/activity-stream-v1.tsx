@@ -688,20 +688,13 @@ export function ActivityStreamV1({
   // Only renders items visible in the viewport plus an overscan buffer,
   // keeping DOM node count ~30 regardless of session length.
 
-  // Build a fingerprint that changes when groupedEntries reshape (e.g.
-  // inference steps collapse/expand on sessionStatus change). This forces
-  // the virtualizer to discard its stale height cache and re-measure.
-  const entriesFingerprint = useMemo(() => {
-    return groupedEntries
-      .map((e) =>
-        e.type === "message"
-          ? e.message.messageId
-          : e.type === "thinking"
-          ? `t-${e.message.messageId}`
-          : `s-${e.messages[0].messageId}`
-      )
-      .join(",");
-  }, [groupedEntries]);
+  // NOTE: We previously built an entriesFingerprint and partsFingerprint
+  // and called virtualizer.measure() when they changed.  That API clears
+  // ALL cached sizes, resetting every item to the 120px estimate and
+  // causing visible overlap until ResizeObserver re-measures.  The
+  // virtualizer's measureElement ref (with its built-in ResizeObserver)
+  // already handles dynamic element sizing automatically — structural
+  // changes are handled by the count and getItemKey props.
 
   // Provide stable keys per item so the virtualizer can track them
   // across index shifts (e.g. when older messages are prepended).
@@ -723,52 +716,13 @@ export function ActivityStreamV1({
     getItemKey,
   });
 
-  // Force the virtualizer to re-measure all items when the entry
-  // structure changes (collapse/expand) or when message content
-  // updates (streaming text, tool call completions).  Without this,
-  // the cached heights become stale and translateY offsets diverge,
-  // causing items to overlap (the "scrambled text" bug).
-  const prevFingerprintRef = useRef(entriesFingerprint);
-  useEffect(() => {
-    if (prevFingerprintRef.current !== entriesFingerprint) {
-      prevFingerprintRef.current = entriesFingerprint;
-      virtualizer.measure();
-    }
-  }, [entriesFingerprint, virtualizer]);
-
-  // Re-measure when messages stream in — their parts array changes
-  // as SSE text deltas and tool-call updates arrive, altering the
-  // rendered height of individual items.
-  // Include text content length so that streaming text deltas (which
-  // append to existing parts without changing parts.length) also
-  // trigger a re-measure.  We bucket text length into 50-char steps
-  // to avoid re-measuring on every single character delta.
-  const partsFingerprint = useMemo(() => {
-    let totalParts = 0;
-    let textBucket = 0;
-    for (const msg of messages) {
-      totalParts += msg.parts.length;
-      for (const part of msg.parts) {
-        if (part.type === "text") {
-          // Bucket into 50-char steps to throttle re-measures
-          textBucket += Math.floor(part.text.length / 50);
-        }
-      }
-    }
-    return `${messages.length}-${totalParts}-${textBucket}`;
-  }, [messages]);
-
-  const prevPartsFingerprintRef = useRef(partsFingerprint);
-  useEffect(() => {
-    if (prevPartsFingerprintRef.current !== partsFingerprint) {
-      prevPartsFingerprintRef.current = partsFingerprint;
-      // Defer to the next frame so the DOM has rendered the new content
-      // before the virtualizer re-reads element heights.
-      requestAnimationFrame(() => {
-        virtualizer.measure();
-      });
-    }
-  }, [partsFingerprint, virtualizer]);
+  // Dynamic element heights (from streaming text, tool call updates, etc.)
+  // are tracked automatically by the ResizeObserver that the virtualizer
+  // attaches to each element via the measureElement ref.  We previously had
+  // manual fingerprint-based virtualizer.measure() calls here, but that API
+  // clears ALL cached sizes (resetting to 120px estimates), causing visible
+  // overlap until the ResizeObserver re-measures.  Removed in favour of the
+  // automatic approach.
 
   return (
     <div className="flex flex-col h-full">
