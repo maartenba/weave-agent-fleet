@@ -651,12 +651,77 @@ export function ActivityStreamV1({
   // ── Virtualizer for the message list ──────────────────────────────────────
   // Only renders items visible in the viewport plus an overscan buffer,
   // keeping DOM node count ~30 regardless of session length.
+
+  // Build a fingerprint that changes when groupedEntries reshape (e.g.
+  // inference steps collapse/expand on sessionStatus change). This forces
+  // the virtualizer to discard its stale height cache and re-measure.
+  const entriesFingerprint = useMemo(() => {
+    return groupedEntries
+      .map((e) =>
+        e.type === "message"
+          ? e.message.messageId
+          : e.type === "thinking"
+          ? `t-${e.message.messageId}`
+          : `s-${e.messages[0].messageId}`
+      )
+      .join(",");
+  }, [groupedEntries]);
+
+  // Provide stable keys per item so the virtualizer can track them
+  // across index shifts (e.g. when older messages are prepended).
+  const getItemKey = useCallback(
+    (index: number) => {
+      const entry = groupedEntries[index];
+      if (entry.type === "message") return entry.message.messageId;
+      if (entry.type === "thinking") return `thinking-${entry.message.messageId}`;
+      return `summary-${entry.messages[0].messageId}`;
+    },
+    [groupedEntries]
+  );
+
   const virtualizer = useVirtualizer({
     count: groupedEntries.length,
     getScrollElement: () => viewportElement,
     estimateSize: () => 120,
     overscan: 10,
+    getItemKey,
   });
+
+  // Force the virtualizer to re-measure all items when the entry
+  // structure changes (collapse/expand) or when message content
+  // updates (streaming text, tool call completions).  Without this,
+  // the cached heights become stale and translateY offsets diverge,
+  // causing items to overlap (the "scrambled text" bug).
+  const prevFingerprintRef = useRef(entriesFingerprint);
+  useEffect(() => {
+    if (prevFingerprintRef.current !== entriesFingerprint) {
+      prevFingerprintRef.current = entriesFingerprint;
+      virtualizer.measure();
+    }
+  }, [entriesFingerprint, virtualizer]);
+
+  // Re-measure when messages stream in — their parts array changes
+  // as SSE text deltas and tool-call updates arrive, altering the
+  // rendered height of individual items.
+  const partsFingerprint = useMemo(() => {
+    let total = 0;
+    for (const msg of messages) {
+      total += msg.parts.length;
+    }
+    return `${messages.length}-${total}`;
+  }, [messages]);
+
+  const prevPartsFingerprintRef = useRef(partsFingerprint);
+  useEffect(() => {
+    if (prevPartsFingerprintRef.current !== partsFingerprint) {
+      prevPartsFingerprintRef.current = partsFingerprint;
+      // Defer to the next frame so the DOM has rendered the new content
+      // before the virtualizer re-reads element heights.
+      requestAnimationFrame(() => {
+        virtualizer.measure();
+      });
+    }
+  }, [partsFingerprint, virtualizer]);
 
   return (
     <div className="flex flex-col h-full">
