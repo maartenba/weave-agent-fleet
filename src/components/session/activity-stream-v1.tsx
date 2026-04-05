@@ -358,19 +358,53 @@ const MessageItem = memo(function MessageItem({
   currentSessionId,
 }: MessageItemProps) {
   const isUser = message.role === "user";
-  const textParts = message.parts.filter((p) => p.type === "text");
-  const toolParts = message.parts.filter(
-    (p): p is AccumulatedPart & { type: "tool" } => p.type === "tool"
-  );
-  const fileParts = message.parts.filter(
-    (p): p is AccumulatedFilePart => p.type === "file"
-  );
 
   const [lightboxImage, setLightboxImage] = useState<AccumulatedFilePart | null>(null);
 
-  const fullText = textParts
-    .map((p) => (p.type === "text" ? p.text : ""))
-    .join("");
+  // Group consecutive parts of the same type into runs for rendering.
+  // This preserves the original interleaved order from the LLM (text→tool→text→tool)
+  // instead of separating by type which causes visual interleaving bugs.
+  const partRuns = useMemo(() => {
+    const runs: Array<
+      | { type: "text"; text: string }
+      | { type: "tools"; parts: Array<AccumulatedPart & { type: "tool" }> }
+      | { type: "files"; parts: AccumulatedFilePart[] }
+    > = [];
+
+    for (const part of message.parts) {
+      if (part.type === "text") {
+        const trimmed = part.text;
+        if (!trimmed) continue;
+        // Merge consecutive text parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "text") {
+          last.text += trimmed;
+        } else {
+          runs.push({ type: "text", text: trimmed });
+        }
+      } else if (part.type === "tool") {
+        // Merge consecutive tool parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "tools") {
+          last.parts.push(part as AccumulatedPart & { type: "tool" });
+        } else {
+          runs.push({ type: "tools", parts: [part as AccumulatedPart & { type: "tool" }] });
+        }
+      } else if (part.type === "file") {
+        // Merge consecutive file parts into one run
+        const last = runs[runs.length - 1];
+        if (last?.type === "files") {
+          last.parts.push(part as AccumulatedFilePart);
+        } else {
+          runs.push({ type: "files", parts: [part as AccumulatedFilePart] });
+        }
+      }
+    }
+
+    return runs;
+  }, [message.parts]);
+
+  const hasContent = partRuns.length > 0;
 
   // Look up agent metadata for color (with fallback)
   const agentMeta = message.agent ? agents?.find((a) => a.name === message.agent) : undefined;
@@ -432,35 +466,42 @@ const MessageItem = memo(function MessageItem({
           ) : null}
         </div>
 
-        {/* Tool calls */}
-        {toolParts.length > 0 && (
-          <div className="space-y-0.5">
-            {toolParts.map((part) => (
-              <ToolCallItem key={part.partId} part={part} currentSessionId={currentSessionId} />
-            ))}
-          </div>
-        )}
+        {/* Render parts in their original interleaved order */}
+        {partRuns.map((run, i) => {
+          if (run.type === "tools") {
+            return (
+              <div key={`tools-${i}`} className="space-y-0.5">
+                {run.parts.map((part) => (
+                  <ToolCallItem key={part.partId} part={part} currentSessionId={currentSessionId} />
+                ))}
+              </div>
+            );
+          }
+          if (run.type === "files") {
+            return (
+              <div key={`files-${i}`} className="flex gap-2 flex-wrap">
+                {run.parts.map((part) => (
+                  <button
+                    key={part.partId}
+                    type="button"
+                    className="block cursor-pointer"
+                    onClick={() => setLightboxImage(part)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={part.url}
+                      alt={part.filename ?? "Image attachment"}
+                      className="max-h-48 max-w-xs rounded-md border border-border object-contain hover:opacity-90 transition-opacity"
+                    />
+                  </button>
+                ))}
+              </div>
+            );
+          }
+          // run.type === "text"
+          return <MarkdownRenderer key={`text-${i}`} content={run.text} />;
+        })}
 
-        {/* Image attachments */}
-        {fileParts.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            {fileParts.map((part) => (
-              <button
-                key={part.partId}
-                type="button"
-                className="block cursor-pointer"
-                onClick={() => setLightboxImage(part)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={part.url}
-                  alt={part.filename ?? "Image attachment"}
-                  className="max-h-48 max-w-xs rounded-md border border-border object-contain hover:opacity-90 transition-opacity"
-                />
-              </button>
-            ))}
-          </div>
-        )}
         {lightboxImage && (
           <ImageLightbox
             src={lightboxImage.url}
@@ -470,13 +511,8 @@ const MessageItem = memo(function MessageItem({
           />
         )}
 
-        {/* Text content */}
-        {fullText && (
-          <MarkdownRenderer content={fullText} />
-        )}
-
         {/* Empty state for assistant — still streaming (only show for incomplete messages) */}
-        {!isUser && !message.completedAt && !fullText && toolParts.length === 0 && fileParts.length === 0 && (
+        {!isUser && !message.completedAt && !hasContent && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>
@@ -652,20 +688,13 @@ export function ActivityStreamV1({
   // Only renders items visible in the viewport plus an overscan buffer,
   // keeping DOM node count ~30 regardless of session length.
 
-  // Build a fingerprint that changes when groupedEntries reshape (e.g.
-  // inference steps collapse/expand on sessionStatus change). This forces
-  // the virtualizer to discard its stale height cache and re-measure.
-  const entriesFingerprint = useMemo(() => {
-    return groupedEntries
-      .map((e) =>
-        e.type === "message"
-          ? e.message.messageId
-          : e.type === "thinking"
-          ? `t-${e.message.messageId}`
-          : `s-${e.messages[0].messageId}`
-      )
-      .join(",");
-  }, [groupedEntries]);
+  // NOTE: We previously built an entriesFingerprint and partsFingerprint
+  // and called virtualizer.measure() when they changed.  That API clears
+  // ALL cached sizes, resetting every item to the 120px estimate and
+  // causing visible overlap until ResizeObserver re-measures.  The
+  // virtualizer's measureElement ref (with its built-in ResizeObserver)
+  // already handles dynamic element sizing automatically — structural
+  // changes are handled by the count and getItemKey props.
 
   // Provide stable keys per item so the virtualizer can track them
   // across index shifts (e.g. when older messages are prepended).
@@ -687,41 +716,13 @@ export function ActivityStreamV1({
     getItemKey,
   });
 
-  // Force the virtualizer to re-measure all items when the entry
-  // structure changes (collapse/expand) or when message content
-  // updates (streaming text, tool call completions).  Without this,
-  // the cached heights become stale and translateY offsets diverge,
-  // causing items to overlap (the "scrambled text" bug).
-  const prevFingerprintRef = useRef(entriesFingerprint);
-  useEffect(() => {
-    if (prevFingerprintRef.current !== entriesFingerprint) {
-      prevFingerprintRef.current = entriesFingerprint;
-      virtualizer.measure();
-    }
-  }, [entriesFingerprint, virtualizer]);
-
-  // Re-measure when messages stream in — their parts array changes
-  // as SSE text deltas and tool-call updates arrive, altering the
-  // rendered height of individual items.
-  const partsFingerprint = useMemo(() => {
-    let total = 0;
-    for (const msg of messages) {
-      total += msg.parts.length;
-    }
-    return `${messages.length}-${total}`;
-  }, [messages]);
-
-  const prevPartsFingerprintRef = useRef(partsFingerprint);
-  useEffect(() => {
-    if (prevPartsFingerprintRef.current !== partsFingerprint) {
-      prevPartsFingerprintRef.current = partsFingerprint;
-      // Defer to the next frame so the DOM has rendered the new content
-      // before the virtualizer re-reads element heights.
-      requestAnimationFrame(() => {
-        virtualizer.measure();
-      });
-    }
-  }, [partsFingerprint, virtualizer]);
+  // Dynamic element heights (from streaming text, tool call updates, etc.)
+  // are tracked automatically by the ResizeObserver that the virtualizer
+  // attaches to each element via the measureElement ref.  We previously had
+  // manual fingerprint-based virtualizer.measure() calls here, but that API
+  // clears ALL cached sizes (resetting to 120px estimates), causing visible
+  // overlap until the ResizeObserver re-measures.  Removed in favour of the
+  // automatic approach.
 
   return (
     <div className="flex flex-col h-full">

@@ -322,10 +322,21 @@ export function useScrollAnchor({
 
       isProgrammaticScrollRef.current = true;
 
-      // Adjust for any content added by gap-fill since the snapshot was taken.
-      const currentScrollHeight = el.scrollHeight;
-      const newScrollTop = saved.scrollTop + (currentScrollHeight - saved.scrollHeight);
-      el.scrollTop = newScrollTop;
+      // If the user was at the bottom when we saved, just scroll to
+      // bottom directly. Computing a delta-based position doesn't work
+      // reliably because the virtualizer uses estimated heights on first
+      // render, so scrollHeight differs from the saved value.
+      const wasAtBottom =
+        saved.scrollHeight - saved.scrollTop - el.clientHeight <= AT_BOTTOM_THRESHOLD;
+
+      if (wasAtBottom) {
+        el.scrollTop = el.scrollHeight;
+      } else {
+        // Adjust for any content added by gap-fill since the snapshot was taken.
+        const currentScrollHeight = el.scrollHeight;
+        const newScrollTop = saved.scrollTop + (currentScrollHeight - saved.scrollHeight);
+        el.scrollTop = newScrollTop;
+      }
 
       // Update isAtBottom based on the restored position.
       const atBottom = checkIsAtBottom(el);
