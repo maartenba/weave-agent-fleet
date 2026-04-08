@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readdirSync, existsSync, statSync, realpathSync } from "fs";
+import { readdirSync, existsSync, statSync, realpathSync, mkdirSync } from "fs";
 import { resolve, dirname, join, sep } from "path";
+import { validateFileName } from "@/lib/file-name-validation";
 import {
   getAllowedRoots,
   validateDirectory,
@@ -203,4 +204,123 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 500 }
     );
   }
+}
+
+// POST /api/directories — create a new subdirectory
+// Body: { parentPath: string; name: string }
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  let body: { parentPath?: string; name?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    );
+  }
+
+  const { parentPath: parentParam, name } = body;
+
+  if (!parentParam || typeof parentParam !== "string") {
+    return NextResponse.json(
+      { error: "parentPath is required" },
+      { status: 400 }
+    );
+  }
+  if (!name || typeof name !== "string") {
+    return NextResponse.json(
+      { error: "name is required" },
+      { status: 400 }
+    );
+  }
+
+  // Validate directory name
+  const nameValidation = validateFileName(name);
+  if (!nameValidation.valid) {
+    return NextResponse.json(
+      { error: nameValidation.error },
+      { status: 400 }
+    );
+  }
+
+  // Validate parent directory exists and is under allowed roots
+  try {
+    validateDirectory(parentParam);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Invalid parent directory";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const resolvedParent = resolve(parentParam);
+  const roots = getAllowedRoots();
+
+  // Security: resolve symlinks on parent and re-validate
+  let realParent: string;
+  try {
+    realParent = realpathSync(resolvedParent);
+  } catch {
+    return NextResponse.json(
+      { error: "Parent directory does not exist" },
+      { status: 404 }
+    );
+  }
+  if (!isUnderAllowedRoot(realParent, roots)) {
+    return NextResponse.json(
+      { error: "Parent directory is outside the allowed workspace roots" },
+      { status: 400 }
+    );
+  }
+
+  const newDirPath = join(resolvedParent, name);
+
+  // CodeQL flags existsSync/mkdirSync below as js/path-injection (CWE-22)
+  // because `newDirPath` derives from user input. This is intentional —
+  // the API must create directories at user-specified locations. The path
+  // is safe because:
+  //   1. `name` is sanitised by validateFileName (rejects path separators,
+  //      ".." traversals, and OS-reserved names).
+  //   2. `parentParam` is validated by validateDirectory (must be under an
+  //      allowed workspace root).
+  //   3. `resolvedParent` is further checked via realpathSync +
+  //      isUnderAllowedRoot to prevent symlink escapes.
+
+  // Check if it already exists
+  if (existsSync(newDirPath)) {
+    return NextResponse.json(
+      { error: `"${name}" already exists in this directory` },
+      { status: 409 }
+    );
+  }
+
+  // Create the directory
+  try {
+    mkdirSync(newDirPath, { recursive: false });
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as NodeJS.ErrnoException).code === "EACCES"
+    ) {
+      return NextResponse.json(
+        { error: "Permission denied" },
+        { status: 403 }
+      );
+    }
+
+    console.error("[POST /api/directories] Error:", err);
+    return NextResponse.json(
+      { error: "Failed to create directory" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      name,
+      path: newDirPath,
+      isGitRepo: false,
+    } satisfies DirectoryEntry,
+    { status: 201 }
+  );
 }
