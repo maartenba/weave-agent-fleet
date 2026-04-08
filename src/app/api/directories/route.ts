@@ -274,6 +274,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const newDirPath = join(resolvedParent, name);
 
+  // CodeQL flags existsSync/mkdirSync below as js/path-injection (CWE-22)
+  // because `newDirPath` derives from user input. This is intentional —
+  // the API must create directories at user-specified locations. The path
+  // is safe because:
+  //   1. `name` is sanitised by validateFileName (rejects path separators,
+  //      ".." traversals, and OS-reserved names).
+  //   2. `parentParam` is validated by validateDirectory (must be under an
+  //      allowed workspace root).
+  //   3. `resolvedParent` is further checked via realpathSync +
+  //      isUnderAllowedRoot to prevent symlink escapes.
+
   // Check if it already exists
   if (existsSync(newDirPath)) {
     return NextResponse.json(
